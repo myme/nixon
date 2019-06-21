@@ -4,6 +4,7 @@ import qualified Control.Foldl as Fold
 import           Control.Monad
 import           Data.List (sort)
 import           Prelude hiding (FilePath)
+import           System.Wordexp
 import           Turtle hiding (sort)
 
 nix_files :: [FilePath]
@@ -27,15 +28,17 @@ is_project path = do
 
 find_projects :: [FilePath] -> IO [FilePath]
 find_projects source_dirs = reduce Fold.list $ do
-  candidate <- cat $ map ls source_dirs
+  expanded <- liftIO $ traverse expand_path source_dirs
+  candidate <- cat $ map ls (concat expanded)
   is_project' <- liftIO (is_project candidate)
   if not is_project'
     then mzero
     else return candidate
 
--- TODO: add wordexp (no command subst) to resolve "~"
--- import System.Wordexp
--- wordexp nosubst path
+expand_path :: FilePath -> IO [FilePath]
+expand_path path = do
+  expanded <- wordexp nosubst (encodeString path)
+  return $ either (const []) (map fromString) expanded
 
 main :: IO ()
 main = do
