@@ -1,7 +1,8 @@
 module Main where
 
 import           Control.Monad
-import           Data.List (sort)
+import           Data.Function (on)
+import           Data.List (sortBy)
 import qualified Data.Text as T
 import qualified Data.Text.IO as Tio
 import           Data.Text.Read (decimal)
@@ -9,7 +10,7 @@ import           Envix.Projects
 import qualified Envix.Rofi as R
 import           Envix.Rofi hiding (s, d, i)
 import           Prelude hiding (FilePath)
-import           Turtle hiding (decimal, sort)
+import           Turtle hiding (decimal, sortBy)
 
 -- | Format project names suited to rofi selection list
 rofi_format_project_name :: Project -> IO Text
@@ -35,18 +36,18 @@ type Commands = [(Text, Text)]
 -- | Launch rofi with a list of projects as candidates
 rofi_projects :: Commands -> [FilePath] -> IO ()
 rofi_projects commands source_dirs = do
-  projects <- find_projects source_dirs
+  projects <- sortBy (compare `on` project_name) <$> find_projects source_dirs
   let opts =
         rofi_prompt "Select project" <>
         rofi_format R.i <>
         rofi_markup <>
         rofi_msg (rofi_build_message commands)
-  candidates <- sort <$> traverse rofi_format_project_name projects
-  let candidate = (candidates !!) . either (const undefined) fst . decimal
+      project = project_name . (projects !!) . either (const undefined) fst . decimal
+  candidates <- traverse rofi_format_project_name projects
   rofi opts candidates >>= \case
     RofiCancel -> Tio.putStrLn "Selection canceled"
-    RofiDefault idx -> Tio.putStrLn $ "Default action: " <> (candidate idx)
-    RofiAlternate i idx -> Tio.putStrLn $ format ("Alternate action ("%d%"): "%s) i (candidate idx)
+    RofiDefault idx -> Tio.putStrLn $ format ("Default action: "%fp) (project idx)
+    RofiAlternate i idx -> Tio.putStrLn $ format ("Alternate action ("%d%"): "%fp) i (project idx)
 
 main :: IO ()
 main = do
