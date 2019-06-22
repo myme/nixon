@@ -76,7 +76,7 @@ rofi_projects commands source_dirs = do
         rofi_format R.i <>
         rofi_markup <>
         rofi_msg (rofi_build_message commands)
-  candidates <- traverse rofi_format_project_name (sort projects)
+  candidates <- sort <$> traverse rofi_format_project_name projects
   rofi opts candidates >>= \case
     RofiCancel -> Tio.putStrLn "Selection canceled"
     RofiDefault p -> Tio.putStrLn $ "Default action: " <> p
