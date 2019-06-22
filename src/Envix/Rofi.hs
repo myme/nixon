@@ -1,4 +1,4 @@
-module Rofi
+module Envix.Rofi
   ( rofi
   , rofi_format
   , rofi_markup
