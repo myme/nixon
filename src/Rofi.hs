@@ -85,8 +85,13 @@ rofi_msg msg = mempty { _msg = Just msg }
 rofi_prompt :: Text -> RofiOpts
 rofi_prompt prompt = mempty { _prompt = Just prompt }
 
+data RofiResult = RofiCancel
+                | RofiDefault Text
+                | RofiAlternate Int Text
+                deriving (Eq, Show)
+
 -- | Launch rofi with the given options and candidates
-rofi :: RofiOpts -> [Text] -> IO (ExitCode, Text)
+rofi :: RofiOpts -> [Text] -> IO RofiResult
 rofi opts candidates = do
   let input' = concatMap (toList . textToLines) candidates
       args = "-dmenu" : concat (
@@ -96,7 +101,12 @@ rofi opts candidates = do
                   , arg "-p" =<< _prompt opts
                   ])
 
-  second T.strip <$> procStrict "rofi" args (select input')
+  (code, out) <- second T.strip <$> procStrict "rofi" args (select input')
+  pure $ case code of
+    ExitSuccess -> RofiDefault out
+    ExitFailure 1 -> RofiCancel
+    ExitFailure c | c >= 10 && c < 20 -> RofiAlternate (c - 10) out
+    _ -> undefined
 
   where
     flag key value = if value then Just [key] else Nothing
