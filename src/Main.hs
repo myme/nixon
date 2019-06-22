@@ -4,23 +4,24 @@ import           Control.Monad
 import           Data.List (sort)
 import qualified Data.Text as T
 import qualified Data.Text.IO as Tio
+import           Data.Text.Read (decimal)
 import           Envix.Projects
 import qualified Envix.Rofi as R
 import           Envix.Rofi hiding (s, d, i)
 import           Prelude hiding (FilePath)
-import           Turtle hiding (sort)
+import           Turtle hiding (decimal, sort)
 
 -- | Format project names suited to rofi selection list
-rofi_format_project_name :: FilePath -> IO Text
-rofi_format_project_name path = do
+rofi_format_project_name :: Project -> IO Text
+rofi_format_project_name project = do
   home' <- home
   let
-    name = format fp (basename path)
+    name = format fp (project_name project)
     pad_width = 30
     name_padded = name <> T.replicate (pad_width - T.length name) " "
-    parent' = parent path
-    dir = case stripPrefix (home' </> "") parent' of
-      Nothing -> parent'
+    pdir = project_dir project
+    dir = case stripPrefix (home' </> "") pdir of
+      Nothing -> pdir
       Just rest -> "~" </> rest
   return $ format (s % " <i>" % fp % "</i>") name_padded dir
 
@@ -41,10 +42,11 @@ rofi_projects commands source_dirs = do
         rofi_markup <>
         rofi_msg (rofi_build_message commands)
   candidates <- sort <$> traverse rofi_format_project_name projects
+  let candidate = (candidates !!) . either (const undefined) fst . decimal
   rofi opts candidates >>= \case
     RofiCancel -> Tio.putStrLn "Selection canceled"
-    RofiDefault p -> Tio.putStrLn $ "Default action: " <> p
-    RofiAlternate i p -> Tio.putStrLn $ format ("Alternate action ("%d%"): "%s) i p
+    RofiDefault idx -> Tio.putStrLn $ "Default action: " <> (candidate idx)
+    RofiAlternate i idx -> Tio.putStrLn $ format ("Alternate action ("%d%"): "%s) i (candidate idx)
 
 main :: IO ()
 main = do

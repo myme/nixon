@@ -1,4 +1,7 @@
-module Envix.Projects where
+module Envix.Projects
+  ( Project (..)
+  , find_projects
+  ) where
 
 import qualified Control.Foldl as Fold
 import           Prelude hiding (FilePath)
@@ -26,14 +29,20 @@ is_project path = do
     else or <$> traverse has_marker project_markers
   where has_marker (check, marker) = check (path </> marker)
 
-find_projects :: [FilePath] -> IO [FilePath]
+data Project = Project { project_name :: FilePath
+                       , project_dir :: FilePath
+                       }
+
+find_projects :: [FilePath] -> IO [Project]
 find_projects source_dirs = reduce Fold.list $ do
   expanded <- liftIO $ traverse expand_path source_dirs
   candidate <- cat $ map ls (concat expanded)
   is_project' <- liftIO (is_project candidate)
   if not is_project'
     then mzero
-    else return candidate
+    else return Project { project_name = basename candidate
+                        , project_dir = parent candidate
+                        }
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path = do
