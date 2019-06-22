@@ -57,7 +57,7 @@ rofi_format_project_name path = do
     dir = case stripPrefix (home' </> "") parent' of
       Nothing -> parent'
       Just rest -> "~" </> rest
-  return $ format (s % " " % fp) name_padded dir
+  return $ format (s % " <i>" % fp % "</i>") name_padded dir
 
 -- | Build a help message of alternate commands with short description
 rofi_build_message :: [(Text, Text)] -> Text
@@ -68,16 +68,17 @@ rofi_build_message = T.intercalate ", " . map format_command . zip [1 :: Int ..]
 rofi_projects :: [FilePath] -> IO ()
 rofi_projects source_dirs = do
   projects <- find_projects source_dirs
-  let candidates = traverse rofi_format_project_name (sort projects)
-      opts =
+  let opts =
         rofi_prompt "Select project" <>
         rofi_format R.q <>
+        rofi_markup <>
         rofi_msg (rofi_build_message
                   [("konsole", "Terminal")
                   ,("emacs", "Editor")
                   ,("dolphin", "Files")
                   ])
-  result <- candidates >>= rofi opts
+  candidates <- traverse rofi_format_project_name (sort projects)
+  result <- rofi opts candidates
   print result
 
 main :: IO ()

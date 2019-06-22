@@ -3,6 +3,7 @@
 module Rofi
   ( rofi
   , rofi_format
+  , rofi_markup
   , rofi_msg
   , rofi_prompt
   , s, i, d, q, f, f'
@@ -19,6 +20,7 @@ import           Turtle hiding (arg, s, d, f)
 data RofiOpts = RofiOpts
   { _format :: Maybe RofiFormat
   , _msg :: Maybe Text
+  , _markup :: Bool
   , _prompt :: Maybe Text
   }
 
@@ -56,16 +58,24 @@ f' = FmtFilterQuote
 
 instance Semigroup RofiOpts where
   left <> right = RofiOpts { _format = _format right <|> _format left
+                           , _markup = _markup right || _markup left
                            , _msg = _msg right <|> _msg left
                            , _prompt = _prompt right <|> _prompt left
                            }
 
 instance Monoid RofiOpts where
-  mempty = RofiOpts Nothing Nothing Nothing
+  mempty = RofiOpts { _format = Nothing
+                    , _markup = False
+                    , _msg = Nothing
+                    , _prompt = Nothing
+                    }
 
 -- | Set the -format output of dmenu command line option
 rofi_format :: RofiFormat -> RofiOpts
 rofi_format fmt = mempty { _format = Just fmt }
+
+rofi_markup :: RofiOpts
+rofi_markup = mempty { _markup = True }
 
 -- | Set -mesg command line option
 rofi_msg :: Text -> RofiOpts
@@ -80,17 +90,21 @@ rofi :: RofiOpts -> [Text] -> IO (ExitCode, Text)
 rofi opts candidates = do
   let input' = concatMap (toList . textToLines) candidates
       args = "-dmenu" : concat (
-        catMaybes [ _format opts >>= arg_fmt
-                  , _msg opts    >>= arg "-mesg"
-                  , _prompt opts >>= arg "-p"
+        catMaybes [ arg_fmt =<< _format opts
+                  , flag "-markup-rows" (_markup opts)
+                  , arg "-mesg" =<< _msg opts
+                  , arg "-p" =<< _prompt opts
                   ])
-  print args
+
   second T.strip <$> procStrict "rofi" args (select input')
-  where arg key = pure . ([key] <>) . pure
-        arg_fmt = pure . (["-format"] <>) . pure . \case
-          FmtString -> "s"
-          FmtZeroIndex -> "i"
-          FmtOneIndex -> "d"
-          FmtQuote -> "q"
-          FmtFilter -> "f"
-          FmtFilterQuote -> "F"
+
+  where
+    flag key value = if value then Just [key] else Nothing
+    arg key = pure . ([key] <>) . pure
+    arg_fmt = pure . (["-format"] <>) . pure . \case
+      FmtString -> "s"
+      FmtZeroIndex -> "i"
+      FmtOneIndex -> "d"
+      FmtQuote -> "q"
+      FmtFilter -> "f"
+      FmtFilterQuote -> "F"
