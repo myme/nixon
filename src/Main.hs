@@ -4,8 +4,9 @@ import qualified Control.Foldl as Fold
 import           Control.Monad
 import           Data.List (sort)
 import qualified Data.Text as T
+import qualified Data.Text.IO as Tio
 import           Prelude hiding (FilePath)
-import           Rofi hiding (s, d)
+import           Rofi hiding (s, d, i)
 import qualified Rofi as R
 import           System.Wordexp
 import           Turtle hiding (sort)
@@ -64,22 +65,27 @@ rofi_build_message :: [(Text, Text)] -> Text
 rofi_build_message = T.intercalate ", " . map format_command . zip [1 :: Int ..]
   where format_command (idx, (_, desc)) = format ("<b>Alt+"%d%"</b>: "%s) idx desc
 
+type Commands = [(Text, Text)]
+
 -- | Launch rofi with a list of projects as candidates
-rofi_projects :: [FilePath] -> IO ()
-rofi_projects source_dirs = do
+rofi_projects :: Commands -> [FilePath] -> IO ()
+rofi_projects commands source_dirs = do
   projects <- find_projects source_dirs
   let opts =
         rofi_prompt "Select project" <>
-        rofi_format R.q <>
+        rofi_format R.i <>
         rofi_markup <>
-        rofi_msg (rofi_build_message
-                  [("konsole", "Terminal")
-                  ,("emacs", "Editor")
-                  ,("dolphin", "Files")
-                  ])
+        rofi_msg (rofi_build_message commands)
   candidates <- traverse rofi_format_project_name (sort projects)
-  result <- rofi opts candidates
-  print result
+  rofi opts candidates >>= \case
+    RofiCancel -> Tio.putStrLn "Selection canceled"
+    RofiDefault p -> Tio.putStrLn $ "Default action: " <> p
+    RofiAlternate i p -> Tio.putStrLn $ format ("Alternate action ("%d%"): "%s) i p
 
 main :: IO ()
-main = rofi_projects ["~/src", "~/projects"]
+main = do
+  let commands = [("konsole", "Terminal")
+                 ,("emacs", "Editor")
+                 ,("dolphin", "Files")
+                 ]
+  rofi_projects commands ["~/src", "~/projects"]

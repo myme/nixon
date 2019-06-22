@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Rofi
   ( rofi
   , rofi_format
@@ -7,6 +5,7 @@ module Rofi
   , rofi_msg
   , rofi_prompt
   , s, i, d, q, f, f'
+  , RofiResult(..)
   ) where
 
 import           Control.Arrow (second)
