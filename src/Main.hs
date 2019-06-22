@@ -47,12 +47,11 @@ rofi_projects commands source_dirs = do
   rofi opts candidates >>= \case
     RofiCancel -> Tio.putStrLn "Selection canceled"
     RofiDefault idx -> Tio.putStrLn $ format ("Default action: "%fp) (project idx)
-    RofiAlternate i idx -> Tio.putStrLn $ format ("Alternate action ("%d%"): "%fp) i (project idx)
+    RofiAlternate i idx -> Tio.putStrLn $ format ("Alternate action #"%d%": "%fp) i (project idx)
 
 main :: IO ()
-main = do
-  let commands = [("konsole", "Terminal")
-                 ,("emacs", "Editor")
-                 ,("dolphin", "Files")
-                 ]
-  rofi_projects commands ["~/src", "~/projects"]
+main = rofi_projects commands ["~/src", "~/projects"]
+  where commands = [("konsole", "Terminal")
+                   ,("emacs", "Editor")
+                   ,("dolphin", "Files")
+                   ]
