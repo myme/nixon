@@ -1,12 +1,11 @@
 module Main where
 
-import           Control.Arrow (second)
 import qualified Control.Foldl as Fold
 import           Control.Monad
 import           Data.List (sort)
-import           Data.List.NonEmpty (toList)
 import qualified Data.Text as T
 import           Prelude hiding (FilePath)
+import           Rofi
 import           System.Wordexp
 import           Turtle hiding (sort)
 
@@ -45,11 +44,6 @@ expand_path path = do
   expanded <- wordexp nosubst (encodeString path)
   return $ either (const []) (map fromString) expanded
 
-rofi :: [Text] -> IO (ExitCode, Text)
-rofi candidates = do
-  let input' = concatMap (toList . textToLines) candidates
-  second T.strip <$> procStrict "rofi" ["-dmenu"] (select input')
-
 rofi_format_project_name :: FilePath -> IO Text
 rofi_format_project_name path = do
   home' <- home
@@ -63,9 +57,18 @@ rofi_format_project_name path = do
       Just rest -> "~" </> rest
   return $ format (s % " " % fp) name_padded dir
 
+rofi_build_message :: [(Text, Text)] -> Text
+rofi_build_message = T.intercalate ", " . map format_command . zip [1 :: Int ..]
+  where format_command (idx, (_, desc)) = format ("<b>Alt+"%d%"</b>: "%s) idx desc
+
 main :: IO ()
 main = do
   projects <- find_projects ["/home/mmyrseth/src"]
-  let candidates = sort projects
-  result <- traverse rofi_format_project_name candidates >>= rofi
+  let candidates = traverse rofi_format_project_name (sort projects)
+      opts = rofi_prompt "Select project" <> rofi_msg (
+        rofi_build_message [("konsole", "Terminal")
+                           ,("emacs", "Editor")
+                           ,("dolphin", "Files")
+                           ])
+  result <- candidates >>= rofi opts
   print result
