@@ -35,6 +35,7 @@ executable envix
   build-depends:       base >=4.12 && <4.13
                      , directory
                      , foldl
+                     , text
                      , turtle
                      , wordexp
   hs-source-dirs:      src
