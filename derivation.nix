@@ -2,6 +2,7 @@
   mkDerivation,
   stdenv,
   base, directory, foldl, text, turtle, wordexp,
+  fzf,
   rofi,
   buildTools ? []
 }:
@@ -20,6 +21,7 @@ mkDerivation {
     wordexp
   ];
   executableSystemDepends = [
+    fzf
     rofi
   ];
   license = stdenv.lib.licenses.mit;

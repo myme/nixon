@@ -6,6 +6,7 @@ import           Data.List (sortBy)
 import qualified Data.Text as T
 import qualified Data.Text.IO as Tio
 import           Data.Text.Read (decimal)
+import           Envix.Fzf
 import           Envix.Projects
 import qualified Envix.Rofi as R
 import           Envix.Rofi hiding (s, d, i)
@@ -41,10 +42,13 @@ rofi_build_message = T.intercalate ", " . map format_command . zip [1 :: Int ..]
 
 type Commands = [(Text, Text)]
 
+sort_projects :: [Project] -> [Project]
+sort_projects = sortBy (compare `on` project_name)
+
 -- | Launch rofi with a list of projects as candidates
 rofi_projects :: Commands -> [FilePath] -> IO ()
 rofi_projects commands source_dirs = do
-  projects <- sortBy (compare `on` project_name) <$> find_projects source_dirs
+  projects <- sort_projects <$> find_projects source_dirs
   let opts =
         rofi_prompt "Select project" <>
         rofi_format R.i <>
@@ -57,9 +61,24 @@ rofi_projects commands source_dirs = do
     RofiDefault idx -> Tio.putStrLn $ format ("Default action: "%fp) (project idx)
     RofiAlternate i idx -> Tio.putStrLn $ format ("Alternate action #"%d%": "%fp) i (project idx)
 
+fzf_format_project_name :: Project -> IO Text
+fzf_format_project_name project = do
+  project' <- implode_home project
+  let
+    dir = project_dir project'
+    name = project_name project'
+  return $ format fp (dir </> name)
+
+fzf_projects :: [FilePath] -> IO ()
+fzf_projects source_dirs = do
+  projects <- sort_projects <$> find_projects source_dirs
+  candidates <- traverse fzf_format_project_name projects
+  fzf candidates
+
 main :: IO ()
-main = rofi_projects commands ["~/src", "~/projects"]
-  where commands = [("konsole", "Terminal")
-                   ,("emacs", "Editor")
-                   ,("dolphin", "Files")
-                   ]
+main = fzf_projects ["~/src", "~/projects"]
+-- main = rofi_projects commands ["~/src", "~/projects"]
+--   where commands = [("konsole", "Terminal")
+--                    ,("emacs", "Editor")
+--                    ,("dolphin", "Files")
+--                    ]
