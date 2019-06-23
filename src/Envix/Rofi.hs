@@ -10,8 +10,8 @@ module Envix.Rofi
 
 import           Control.Arrow (second)
 import           Data.List.NonEmpty (toList)
-import           Data.Maybe (catMaybes)
 import qualified Data.Text as T
+import           Envix.Process
 import           Prelude hiding (FilePath)
 import           Turtle hiding (arg, s, d, f)
 
@@ -30,6 +30,15 @@ data RofiFormat = FmtString
                 | FmtQuote
                 | FmtFilter
                 | FmtFilterQuote
+
+fmt_str :: IsString s => RofiFormat -> s
+fmt_str = \case
+  FmtString -> "s"
+  FmtZeroIndex -> "i"
+  FmtOneIndex -> "d"
+  FmtQuote -> "q"
+  FmtFilter -> "f"
+  FmtFilterQuote -> "F"
 
 -- | Output the selected string
 s :: RofiFormat
@@ -93,12 +102,12 @@ data RofiResult = RofiCancel
 rofi :: RofiOpts -> [Text] -> IO RofiResult
 rofi opts candidates = do
   let input' = concatMap (toList . textToLines) candidates
-      args = "-dmenu" : concat (
-        catMaybes [ arg_fmt =<< _format opts
-                  , flag "-markup-rows" (_markup opts)
-                  , arg "-mesg" =<< _msg opts
-                  , arg "-p" =<< _prompt opts
-                  ])
+      args = "-dmenu" : build_args
+        [ flag "-markup-rows" (_markup opts)
+        , arg "-mesg" =<< _msg opts
+        , arg "-p" =<< _prompt opts
+        , _format opts >>= arg_fmt "-format" fmt_str
+        ]
 
   (code, out) <- second T.strip <$> procStrict "rofi" args (select input')
   pure $ case code of
@@ -106,14 +115,3 @@ rofi opts candidates = do
     ExitFailure 1 -> RofiCancel
     ExitFailure c | c >= 10 && c < 20 -> RofiAlternate (c - 10) out
     _ -> undefined
-
-  where
-    flag key value = if value then Just [key] else Nothing
-    arg key = pure . ([key] <>) . pure
-    arg_fmt = pure . (["-format"] <>) . pure . \case
-      FmtString -> "s"
-      FmtZeroIndex -> "i"
-      FmtOneIndex -> "d"
-      FmtQuote -> "q"
-      FmtFilter -> "f"
-      FmtFilterQuote -> "F"

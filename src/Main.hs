@@ -73,7 +73,10 @@ fzf_projects :: [FilePath] -> IO ()
 fzf_projects source_dirs = do
   projects <- sort_projects <$> find_projects source_dirs
   candidates <- traverse fzf_format_project_name projects
-  fzf candidates
+  let opts = fzf_header "Select project" <>
+        fzf_border <>
+        fzf_height 40
+  fzf opts candidates
 
 main :: IO ()
 main = fzf_projects ["~/src", "~/projects"]
