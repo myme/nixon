@@ -78,10 +78,22 @@ fzf_projects source_dirs = do
         fzf_height 40
   fzf opts candidates
 
+data Backend = Fzf | Rofi
+
+parser :: Parser Backend
+parser = arg parse_backend "backend" "Backend to use: fzf, rofi"
+  where parse_backend "fzf" = Just Fzf
+        parse_backend "rofi" = Just Rofi
+        parse_backend _ = Nothing
+
 main :: IO ()
-main = fzf_projects ["~/src", "~/projects"]
--- main = rofi_projects commands ["~/src", "~/projects"]
---   where commands = [("konsole", "Terminal")
---                    ,("emacs", "Editor")
---                    ,("dolphin", "Files")
---                    ]
+main = do
+  let source_dirs = ["~/src", "~/projects"]
+      commands = [("konsole", "Terminal")
+                 ,("emacs", "Editor")
+                 ,("dolphin", "Files")
+                 ]
+  backend <- options "Launch project environments" parser
+  case backend of
+    Fzf -> fzf_projects source_dirs
+    Rofi -> rofi_projects commands source_dirs
