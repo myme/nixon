@@ -12,18 +12,26 @@ import           Envix.Rofi hiding (s, d, i)
 import           Prelude hiding (FilePath)
 import           Turtle hiding (decimal, sortBy)
 
+-- | Replace the value of $HOME in a path with "~"
+implode_home :: Project -> IO Project
+implode_home project = do
+  home' <-home
+  let
+    path = project_dir project
+    dir = case stripPrefix (home' </> "") path of
+      Nothing -> path
+      Just rest -> "~" </> rest
+  return $ project { project_dir = dir }
+
 -- | Format project names suited to rofi selection list
 rofi_format_project_name :: Project -> IO Text
 rofi_format_project_name project = do
-  home' <- home
+  project' <- implode_home project
   let
-    name = format fp (project_name project)
     pad_width = 30
+    name = format fp (project_name project)
     name_padded = name <> T.replicate (pad_width - T.length name) " "
-    pdir = project_dir project
-    dir = case stripPrefix (home' </> "") pdir of
-      Nothing -> pdir
-      Just rest -> "~" </> rest
+    dir = project_dir project'
   return $ format (s % " <i>" % fp % "</i>") name_padded dir
 
 -- | Build a help message of alternate commands with short description
