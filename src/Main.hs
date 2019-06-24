@@ -2,7 +2,7 @@ module Main where
 
 import           Control.Monad
 import           Data.Function (on)
-import           Data.List (sortBy)
+import           Data.List (sort, sortBy)
 import qualified Data.Text as T
 import qualified Data.Text.IO as Tio
 import           Data.Text.Read (decimal)
@@ -11,7 +11,7 @@ import           Envix.Projects
 import qualified Envix.Rofi as R
 import           Envix.Rofi hiding (s, d, i)
 import           Prelude hiding (FilePath)
-import           Turtle hiding (decimal, sortBy)
+import           Turtle hiding (decimal, sort, sortBy)
 
 -- | Replace the value of $HOME in a path with "~"
 implode_home :: Project -> IO Project
@@ -42,9 +42,6 @@ rofi_build_message = T.intercalate ", " . map format_command . zip [1 :: Int ..]
 
 type Commands = [(Text, Text)]
 
-sort_projects :: [Project] -> [Project]
-sort_projects = sortBy (compare `on` project_name)
-
 -- | Launch rofi with a list of projects as candidates
 rofi_projects :: Commands -> [FilePath] -> IO ()
 rofi_projects commands source_dirs = do
@@ -60,6 +57,8 @@ rofi_projects commands source_dirs = do
     RofiCancel -> Tio.putStrLn "Selection canceled"
     RofiDefault idx -> Tio.putStrLn $ format ("Default action: "%fp) (project idx)
     RofiAlternate i idx -> Tio.putStrLn $ format ("Alternate action #"%d%": "%fp) i (project idx)
+  where
+    sort_projects = sortBy (compare `on` project_name)
 
 fzf_format_project_name :: Project -> IO Text
 fzf_format_project_name project = do
@@ -71,12 +70,14 @@ fzf_format_project_name project = do
 
 fzf_projects :: [FilePath] -> IO ()
 fzf_projects source_dirs = do
-  projects <- sort_projects <$> find_projects source_dirs
-  candidates <- traverse fzf_format_project_name projects
+  projects <- find_projects source_dirs
+  candidates <- sort <$> traverse fzf_format_project_name projects
   let opts = fzf_header "Select project" <>
         fzf_border <>
         fzf_height 40
-  fzf opts candidates
+  fzf opts candidates >>= \case
+    FzfCancel -> Tio.putStrLn "Selection canceled"
+    FzfDefault out -> Tio.putStrLn $ "Selected project: " <> out
 
 data Options = Options { _backend :: Backend
                        , _source_dirs :: [FilePath]

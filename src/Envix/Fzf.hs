@@ -3,6 +3,7 @@ module Envix.Fzf
   , fzf_border
   , fzf_header
   , fzf_height
+  , FzfResult(..)
   ) where
 
 import           Control.Arrow (second)
@@ -35,7 +36,10 @@ fzf_header header = mempty { _header = Just header }
 fzf_height :: Integer -> FzfOpts
 fzf_height height = mempty { _height = Just height }
 
-fzf :: FzfOpts -> [Text] -> IO ()
+data FzfResult = FzfCancel
+               | FzfDefault Text
+
+fzf :: FzfOpts -> [Text] -> IO FzfResult
 fzf opts candidates = do
   let input' = concatMap (toList . textToLines) candidates
       args = build_args
@@ -44,4 +48,7 @@ fzf opts candidates = do
         , arg "--height" =<< format (d%"%") <$> _height opts
         ]
   (code, out) <- second T.strip <$> procStrict "fzf" args (select input')
-  print (code, out)
+  pure $ case code of
+    ExitSuccess -> FzfDefault out
+    ExitFailure 130 -> FzfCancel
+    ExitFailure _ -> undefined
