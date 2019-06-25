@@ -1,7 +1,7 @@
 {
   mkDerivation,
   stdenv,
-  base, directory, foldl, text, turtle, wordexp,
+  base, directory, foldl, process, text, turtle, unix, wordexp,
   fzf,
   rofi,
   buildTools ? []
@@ -16,8 +16,10 @@ mkDerivation {
     base
     directory
     foldl
+    process
     text
     turtle
+    unix
     wordexp
   ];
   executableSystemDepends = [

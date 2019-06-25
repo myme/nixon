@@ -4,14 +4,10 @@ module Envix.Projects
   ) where
 
 import qualified Control.Foldl as Fold
+import           Envix.Nix
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (sort)
-
-nix_files :: [FilePath]
-nix_files = ["shell.nix"
-            ,"default.nix"
-            ]
 
 project_markers :: [(FilePath -> IO Bool, FilePath)]
 project_markers = nix_files' ++
