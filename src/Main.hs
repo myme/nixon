@@ -59,7 +59,7 @@ rofi_projects commands source_dirs = do
   candidates <- traverse rofi_format_project_name projects
   rofi opts candidates >>= \case
     RofiCancel -> return Nothing
-    RofiDefault idx -> return $ Just (project idx, fst $ head commands)
+    RofiDefault idx -> return $ Just (project idx, "rofi -show run")
     RofiAlternate i idx -> return $ Just (project idx, fst $ commands !! i)
   where
     sort_projects = sortBy (compare `on` project_name)
