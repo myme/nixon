@@ -104,6 +104,7 @@ main = do
   let source_dirs = if null (_source_dirs opts)
         then ["~/src", "~/projects"]
         else _source_dirs opts
+      -- TODO: Allow format strings (%s) in commands to insert e.g. project path
       commands = [("konsole", "Terminal")
                  ,("emacs", "Editor")
                  ,("dolphin", "Files")
