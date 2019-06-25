@@ -37,7 +37,7 @@ rofi_format_project_name project = do
 
 -- | Build a help message of alternate commands with short description
 rofi_build_message :: [(Text, Text)] -> Text
-rofi_build_message = T.intercalate ", " . map format_command . zip [1 :: Int ..]
+rofi_build_message = T.intercalate ", " . zipWith (curry format_command) [1 :: Int ..]
   where format_command (idx, (_, desc)) = format ("<b>Alt+"%d%"</b>: "%s) idx desc
 
 type Commands = [(Text, Text)]
@@ -88,7 +88,7 @@ data Backend = Fzf | Rofi
 parser :: Parser Options
 parser = Options
   <$> arg parse_backend "backend" "Backend to use: fzf, rofi"
-  <*> (many $ optPath "path" 'p' "Project directory")
+  <*> many (optPath "path" 'p' "Project directory")
   where parse_backend "fzf" = Just Fzf
         parse_backend "rofi" = Just Rofi
         parse_backend _ = Nothing

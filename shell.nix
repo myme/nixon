@@ -5,6 +5,7 @@ let
     buildTools = with pkgs; [
       cabal2nix
       cabal-install
+      hlint
     ];
   };
 in drv.env
