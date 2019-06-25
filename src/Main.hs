@@ -84,7 +84,7 @@ fzf_projects source_dirs = do
     FzfCancel -> return Nothing
     FzfDefault out -> return $ Map.lookup out candidates
 
-data Options = Options { _backend :: Backend
+data Options = Options { _backend :: Maybe Backend
                        , _source_dirs :: [FilePath]
                        }
 
@@ -92,7 +92,7 @@ data Backend = Fzf | Rofi
 
 parser :: Parser Options
 parser = Options
-  <$> arg parse_backend "backend" "Backend to use: fzf, rofi"
+  <$> optional (arg parse_backend "backend" "Backend to use: fzf, rofi")
   <*> many (optPath "path" 'p' "Project directory")
   where parse_backend "fzf" = Just Fzf
         parse_backend "rofi" = Just Rofi
@@ -110,7 +110,7 @@ main = do
                  ]
 
   case _backend opts of
-    Fzf -> fzf_projects source_dirs >>= \case
+    Just Fzf -> fzf_projects source_dirs >>= \case
       Nothing -> putStrLn "No project selected."
       Just project ->
         let path = project_path project
@@ -118,7 +118,7 @@ main = do
           Nothing -> run "bash" []
           Just nix_file -> nix_shell nix_file Nothing
 
-    Rofi -> rofi_projects commands source_dirs >>= \case
+    _ -> rofi_projects commands source_dirs >>= \case
       Nothing -> putStrLn "No project selected."
       Just (project, command) ->
         let path = project_path project
