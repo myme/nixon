@@ -1,7 +1,7 @@
 {
   mkDerivation,
   stdenv,
-  base, directory, foldl, process, text, turtle, unix, wordexp,
+  base, containers, directory, foldl, process, text, turtle, unix, wordexp,
   fzf,
   rofi,
   buildTools ? []
@@ -14,6 +14,7 @@ mkDerivation {
   isExecutable = true;
   executableHaskellDepends = [
     base
+    containers
     directory
     foldl
     process

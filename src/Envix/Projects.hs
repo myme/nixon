@@ -1,6 +1,7 @@
 module Envix.Projects
   ( Project (..)
   , find_projects
+  , project_path
   ) where
 
 import qualified Control.Foldl as Fold
@@ -44,3 +45,6 @@ expand_path :: FilePath -> IO [FilePath]
 expand_path path = do
   expanded <- wordexp nosubst (encodeString path)
   return $ either (const []) (map fromString) expanded
+
+project_path :: Project -> FilePath
+project_path (Project name dir) = dir </> name

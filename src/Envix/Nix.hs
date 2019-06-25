@@ -2,6 +2,7 @@ module Envix.Nix
   ( find_nix_file
   , nix_files
   , nix_shell
+  , nix_shell_spawn
   ) where
 
 import Control.Exception (IOException, catch)
@@ -9,7 +10,7 @@ import Control.Monad (filterM)
 import Data.Maybe (listToMaybe)
 import Envix.Process
 import Prelude hiding (FilePath)
-import Turtle
+import Turtle hiding (arg)
 
 -- | Nix project files, in prioritized order
 nix_files :: [FilePath]
@@ -27,8 +28,19 @@ find_nix_file dir = do
         handle_error :: IOException -> IO Bool
         handle_error _ = return False
 
+-- | Evaluate a command in a nix-shell
+nix_shell :: FilePath -> Maybe Text -> IO ()
+nix_shell = nix_run run
+
 -- | Fork and evaluate a command in a nix-shell
-nix_shell :: FilePath -> Text -> IO ()
-nix_shell nix_file command = do
+nix_shell_spawn :: FilePath -> Maybe Text -> IO ()
+nix_shell_spawn = nix_run spawn
+
+type Runner = Text -> [Text] -> IO ()
+
+nix_run :: Runner -> FilePath -> Maybe Text -> IO ()
+nix_run run' nix_file command = do
   let nix_file' = format fp nix_file
-  spawn "nix-shell" [nix_file', "--run", command]
+      args = build_args [ pure [nix_file']
+                        , arg "--run" =<< command]
+  run' "nix-shell" args

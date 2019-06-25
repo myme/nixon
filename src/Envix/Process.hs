@@ -3,12 +3,15 @@ module Envix.Process
   , arg_fmt
   , flag
   , build_args
+  , run
   , spawn
   ) where
 
-import Data.Maybe (catMaybes)
-import System.Posix
-import Turtle hiding (arg)
+import           Data.Maybe (catMaybes)
+import qualified Data.Text as T
+import           System.Posix
+import           System.Process hiding (proc)
+import           Turtle hiding (arg)
 
 flag :: a -> Bool -> Maybe [a]
 flag key value = if value then Just [key] else Nothing
@@ -22,6 +25,11 @@ arg_fmt key f' = pure . ([key] <>) . pure . f'
 build_args :: [Maybe [a]] -> [a]
 build_args = concat . catMaybes
 
+-- | Run a command and wait for it to finish
+run :: Text -> [Text] -> IO ()
+run command = callProcess (T.unpack command) . map T.unpack
+
+-- | Spawn/for off a command in the background
 spawn :: Text -> [Text] -> IO ()
 spawn command args = void $ forkProcess $ do
   _ <- createSession

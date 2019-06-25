@@ -3,10 +3,12 @@ module Main where
 import           Control.Monad
 import           Data.Function (on)
 import           Data.List (sort, sortBy)
+import qualified Data.Map as Map
 import qualified Data.Text as T
-import qualified Data.Text.IO as Tio
 import           Data.Text.Read (decimal)
 import           Envix.Fzf
+import           Envix.Nix
+import           Envix.Process hiding (arg)
 import           Envix.Projects
 import qualified Envix.Rofi as R
 import           Envix.Rofi hiding (s, d, i)
@@ -40,10 +42,12 @@ rofi_build_message :: [(Text, Text)] -> Text
 rofi_build_message = T.intercalate ", " . zipWith (curry format_command) [1 :: Int ..]
   where format_command (idx, (_, desc)) = format ("<b>Alt+"%d%"</b>: "%s) idx desc
 
+type Selection = (Project, Command)
+type Command = Text
 type Commands = [(Text, Text)]
 
 -- | Launch rofi with a list of projects as candidates
-rofi_projects :: Commands -> [FilePath] -> IO ()
+rofi_projects :: Commands -> [FilePath] -> IO (Maybe Selection)
 rofi_projects commands source_dirs = do
   projects <- sort_projects <$> find_projects source_dirs
   let opts =
@@ -51,33 +55,34 @@ rofi_projects commands source_dirs = do
         rofi_format R.i <>
         rofi_markup <>
         rofi_msg (rofi_build_message commands)
-      project = project_name . (projects !!) . either (const undefined) fst . decimal
+      project = (projects !!) . either (const undefined) fst . decimal
   candidates <- traverse rofi_format_project_name projects
   rofi opts candidates >>= \case
-    RofiCancel -> Tio.putStrLn "Selection canceled"
-    RofiDefault idx -> Tio.putStrLn $ format ("Default action: "%fp) (project idx)
-    RofiAlternate i idx -> Tio.putStrLn $ format ("Alternate action #"%d%": "%fp) i (project idx)
+    RofiCancel -> return Nothing
+    RofiDefault idx -> return $ Just (project idx, fst $ head commands)
+    RofiAlternate i idx -> return $ Just (project idx, fst $ commands !! i)
   where
     sort_projects = sortBy (compare `on` project_name)
 
-fzf_format_project_name :: Project -> IO Text
+fzf_format_project_name :: Project -> IO (Text, Project)
 fzf_format_project_name project = do
   project' <- implode_home project
   let
     dir = project_dir project'
     name = project_name project'
-  return $ format fp (dir </> name)
+    path = format fp (dir </> name)
+  return (path, project)
 
-fzf_projects :: [FilePath] -> IO ()
+fzf_projects :: [FilePath] -> IO (Maybe Project)
 fzf_projects source_dirs = do
   projects <- find_projects source_dirs
-  candidates <- sort <$> traverse fzf_format_project_name projects
+  candidates <- Map.fromList <$> traverse fzf_format_project_name projects
   let opts = fzf_header "Select project" <>
         fzf_border <>
         fzf_height 40
-  fzf opts candidates >>= \case
-    FzfCancel -> Tio.putStrLn "Selection canceled"
-    FzfDefault out -> Tio.putStrLn $ "Selected project: " <> out
+  fzf opts (sort $ Map.keys candidates) >>= \case
+    FzfCancel -> return Nothing
+    FzfDefault out -> return $ Map.lookup out candidates
 
 data Options = Options { _backend :: Backend
                        , _source_dirs :: [FilePath]
@@ -103,6 +108,20 @@ main = do
                  ,("emacs", "Editor")
                  ,("dolphin", "Files")
                  ]
+
   case _backend opts of
-    Fzf -> fzf_projects source_dirs
-    Rofi -> rofi_projects commands source_dirs
+    Fzf -> fzf_projects source_dirs >>= \case
+      Nothing -> putStrLn "No project selected."
+      Just project ->
+        let path = project_path project
+        in find_nix_file path >>= \case
+          Nothing -> run "bash" []
+          Just nix_file -> nix_shell nix_file Nothing
+
+    Rofi -> rofi_projects commands source_dirs >>= \case
+      Nothing -> putStrLn "No project selected."
+      Just (project, command) ->
+        let path = project_path project
+        in find_nix_file path >>= \case
+          Nothing -> spawn "bash" ["-c", command]
+          Just nix_file -> nix_shell_spawn nix_file (Just command)
