@@ -86,6 +86,7 @@ fzf_projects source_dirs = do
 
 data Options = Options { _backend :: Maybe Backend
                        , _source_dirs :: [FilePath]
+                       , _command :: Maybe Text
                        }
 
 data Backend = Fzf | Rofi
@@ -94,6 +95,8 @@ parser :: Parser Options
 parser = Options
   <$> optional (arg parse_backend "backend" "Backend to use: fzf, rofi")
   <*> many (optPath "path" 'p' "Project directory")
+  -- TODO: Use command passed on the command line
+  <*> optional (optText "command" 'c' "Command to run")
   where parse_backend "fzf" = Just Fzf
         parse_backend "rofi" = Just Rofi
         parse_backend _ = Nothing
