@@ -77,9 +77,9 @@ fzf_projects :: [FilePath] -> IO (Maybe Project)
 fzf_projects source_dirs = do
   projects <- find_projects source_dirs
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
-  let opts = fzf_header "Select project" <>
-        fzf_border <>
-        fzf_height 40
+  let opts = fzf_header "Select project"
+        <> fzf_border
+        -- <> fzf_height 40
   fzf opts (sort $ Map.keys candidates) >>= \case
     FzfCancel -> return Nothing
     FzfDefault out -> return $ Map.lookup out candidates
@@ -116,7 +116,7 @@ main = do
       Just project ->
         let path = project_path project
         in find_nix_file path >>= \case
-          Nothing -> run "bash" []
+          Nothing -> run "bash" [] (Just $ project_dir project)
           Just nix_file -> nix_shell nix_file Nothing
 
     _ -> rofi_projects commands source_dirs >>= \case
@@ -124,5 +124,5 @@ main = do
       Just (project, command) ->
         let path = project_path project
         in find_nix_file path >>= \case
-          Nothing -> spawn "bash" ["-c", command]
+          Nothing -> spawn "bash" ["-c", command] (Just $ project_dir project)
           Just nix_file -> nix_shell_spawn nix_file (Just command)

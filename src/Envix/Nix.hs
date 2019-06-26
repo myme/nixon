@@ -36,11 +36,11 @@ nix_shell = nix_run run
 nix_shell_spawn :: FilePath -> Maybe Text -> IO ()
 nix_shell_spawn = nix_run spawn
 
-type Runner = Text -> [Text] -> IO ()
+type Runner = Text -> [Text] -> Maybe FilePath -> IO ()
 
 nix_run :: Runner -> FilePath -> Maybe Text -> IO ()
 nix_run run' nix_file command = do
   let nix_file' = format fp nix_file
       args = build_args [ pure [nix_file']
                         , arg "--run" =<< command]
-  run' "nix-shell" args
+  run' "nix-shell" args (Just $ parent nix_file)

@@ -49,5 +49,6 @@ executable envix
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings
                      , LambdaCase
+                     , NamedFieldPuns
                      , TupleSections
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
