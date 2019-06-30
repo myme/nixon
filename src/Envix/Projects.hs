@@ -37,7 +37,7 @@ find_projects source_dirs = reduce Fold.list $ do
   is_project' <- liftIO (is_project candidate)
   if not is_project'
     then mzero
-    else return Project { project_name = basename candidate
+    else return Project { project_name = filename candidate
                         , project_dir = parent candidate
                         }
 
