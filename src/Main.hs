@@ -13,6 +13,7 @@ import           Envix.Projects
 import qualified Envix.Rofi as R
 import           Envix.Rofi hiding (s, d, i)
 import           Prelude hiding (FilePath)
+import qualified System.IO as S
 import           Turtle hiding (decimal, sort, sortBy)
 
 -- | Replace the value of $HOME in a path with "~"
@@ -113,19 +114,25 @@ main = do
                  ,("dolphin", "Files")
                  ]
 
-  case _backend opts of
-    Just Fzf -> fzf_projects source_dirs >>= \case
-      Nothing -> putStrLn "No project selected."
-      Just project ->
-        let path = project_path project
-        in find_nix_file path >>= \case
-          Nothing -> run "bash" [] (Just $ project_dir project)
-          Just nix_file -> nix_shell nix_file Nothing
+      do_fzf = fzf_projects source_dirs >>= \case
+        Nothing -> putStrLn "No project selected."
+        Just project ->
+          let path = project_path project
+          in find_nix_file path >>= \case
+            Nothing -> run "bash" [] (Just $ project_dir project)
+            Just nix_file -> nix_shell nix_file Nothing
 
-    _ -> rofi_projects commands source_dirs >>= \case
-      Nothing -> putStrLn "No project selected."
-      Just (project, command) ->
-        let path = project_path project
-        in find_nix_file path >>= \case
-          Nothing -> spawn "bash" ["-c", command] (Just $ project_dir project)
-          Just nix_file -> nix_shell_spawn nix_file (Just command)
+      do_rofi = rofi_projects commands source_dirs >>= \case
+        Nothing -> putStrLn "No project selected."
+        Just (project, command) ->
+          let path = project_path project
+          in find_nix_file path >>= \case
+            Nothing -> spawn "bash" ["-c", command] (Just $ project_dir project)
+            Just nix_file -> nix_shell_spawn nix_file (Just command)
+
+  case _backend opts of
+    Nothing -> S.hIsTerminalDevice S.stdin >>= \case
+      True -> do_fzf
+      False -> do_rofi
+    Just Fzf -> do_fzf
+    Just Rofi -> do_rofi
