@@ -1,9 +1,11 @@
 module Main where
 
 import           Control.Monad
+import           Data.Bool (bool)
 import           Data.Function (on)
 import           Data.List (sort, sortBy)
 import qualified Data.Map as Map
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Data.Text.Read (decimal)
 import           Envix.Fzf
@@ -14,7 +16,7 @@ import qualified Envix.Rofi as R
 import           Envix.Rofi hiding (s, d, i)
 import           Prelude hiding (FilePath)
 import qualified System.IO as S
-import           Turtle hiding (decimal, sort, sortBy)
+import           Turtle hiding (decimal, find, sort, sortBy)
 
 -- | Replace the value of $HOME in a path with "~"
 implode_home :: Project -> IO Project
@@ -74,8 +76,8 @@ fzf_format_project_name project = do
     path = format fp (dir </> name)
   return (path, project)
 
-fzf_projects :: [FilePath] -> IO (Maybe Project)
-fzf_projects source_dirs = do
+fzf_projects :: Commands -> [FilePath] -> IO (Maybe Selection)
+fzf_projects commands source_dirs = do
   projects <- find_projects source_dirs
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
   let opts = fzf_header "Select project"
@@ -83,7 +85,7 @@ fzf_projects source_dirs = do
         -- <> fzf_height 40
   fzf opts (sort $ Map.keys candidates) >>= \case
     FzfCancel -> return Nothing
-    FzfDefault out -> return $ Map.lookup out candidates
+    FzfDefault out -> return ((, fst (head commands)) <$> Map.lookup out candidates)
 
 data Options = Options { _project :: Maybe Project
                        , _backend :: Maybe Backend
@@ -98,12 +100,21 @@ parser = Options
   <$> optional (arg parse_project "project" "Project to jump into")
   <*> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
   <*> many (optPath "path" 'p' "Project directory")
-  -- TODO: Use command passed on the command line
   <*> optional (optText "command" 'c' "Command to run")
   where parse_backend "fzf" = Just Fzf
         parse_backend "rofi" = Just Rofi
         parse_backend _ = Nothing
         parse_project = pure . mkproject . fromText
+
+fzf_exec :: Project -> Text -> IO ()
+fzf_exec project _ = find_nix_file (project_path project) >>= \case
+  Nothing -> run "bash" [] (Just $ project_dir project)
+  Just nix_file -> nix_shell nix_file Nothing
+
+rofi_exec :: Project -> Text -> IO ()
+rofi_exec project command = find_nix_file (project_path project) >>= \case
+  Nothing -> spawn "bash" ["-c", command] (Just $ project_dir project)
+  Just nix_file -> nix_shell_spawn nix_file (Just command)
 
 main :: IO ()
 main = do
@@ -111,31 +122,19 @@ main = do
   let source_dirs = if null (_source_dirs opts)
         then ["~/src", "~/projects"]
         else _source_dirs opts
+      -- TODO: Allow changing default command
       -- TODO: Allow format strings (%s) in commands to insert e.g. project path
       commands = [("konsole", "Terminal")
                  ,("emacs", "Editor")
                  ,("dolphin", "Files")
                  ]
 
-      do_fzf = fzf_projects source_dirs >>= \case
-        Nothing -> putStrLn "No project selected."
-        Just project ->
-          let path = project_path project
-          in find_nix_file path >>= \case
-            Nothing -> run "bash" [] (Just $ project_dir project)
-            Just nix_file -> nix_shell nix_file Nothing
+  def_backend <- bool Rofi Fzf <$> S.hIsTerminalDevice S.stdin
+  let backend = fromMaybe def_backend (_backend opts)
+      (find, exec) = case backend of
+        Fzf -> (fzf_projects, fzf_exec)
+        Rofi -> (rofi_projects, rofi_exec)
 
-      do_rofi = rofi_projects commands source_dirs >>= \case
-        Nothing -> putStrLn "No project selected."
-        Just (project, command) ->
-          let path = project_path project
-          in find_nix_file path >>= \case
-            Nothing -> spawn "bash" ["-c", command] (Just $ project_dir project)
-            Just nix_file -> nix_shell_spawn nix_file (Just command)
-
-  case _backend opts of
-    Nothing -> S.hIsTerminalDevice S.stdin >>= \case
-      True -> do_fzf
-      False -> do_rofi
-    Just Fzf -> do_fzf
-    Just Rofi -> do_rofi
+  find commands source_dirs >>= \case
+    Nothing -> putStrLn "No project selected."
+    Just (project, command) -> exec project command
