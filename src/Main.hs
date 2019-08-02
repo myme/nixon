@@ -87,7 +87,7 @@ fzf_projects commands source_dirs = do
     FzfCancel -> return Nothing
     FzfDefault out -> return ((, fst (head commands)) <$> Map.lookup out candidates)
 
-data Options = Options { _project :: Maybe Project
+data Options = Options { _project :: Maybe FilePath
                        , _backend :: Maybe Backend
                        , _source_dirs :: [FilePath]
                        , _command :: Maybe Text
@@ -98,7 +98,7 @@ data Backend = Fzf | Rofi
 
 parser :: Parser Options
 parser = Options
-  <$> optional (arg parse_project "project" "Project to jump into")
+  <$> optional (argPath "project" "Project to jump into")
   <*> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
   <*> many (optPath "path" 'p' "Project directory")
   <*> optional (optText "command" 'c' "Command to run")
@@ -106,26 +106,27 @@ parser = Options
   where parse_backend "fzf" = Just Fzf
         parse_backend "rofi" = Just Rofi
         parse_backend _ = Nothing
-        parse_project = pure . mkproject . fromText
 
-fzf_exec :: Bool -> Project -> Text -> IO ()
-fzf_exec no_nix project _ =
+project_exec :: (Project -> IO ()) -- ^ Non-nix project action
+             -> (FilePath -> IO ()) -- ^ Nix project action
+             -> Bool -> Project -> IO ()
+project_exec plain with_nix no_nix project =
   let action = if no_nix
         then pure Nothing
         else find_nix_file (project_path project)
   in action >>= \case
-    Nothing -> run "bash" [] (Just $ project_path project)
-    Just nix_file -> nix_shell nix_file Nothing
+    Nothing -> plain project
+    Just nix_file -> with_nix nix_file
 
-rofi_exec :: Bool -> Project -> Text -> IO ()
-rofi_exec no_nix project command =
-  let action = if no_nix
-        then pure Nothing
-        else find_nix_file (project_path project)
-  in action >>= \case
-    Nothing -> spawn "bash" ["-c", command] (Just $ project_path project)
-    Just nix_file -> nix_shell_spawn nix_file (Just command)
+fzf_exec :: Text -> Bool -> Project -> IO ()
+fzf_exec _ = project_exec plain with_nix
+  where plain project = run "bash" [] (Just $ project_path project)
+        with_nix nix_file = nix_shell nix_file Nothing
 
+rofi_exec :: Text -> Bool -> Project -> IO ()
+rofi_exec command = project_exec plain with_nix
+  where plain project = spawn "bash" ["-c", command] (Just $ project_path project)
+        with_nix nix_file = nix_shell_spawn nix_file (Just command)
 
 main :: IO ()
 main = do
@@ -155,4 +156,4 @@ main = do
 
   case action of
     Nothing -> putStrLn "No project selected."
-    Just (project, command) -> exec (_no_nix opts) project command
+    Just (project, command) -> exec command (_no_nix opts) project
