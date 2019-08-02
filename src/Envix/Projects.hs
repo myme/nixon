@@ -2,6 +2,7 @@ module Envix.Projects
   ( Project (..)
   , find_projects
   , project_path
+  , mkproject
   ) where
 
 import qualified Control.Foldl as Fold
@@ -25,6 +26,9 @@ is_project path = do
     then return False
     else or <$> traverse has_marker project_markers
   where has_marker (check, marker) = check (path </> marker)
+
+mkproject :: FilePath -> Project
+mkproject path = Project (filename path) (parent path)
 
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
