@@ -91,6 +91,7 @@ data Options = Options { _project :: Maybe Project
                        , _backend :: Maybe Backend
                        , _source_dirs :: [FilePath]
                        , _command :: Maybe Text
+                       , _no_nix :: Bool
                        }
 
 data Backend = Fzf | Rofi
@@ -101,20 +102,29 @@ parser = Options
   <*> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
   <*> many (optPath "path" 'p' "Project directory")
   <*> optional (optText "command" 'c' "Command to run")
+  <*> switch "no-nix" 'n' "Do not invoke nix-shell if *.nix files are found"
   where parse_backend "fzf" = Just Fzf
         parse_backend "rofi" = Just Rofi
         parse_backend _ = Nothing
         parse_project = pure . mkproject . fromText
 
-fzf_exec :: Project -> Text -> IO ()
-fzf_exec project _ = find_nix_file (project_path project) >>= \case
-  Nothing -> run "bash" [] (Just $ project_path project)
-  Just nix_file -> nix_shell nix_file Nothing
+fzf_exec :: Bool -> Project -> Text -> IO ()
+fzf_exec no_nix project _ =
+  let action = if no_nix
+        then pure Nothing
+        else find_nix_file (project_path project)
+  in action >>= \case
+    Nothing -> run "bash" [] (Just $ project_path project)
+    Just nix_file -> nix_shell nix_file Nothing
 
-rofi_exec :: Project -> Text -> IO ()
-rofi_exec project command = find_nix_file (project_path project) >>= \case
-  Nothing -> spawn "bash" ["-c", command] (Just $ project_path project)
-  Just nix_file -> nix_shell_spawn nix_file (Just command)
+rofi_exec :: Bool -> Project -> Text -> IO ()
+rofi_exec no_nix project command =
+  let action = if no_nix
+        then pure Nothing
+        else find_nix_file (project_path project)
+  in action >>= \case
+    Nothing -> spawn "bash" ["-c", command] (Just $ project_path project)
+    Just nix_file -> nix_shell_spawn nix_file (Just command)
 
 resolve_project :: Project -> [FilePath] -> IO (Maybe Project)
 resolve_project project source_dirs = do
@@ -155,4 +165,4 @@ main = do
 
   case action of
     Nothing -> putStrLn "No project selected."
-    Just (project, command) -> exec project command
+    Just (project, command) -> exec (_no_nix opts) project command
