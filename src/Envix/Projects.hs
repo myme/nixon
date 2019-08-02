@@ -1,19 +1,22 @@
 module Envix.Projects
   ( Project (..)
-  , find_project_by_name
+  , find_projects_by_name
   , find_projects
   , is_project
   , mkproject
   , project_path
   , resolve_project
+  , sort_projects
   ) where
 
 import qualified Control.Foldl as Fold
-import           Data.List (find)
+import           Data.Function (on)
+import           Data.List (sortBy)
+import           Data.Text (isInfixOf)
 import           Envix.Nix
 import           Prelude hiding (FilePath)
 import           System.Wordexp
-import           Turtle hiding (find, sort)
+import           Turtle hiding (find, sort, sortBy, toText)
 
 -- TODO: Add associated action with each project type
 -- e.g. for *.nix invoke nix-shell
@@ -44,9 +47,11 @@ data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
                        }
 
-find_project_by_name :: FilePath -> [FilePath] -> IO (Maybe Project)
-find_project_by_name project = fmap find_project . find_projects
-  where find_project = find ((== project) . project_name)
+find_projects_by_name :: FilePath -> [FilePath] -> IO [Project]
+find_projects_by_name project = fmap find_matching . find_projects
+  where find_matching = filter ((project `isInfix`) . toText . project_name)
+        isInfix p = isInfixOf (toText p)
+        toText = format fp
 
 find_projects :: [FilePath] -> IO [Project]
 find_projects source_dirs = reduce Fold.list $ do
@@ -69,15 +74,14 @@ project_path (Project name dir) = dir </> name
 
 -- | Given a path, resolve it to a project
 -- | path can be a relative/absolute path or a name from the project list.
-resolve_project :: FilePath -> [FilePath] -> IO (Maybe Project)
+resolve_project :: FilePath -> [FilePath] -> IO [Project]
 resolve_project path source_dirs = do
   let project = mkproject path
       name = project_name project
   is_dir <- testdir path
   if is_dir
-    then pure $ Just project
-    else find_project_by_name name source_dirs >>= \case
-      Nothing -> do
-        putStrLn $ "Not a known project: " <> show name
-        pure Nothing
-      Just p -> pure $ Just p
+    then pure [project]
+    else find_projects_by_name name source_dirs
+
+sort_projects :: [Project] -> [Project]
+sort_projects = sortBy (compare `on` project_name)

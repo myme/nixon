@@ -2,8 +2,7 @@ module Main where
 
 import           Control.Monad
 import           Data.Bool (bool)
-import           Data.Function (on)
-import           Data.List (sort, sortBy)
+import           Data.List (sort)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
@@ -16,7 +15,7 @@ import qualified Envix.Rofi as R
 import           Envix.Rofi hiding (s, d, i, f)
 import           Prelude hiding (FilePath)
 import qualified System.IO as S
-import           Turtle hiding (decimal, find, sort, sortBy, f, g)
+import           Turtle hiding (decimal, find, sort, sortBy)
 
 -- | Replace the value of $HOME in a path with "~"
 implode_home :: Project -> IO Project
@@ -50,9 +49,8 @@ type Command = Text
 type Commands = [(Text, Text)]
 
 -- | Launch rofi with a list of projects as candidates
-rofi_projects :: Commands -> [FilePath] -> IO (Maybe Selection)
-rofi_projects commands source_dirs = do
-  projects <- sort_projects <$> find_projects source_dirs
+rofi_projects :: Commands -> [Project] -> IO (Maybe Selection)
+rofi_projects commands projects = do
   let opts =
         rofi_prompt "Select project" <>
         rofi_format R.i <>
@@ -64,8 +62,6 @@ rofi_projects commands source_dirs = do
     RofiCancel -> return Nothing
     RofiDefault idx -> return $ Just (project idx, "rofi -show run")
     RofiAlternate i idx -> return $ Just (project idx, fst $ commands !! i)
-  where
-    sort_projects = sortBy (compare `on` project_name)
 
 fzf_format_project_name :: Project -> IO (Text, Project)
 fzf_format_project_name project = do
@@ -76,9 +72,8 @@ fzf_format_project_name project = do
     path = format fp (dir </> name)
   return (path, project)
 
-fzf_projects :: Commands -> [FilePath] -> IO (Maybe Selection)
-fzf_projects commands source_dirs = do
-  projects <- find_projects source_dirs
+fzf_projects :: Commands -> [Project] -> IO (Maybe Selection)
+fzf_projects commands projects = do
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
   let opts = fzf_header "Select project"
         <> fzf_border
@@ -147,12 +142,23 @@ main = do
         Fzf -> (fzf_projects, fzf_exec)
         Rofi -> (rofi_projects, rofi_exec)
 
+  projects <- sort_projects <$> find_projects source_dirs
   action <- case _project opts of
-    Nothing -> find commands source_dirs
+    Nothing -> find commands projects
     Just project -> do
       let command = fst (head commands)
-      -- TODO: Fall back to `find commands source_dirs` if Nothing
-      fmap (, command) <$> resolve_project project source_dirs
+      matching <- resolve_project project source_dirs
+      case matching of
+        []  -> do
+          printf ("No projects matching: " % fp % "\n") project
+          pure Nothing
+        [p] -> do
+          path <- project_path <$> implode_home p
+          printf ("Using matching project: " % fp % "\n") path
+          pure $ Just (p, command)
+        _   -> do
+          printf ("Found multiple projects matching: " % fp % "\n") project
+          find commands matching
 
   case action of
     Nothing -> putStrLn "No project selected."
