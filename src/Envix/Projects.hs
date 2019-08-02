@@ -5,6 +5,7 @@ module Envix.Projects
   , is_project
   , mkproject
   , project_path
+  , resolve_project
   ) where
 
 import qualified Control.Foldl as Fold
@@ -59,3 +60,18 @@ expand_path path = do
 
 project_path :: Project -> FilePath
 project_path (Project name dir) = dir </> name
+
+-- | Given a path, resolve it to a project
+-- | path can be a relative/absolute path or a name from the project list.
+resolve_project :: FilePath -> [FilePath] -> IO (Maybe Project)
+resolve_project path source_dirs = do
+  let project = mkproject path
+      name = project_name project
+  is_dir <- testdir path
+  if is_dir
+    then pure $ Just project
+    else find_project_by_name name source_dirs >>= \case
+      Nothing -> do
+        putStrLn $ "Not a known project: " <> show name
+        pure Nothing
+      Just p -> pure $ Just p

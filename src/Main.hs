@@ -126,16 +126,6 @@ rofi_exec no_nix project command =
     Nothing -> spawn "bash" ["-c", command] (Just $ project_path project)
     Just nix_file -> nix_shell_spawn nix_file (Just command)
 
-resolve_project :: Project -> [FilePath] -> IO (Maybe Project)
-resolve_project project source_dirs = do
-  is_dir <- testdir (project_path project)
-  if is_dir
-    then pure $ Just project
-    else find_project_by_name (project_name project) source_dirs >>= \case
-      Nothing -> do
-        putStrLn $ "Not a known project: " <> show (project_name project)
-        pure Nothing
-      Just p -> pure $ Just p
 
 main :: IO ()
 main = do
