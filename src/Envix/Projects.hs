@@ -1,15 +1,18 @@
 module Envix.Projects
   ( Project (..)
+  , find_project_by_name
   , find_projects
-  , project_path
+  , is_project
   , mkproject
+  , project_path
   ) where
 
 import qualified Control.Foldl as Fold
+import           Data.List (find)
 import           Envix.Nix
 import           Prelude hiding (FilePath)
 import           System.Wordexp
-import           Turtle hiding (sort)
+import           Turtle hiding (find, sort)
 
 project_markers :: [(FilePath -> IO Bool, FilePath)]
 project_markers = nix_files' ++
@@ -33,6 +36,10 @@ mkproject path = Project (filename path) (parent path)
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
                        }
+
+find_project_by_name :: FilePath -> [FilePath] -> IO (Maybe Project)
+find_project_by_name project = fmap find_project . find_projects
+  where find_project = find ((== project) . project_name)
 
 find_projects :: [FilePath] -> IO [Project]
 find_projects source_dirs = reduce Fold.list $ do

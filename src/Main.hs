@@ -13,10 +13,10 @@ import           Envix.Nix
 import           Envix.Process hiding (arg)
 import           Envix.Projects
 import qualified Envix.Rofi as R
-import           Envix.Rofi hiding (s, d, i)
+import           Envix.Rofi hiding (s, d, i, f)
 import           Prelude hiding (FilePath)
 import qualified System.IO as S
-import           Turtle hiding (decimal, find, sort, sortBy)
+import           Turtle hiding (decimal, find, sort, sortBy, f, g)
 
 -- | Replace the value of $HOME in a path with "~"
 implode_home :: Project -> IO Project
@@ -116,6 +116,17 @@ rofi_exec project command = find_nix_file (project_path project) >>= \case
   Nothing -> spawn "bash" ["-c", command] (Just $ project_dir project)
   Just nix_file -> nix_shell_spawn nix_file (Just command)
 
+resolve_project :: Project -> [FilePath] -> IO (Maybe Project)
+resolve_project project source_dirs = do
+  is_dir <- testdir (project_path project)
+  if is_dir
+    then pure $ Just project
+    else find_project_by_name (project_name project) source_dirs >>= \case
+      Nothing -> do
+        putStrLn $ "Not a known project: " <> show (project_name project)
+        pure Nothing
+      Just p -> pure $ Just p
+
 main :: IO ()
 main = do
   opts <- options "Launch project environments" parser
@@ -135,6 +146,13 @@ main = do
         Fzf -> (fzf_projects, fzf_exec)
         Rofi -> (rofi_projects, rofi_exec)
 
-  find commands source_dirs >>= \case
+  action <- case _project opts of
+    Nothing -> find commands source_dirs
+    Just project -> do
+      let command = fst (head commands)
+      -- TODO: Fall back to `find commands source_dirs` if Nothing
+      fmap (, command) <$> resolve_project project source_dirs
+
+  case action of
     Nothing -> putStrLn "No project selected."
     Just (project, command) -> exec project command
