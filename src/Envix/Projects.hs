@@ -15,6 +15,12 @@ import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort)
 
+-- TODO: Add associated action with each project type
+-- e.g. for *.nix invoke nix-shell
+--      for .git do a fetch?
+--      This should be configurable.
+-- This can then be paired up with a `--type <type>` cli arg to allow override
+-- which action to run. This can obsolete `--no-nix` with `--type plain`.
 project_markers :: [(FilePath -> IO Bool, FilePath)]
 project_markers = nix_files' ++
                   [(testdir, ".git")
