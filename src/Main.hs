@@ -108,12 +108,12 @@ parser = Options
 
 fzf_exec :: Project -> Text -> IO ()
 fzf_exec project _ = find_nix_file (project_path project) >>= \case
-  Nothing -> run "bash" [] (Just $ project_dir project)
+  Nothing -> run "bash" [] (Just $ project_path project)
   Just nix_file -> nix_shell nix_file Nothing
 
 rofi_exec :: Project -> Text -> IO ()
 rofi_exec project command = find_nix_file (project_path project) >>= \case
-  Nothing -> spawn "bash" ["-c", command] (Just $ project_dir project)
+  Nothing -> spawn "bash" ["-c", command] (Just $ project_path project)
   Just nix_file -> nix_shell_spawn nix_file (Just command)
 
 resolve_project :: Project -> [FilePath] -> IO (Maybe Project)
