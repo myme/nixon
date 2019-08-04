@@ -1,8 +1,11 @@
 module Envix.Rofi
   ( rofi
+  , rofi_exec
   , rofi_format
+  , rofi_format_project_name
   , rofi_markup
   , rofi_msg
+  , rofi_projects
   , rofi_prompt
   , s, i, d, q, f, f'
   , RofiResult(..)
@@ -11,9 +14,13 @@ module Envix.Rofi
 import           Control.Arrow (second)
 import           Data.List.NonEmpty (toList)
 import qualified Data.Text as T
+import           Data.Text.Read (decimal)
+import           Envix.Nix
 import           Envix.Process
+import           Envix.Projects
 import           Prelude hiding (FilePath)
-import           Turtle hiding (arg, s, d, f)
+import           Turtle hiding (arg, decimal, s, d, f)
+import qualified Turtle as Tu
 
 -- | Data type for command line options to rofi
 data RofiOpts = RofiOpts
@@ -115,3 +122,43 @@ rofi opts candidates = do
     ExitFailure 1 -> RofiCancel
     ExitFailure c | c >= 10 && c < 20 -> RofiAlternate (c - 10) out
     _ -> undefined
+
+-- | Format project names suited to rofi selection list
+rofi_format_project_name :: Project -> IO Text
+rofi_format_project_name project = do
+  project' <- implode_home project
+  let
+    pad_width = 30
+    name = format fp (project_name project)
+    name_padded = name <> T.replicate (pad_width - T.length name) " "
+    dir = project_dir project'
+  return $ format (Tu.s % " <i>" % fp % "</i>") name_padded dir
+
+-- | Build a help message of alternate commands with short description
+rofi_build_message :: [(Text, Text)] -> Text
+rofi_build_message = T.intercalate ", " . zipWith (curry format_command) [1 :: Int ..]
+  where format_command (idx, (_, desc)) = format ("<b>Alt+"%Tu.d%"</b>: "%Tu.s) idx desc
+
+type Selection = (Project, Command)
+type Command = Text
+type Commands = [(Text, Text)]
+
+-- | Launch rofi with a list of projects as candidates
+rofi_projects :: Commands -> [Project] -> IO (Maybe Selection)
+rofi_projects commands projects = do
+  let opts =
+        rofi_prompt "Select project" <>
+        rofi_format i <>
+        rofi_markup <>
+        rofi_msg (rofi_build_message commands)
+      project = (projects !!) . either (const undefined) fst . decimal
+  candidates <- traverse rofi_format_project_name projects
+  rofi opts candidates >>= \case
+    RofiCancel -> return Nothing
+    RofiDefault idx -> return $ Just (project idx, "rofi -show run")
+    RofiAlternate i' idx -> return $ Just (project idx, fst $ commands !! i')
+
+rofi_exec :: Text -> Bool -> Project -> IO ()
+rofi_exec command = project_exec plain with_nix
+  where plain project = spawn "bash" ["-c", command] (Just $ project_path project)
+        with_nix nix_file = nix_shell_spawn nix_file (Just command)

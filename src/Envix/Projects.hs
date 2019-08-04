@@ -1,9 +1,11 @@
 module Envix.Projects
   ( Project (..)
-  , find_projects_by_name
   , find_projects
+  , find_projects_by_name
+  , implode_home
   , is_project
   , mkproject
+  , project_exec
   , project_path
   , resolve_project
   , sort_projects
@@ -47,6 +49,17 @@ data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
                        }
 
+-- | Replace the value of $HOME in a path with "~"
+implode_home :: Project -> IO Project
+implode_home project = do
+  home' <-home
+  let
+    path = project_dir project
+    dir = case stripPrefix (home' </> "") path of
+      Nothing -> path
+      Just rest -> "~" </> rest
+  return $ project { project_dir = dir }
+
 find_projects_by_name :: FilePath -> [FilePath] -> IO [Project]
 find_projects_by_name project = fmap find_matching . find_projects
   where find_matching = filter ((project `isInfix`) . toText . project_name)
@@ -85,3 +98,14 @@ resolve_project path source_dirs = do
 
 sort_projects :: [Project] -> [Project]
 sort_projects = sortBy (compare `on` project_name)
+
+project_exec :: (Project -> IO ()) -- ^ Non-nix project action
+             -> (FilePath -> IO ()) -- ^ Nix project action
+             -> Bool -> Project -> IO ()
+project_exec plain with_nix no_nix project =
+  let action = if no_nix
+        then pure Nothing
+        else find_nix_file (project_path project)
+  in action >>= \case
+    Nothing -> plain project
+    Just nix_file -> with_nix nix_file
