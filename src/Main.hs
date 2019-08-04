@@ -34,6 +34,9 @@ parser = Options
         parse_backend "rofi" = Just Rofi
         parse_backend _ = Nothing
 
+-- TODO: Launch terminal with nix-shell output if taking a long time.
+-- If switching to a project takes a long time it would be nice to see a window
+-- showing the progress of starting the environment.
 main :: IO ()
 main = do
   opts <- options "Launch project environments" parser
