@@ -30,7 +30,8 @@ extra-source-files:  CHANGELOG.md
 
 executable envix
   main-is:             Main.hs
-  other-modules:       Envix.Fzf
+  other-modules:       Envix.Config
+                     , Envix.Fzf
                      , Envix.Nix
                      , Envix.Process
                      , Envix.Projects
