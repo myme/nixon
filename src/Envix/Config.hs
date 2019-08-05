@@ -11,9 +11,13 @@ import           Prelude hiding (FilePath)
 import           System.Environment (withArgs)
 import           Turtle
 
+-- TODO: Add "Backend" configuration support (for e.g. styles like height)
+-- E.g. --backend-arg "fzf: --height 40"
+--      --backend-arg "rofi: ..."
 -- | Command line options.
 data Options = Options { project :: Maybe FilePath
                        , backend :: Maybe Backend
+                       -- , backend_args :: [Text]
                        , source_dirs :: [FilePath]
                        , command :: Maybe Text
                        , no_nix :: Bool
