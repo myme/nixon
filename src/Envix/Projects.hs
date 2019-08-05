@@ -52,7 +52,7 @@ data Project = Project { project_name :: FilePath
 -- | Replace the value of $HOME in a path with "~"
 implode_home :: Project -> IO Project
 implode_home project = do
-  home' <-home
+  home' <- home
   let
     path = project_dir project
     dir = case stripPrefix (home' </> "") path of
