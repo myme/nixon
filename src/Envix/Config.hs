@@ -11,6 +11,11 @@ import           Prelude hiding (FilePath)
 import           System.Environment (withArgs)
 import           Turtle
 
+-- TODO: Add support for independent directory/tree of nix files.
+--       The idea is that for some projects you don't want to "pollute" the
+--       project by adding e.g. nix files. Add support so that "envix" can find
+--       these files and launch the appropriate environment without the files
+--       having to be *in* the project root.
 -- TODO: Add "Backend" configuration support (for e.g. styles like height)
 -- E.g. --backend-arg "fzf: --height 40"
 --      --backend-arg "rofi: ..."
