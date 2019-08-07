@@ -11,6 +11,8 @@ import           Prelude hiding (FilePath)
 import           System.Environment (withArgs)
 import           Turtle
 
+-- TODO: Add CLI opt for outputting bash/zsh completion script.
+-- TODO: Add CLI opt for listing out projects (no action).
 -- TODO: Add support for independent directory/tree of nix files.
 --       The idea is that for some projects you don't want to "pollute" the
 --       project by adding e.g. nix files. Add support so that "envix" can find
