@@ -58,5 +58,9 @@ main = do
             find commands matching
 
       case action of
-        Nothing -> putStrLn "No project selected."
-        Just (project, command) -> exec (Opts.command opts <|> command) (Opts.no_nix opts) project
+        Nothing -> do
+          putStrLn "No project selected."
+          exit (ExitFailure 1)
+        Just (project, command) -> if Opts.select opts
+          then printf (fp % "\n") (project_path project)
+          else exec (Opts.command opts <|> command) (Opts.no_nix opts) project

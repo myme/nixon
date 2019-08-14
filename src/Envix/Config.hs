@@ -9,7 +9,7 @@ import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Prelude hiding (FilePath)
 import           System.Environment (withArgs)
-import           Turtle
+import           Turtle hiding (select)
 
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
 -- TODO: Add support for independent directory/tree of nix files.
@@ -29,6 +29,7 @@ data Options = Options { project :: Maybe FilePath
                        , no_nix :: Bool
                        , config :: Maybe FilePath
                        , list :: Bool
+                       , select :: Bool
                        } deriving Show
 
 data Backend = Fzf | Rofi deriving Show
@@ -41,7 +42,8 @@ parser = Options
   <*> optional (optText "command" 'c' "Command to run")
   <*> switch "no-nix" 'n' "Do not invoke nix-shell if *.nix files are found"
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/envix)")
-  <*> switch "list" 'l' "Only list out found projects"
+  <*> switch "list" 'l' "List projects"
+  <*> switch "select" 's' "Select a project and output on stdout"
   where parse_backend "fzf" = Just Fzf
         parse_backend "rofi" = Just Rofi
         parse_backend _ = Nothing
@@ -72,6 +74,7 @@ parse_args = do
                      , no_nix = no_nix cli_opts || no_nix file_opts
                      , config = config cli_opts
                      , list = list cli_opts
+                     , select = select cli_opts
                      }
   if not . null $ source_dirs opts
     then pure opts
