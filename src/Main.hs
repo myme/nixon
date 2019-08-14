@@ -12,10 +12,6 @@ import           Prelude hiding (FilePath)
 import qualified System.IO as S
 import           Turtle hiding (decimal, find, sort, sortBy)
 
-type Selection = (Project, Command)
-type Command = Text
-type Commands = [(Text, Text)]
-
 -- TODO: Integrate with `direnv`
 -- TODO: Launch terminal with nix-shell output if taking a long time.
 -- If switching to a project takes a long time it would be nice to see a window

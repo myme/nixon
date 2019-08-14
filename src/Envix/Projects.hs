@@ -1,5 +1,6 @@
 module Envix.Projects
   ( Project (..)
+  , Selection
   , find_projects
   , find_projects_by_name
   , implode_home
@@ -16,9 +17,12 @@ import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
 import           Envix.Nix
+import           Envix.Process
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
+
+type Selection = (Project, Command)
 
 -- TODO: Add associated action with each project type
 -- e.g. for *.nix invoke nix-shell

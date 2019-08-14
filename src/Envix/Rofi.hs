@@ -139,10 +139,6 @@ rofi_build_message :: [(Text, Text)] -> Text
 rofi_build_message = T.intercalate ", " . zipWith (curry format_command) [1 :: Int ..]
   where format_command (idx, (_, desc)) = format ("<b>Alt+"%Tu.d%"</b>: "%Tu.s) idx desc
 
-type Selection = (Project, Command)
-type Command = Text
-type Commands = [(Text, Text)]
-
 -- | Launch rofi with a list of projects as candidates
 rofi_projects :: Commands -> [Project] -> IO (Maybe Selection)
 rofi_projects commands projects = do

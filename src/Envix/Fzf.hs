@@ -74,10 +74,6 @@ fzf_format_project_name project = do
     path = format fp (dir </> name)
   return (path, project)
 
-type Selection = (Project, Command)
-type Command = Text
-type Commands = [(Text, Text)]
-
 fzf_projects :: Commands -> [Project] -> IO (Maybe Selection)
 fzf_projects commands projects = do
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
