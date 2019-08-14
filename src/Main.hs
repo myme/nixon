@@ -1,6 +1,7 @@
 module Main where
 
 import           Data.Bool (bool)
+import           Data.List (sort)
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -33,13 +34,15 @@ main = do
         Opts.Fzf -> (fzf_projects, fzf_exec)
         Opts.Rofi -> (rofi_projects, rofi_exec)
 
-  projects <- sort_projects <$> find_projects source_dirs
   if Opts.list opts
     then do
-      projects' <- map fst <$> traverse fzf_format_project_name projects
-      T.putStr $ T.unlines projects'
+      matching <- resolve_project (fromMaybe "" $ Opts.project opts) source_dirs
+      projects <- traverse implode_home matching
+      let paths = map (format fp . project_path) projects
+      T.putStr $ T.unlines (sort paths)
 
     else do
+      projects <- sort_projects <$> find_projects source_dirs
       action <- case Opts.project opts of
         Nothing -> find commands projects
         Just project -> resolve_project project source_dirs >>= \case
