@@ -12,7 +12,6 @@ import           System.Environment (withArgs)
 import           Turtle
 
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
--- TODO: Add CLI opt for listing out projects (no action).
 -- TODO: Add support for independent directory/tree of nix files.
 --       The idea is that for some projects you don't want to "pollute" the
 --       project by adding e.g. nix files. Add support so that "envix" can find
@@ -29,6 +28,7 @@ data Options = Options { project :: Maybe FilePath
                        , command :: Maybe Text
                        , no_nix :: Bool
                        , config :: Maybe FilePath
+                       , list :: Bool
                        } deriving Show
 
 data Backend = Fzf | Rofi deriving Show
@@ -41,6 +41,7 @@ parser = Options
   <*> optional (optText "command" 'c' "Command to run")
   <*> switch "no-nix" 'n' "Do not invoke nix-shell if *.nix files are found"
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/envix)")
+  <*> switch "list" 'l' "Only list out found projects"
   where parse_backend "fzf" = Just Fzf
         parse_backend "rofi" = Just Rofi
         parse_backend _ = Nothing
@@ -70,6 +71,7 @@ parse_args = do
                      , command = command cli_opts <|> command file_opts
                      , no_nix = no_nix cli_opts || no_nix file_opts
                      , config = config cli_opts
+                     , list = list cli_opts
                      }
   if not . null $ source_dirs opts
     then pure opts

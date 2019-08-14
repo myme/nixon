@@ -2,6 +2,8 @@ module Main where
 
 import           Data.Bool (bool)
 import           Data.Maybe (fromMaybe)
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import qualified Envix.Config as Opts
 import           Envix.Fzf
 import           Envix.Projects
@@ -35,23 +37,29 @@ main = do
         Opts.Rofi -> (rofi_projects, rofi_exec)
 
   projects <- sort_projects <$> find_projects source_dirs
-  action <- case Opts.project opts of
-    Nothing -> find commands projects
-    Just project -> do
-      let command = fst (head commands)
-      matching <- resolve_project project source_dirs
-      case matching of
-        []  -> do
-          printf ("No projects matching: " % fp % "\n") project
-          pure Nothing
-        [p] -> do
-          path <- project_path <$> implode_home p
-          printf ("Using matching project: " % fp % "\n") path
-          pure $ Just (p, command)
-        _   -> do
-          printf ("Found multiple projects matching: " % fp % "\n") project
-          find commands matching
+  if Opts.list opts
+    then do
+      projects' <- map fst <$> traverse fzf_format_project_name projects
+      T.putStr $ T.unlines projects'
 
-  case action of
-    Nothing -> putStrLn "No project selected."
-    Just (project, command) -> exec command (Opts.no_nix opts) project
+    else do
+      action <- case Opts.project opts of
+        Nothing -> find commands projects
+        Just project -> do
+          let command = fst (head commands)
+          matching <- resolve_project project source_dirs
+          case matching of
+            []  -> do
+              printf ("No projects matching: " % fp % "\n") project
+              pure Nothing
+            [p] -> do
+              path <- project_path <$> implode_home p
+              printf ("Using matching project: " % fp % "\n") path
+              pure $ Just (p, command)
+            _   -> do
+              printf ("Found multiple projects matching: " % fp % "\n") project
+              find commands matching
+
+      case action of
+        Nothing -> putStrLn "No project selected."
+        Just (project, command) -> exec command (Opts.no_nix opts) project
