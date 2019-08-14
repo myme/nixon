@@ -151,10 +151,11 @@ rofi_projects commands projects = do
   candidates <- traverse rofi_format_project_name projects
   rofi opts candidates >>= \case
     RofiCancel -> return Nothing
-    RofiDefault idx -> return $ Just (project idx, "rofi -show run")
-    RofiAlternate i' idx -> return $ Just (project idx, fst $ commands !! i')
+    RofiDefault idx -> return $ Just (project idx, Just "rofi -show run")
+    RofiAlternate i' idx -> return $ Just (project idx, Just . fst $ commands !! i')
 
-rofi_exec :: Text -> Bool -> Project -> IO ()
+rofi_exec :: Maybe Text -> Bool -> Project -> IO ()
 rofi_exec command = project_exec plain with_nix
-  where plain project = spawn "bash" ["-c", command] (Just $ project_path project)
-        with_nix nix_file = nix_shell_spawn nix_file (Just command)
+  where plain project = spawn "bash" bash_args (Just $ project_path project)
+        with_nix nix_file = nix_shell_spawn nix_file command
+        bash_args = maybe [] (("-c":) . pure) command

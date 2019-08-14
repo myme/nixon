@@ -13,6 +13,7 @@ import           Control.Arrow (second)
 import           Data.List (sort)
 import           Data.List.NonEmpty (toList)
 import qualified Data.Map as Map
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Process
@@ -60,10 +61,11 @@ fzf opts candidates = do
     ExitFailure 130 -> FzfCancel
     ExitFailure _ -> undefined
 
-fzf_exec :: Text -> Bool -> Project -> IO ()
-fzf_exec _ = project_exec plain with_nix
-  where plain project = run "bash" [] (Just $ project_path project)
-        with_nix nix_file = nix_shell nix_file Nothing
+fzf_exec :: Maybe Text -> Bool -> Project -> IO ()
+fzf_exec command = project_exec plain with_nix
+  where plain project = run bash_command [] (Just $ project_path project)
+        with_nix nix_file = nix_shell nix_file command
+        bash_command = fromMaybe "bash" command
 
 fzf_format_project_name :: Project -> IO (Text, Project)
 fzf_format_project_name project = do
@@ -75,11 +77,11 @@ fzf_format_project_name project = do
   return (path, project)
 
 fzf_projects :: Commands -> [Project] -> IO (Maybe Selection)
-fzf_projects commands projects = do
+fzf_projects _ projects = do
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
   let opts = fzf_header "Select project"
         <> fzf_border
         -- <> fzf_height 40
   fzf opts (sort $ Map.keys candidates) >>= \case
     FzfCancel -> return Nothing
-    FzfDefault out -> return ((, fst (head commands)) <$> Map.lookup out candidates)
+    FzfDefault out -> return ((, Nothing) <$> Map.lookup out candidates)

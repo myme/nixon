@@ -42,21 +42,18 @@ main = do
     else do
       action <- case Opts.project opts of
         Nothing -> find commands projects
-        Just project -> do
-          let command = fst (head commands)
-          matching <- resolve_project project source_dirs
-          case matching of
-            []  -> do
-              printf ("No projects matching: " % fp % "\n") project
-              pure Nothing
-            [p] -> do
-              path <- project_path <$> implode_home p
-              printf ("Using matching project: " % fp % "\n") path
-              pure $ Just (p, command)
-            _   -> do
-              printf ("Found multiple projects matching: " % fp % "\n") project
-              find commands matching
+        Just project -> resolve_project project source_dirs >>= \case
+          [] -> do
+            printf ("No projects matching: " % fp % "\n") project
+            pure Nothing
+          [p] -> do
+            path <- project_path <$> implode_home p
+            printf ("Using matching project: " % fp % "\n") path
+            pure $ Just (p, Opts.command opts)
+          matching -> do
+            printf ("Found multiple projects matching: " % fp % "\n") project
+            find commands matching
 
       case action of
         Nothing -> putStrLn "No project selected."
-        Just (project, command) -> exec command (Opts.no_nix opts) project
+        Just (project, command) -> exec (Opts.command opts <|> command) (Opts.no_nix opts) project

@@ -22,7 +22,7 @@ import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
 
-type Selection = (Project, Command)
+type Selection = (Project, Maybe Command)
 
 -- TODO: Add associated action with each project type
 -- e.g. for *.nix invoke nix-shell
