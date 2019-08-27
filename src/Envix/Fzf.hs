@@ -45,6 +45,7 @@ fzf_height :: Integer -> FzfOpts
 fzf_height height = mempty { _height = Just height }
 
 data FzfResult = FzfCancel
+               | FzfEmpty
                | FzfDefault Text
 
 fzf :: FzfOpts -> [Text] -> IO FzfResult
@@ -58,6 +59,7 @@ fzf opts candidates = do
   (code, out) <- second T.strip <$> procStrict "fzf" args (select input')
   pure $ case code of
     ExitSuccess -> FzfDefault out
+    ExitFailure 1 -> FzfEmpty
     ExitFailure 130 -> FzfCancel
     ExitFailure _ -> undefined
 
@@ -84,4 +86,5 @@ fzf_projects _ projects = do
         -- <> fzf_height 40
   fzf opts (sort $ Map.keys candidates) >>= \case
     FzfCancel -> return Nothing
+    FzfEmpty -> return Nothing
     FzfDefault out -> return ((, Nothing) <$> Map.lookup out candidates)
