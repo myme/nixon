@@ -26,7 +26,7 @@ data Options = Options { project :: Maybe FilePath
                        -- , backend_args :: [Text]
                        , source_dirs :: [FilePath]
                        , command :: Maybe Text
-                       , no_nix :: Bool
+                       , use_nix :: Bool
                        , config :: Maybe FilePath
                        , list :: Bool
                        , select :: Bool
@@ -40,7 +40,7 @@ parser = Options
   <*> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
   <*> many (optPath "path" 'p' "Project directory")
   <*> optional (optText "command" 'c' "Command to run")
-  <*> switch "no-nix" 'n' "Do not invoke nix-shell if *.nix files are found"
+  <*> switch "nix" 'n' "Invoke nix-shell if *.nix files are found"
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/envix)")
   <*> switch "list" 'l' "List projects"
   <*> switch "select" 's' "Select a project and output on stdout"
@@ -61,7 +61,7 @@ merge_opts secondary primary = Options
   , backend = backend primary <|> backend secondary
   , source_dirs = source_dirs secondary ++ source_dirs primary
   , command = command primary <|> command secondary
-  , no_nix = no_nix primary || no_nix secondary
+  , use_nix = use_nix primary || use_nix secondary
   , config = config primary
   , list = list primary
   , select = select primary

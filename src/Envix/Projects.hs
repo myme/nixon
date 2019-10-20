@@ -93,11 +93,12 @@ sort_projects = sortBy (compare `on` project_name)
 
 project_exec :: (Project -> IO ()) -- ^ Non-nix project action
              -> (FilePath -> IO ()) -- ^ Nix project action
-             -> Bool -> Project -> IO ()
-project_exec plain with_nix no_nix project =
-  let action = if no_nix
-        then pure Nothing
-        else find_nix_file (project_path project)
+             -> Bool -- ^ Use nix
+             -> Project -> IO ()
+project_exec plain with_nix use_nix project =
+  let action = if use_nix
+        then find_nix_file (project_path project)
+        else pure Nothing
   in action >>= \case
     Nothing -> plain project
     Just nix_file -> with_nix nix_file

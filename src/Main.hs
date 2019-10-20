@@ -40,7 +40,7 @@ projectAction commands projects opts = do
       exit (ExitFailure 1)
     Just (project, command) -> if Opts.select opts
       then printf (fp % "\n") (project_path project)
-      else exec (Opts.command opts <|> command) (Opts.no_nix opts) project
+      else exec (Opts.command opts <|> command) (Opts.use_nix opts) project
 
 -- TODO: Integrate with `direnv`
 -- TODO: Launch terminal with nix-shell output if taking a long time.
