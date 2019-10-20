@@ -10,7 +10,7 @@ import           Envix.Fzf
 import           Envix.Projects
 import           Envix.Rofi hiding (d, s)
 import           Prelude hiding (FilePath)
-import qualified System.IO as S
+import qualified System.IO as IO
 import           Turtle hiding (decimal, find, sort, sortBy)
 
 -- TODO: Integrate with `direnv`
@@ -28,7 +28,7 @@ main = do
                  ,("dolphin", "Files")
                  ]
 
-  def_backend <- bool Opts.Rofi Opts.Fzf <$> S.hIsTerminalDevice S.stdin
+  def_backend <- bool Opts.Rofi Opts.Fzf <$> IO.hIsTerminalDevice IO.stdin
   let backend = fromMaybe def_backend (Opts.backend opts)
       (find, exec) = case backend of
         Opts.Fzf -> (fzf_projects, fzf_exec)
@@ -43,23 +43,11 @@ main = do
 
     else do
       projects <- sort_projects <$> find_projects source_dirs
-      action <- case Opts.project opts of
-        Nothing -> find Nothing commands projects
-        Just project -> resolve_project project source_dirs >>= \case
-          [] -> do
-            printf ("No projects matching: " % fp % "\n") project
-            pure Nothing
-          [p] -> do
-            path <- project_path <$> implode_home p
-            printf ("Using matching project: " % fp % "\n") path
-            pure $ Just (p, Opts.command opts)
-          _ -> do
-            printf ("Found multiple projects matching: " % fp % "\n") project
-            find (Just $ format fp project) commands projects
+      action <- find (format fp <$> Opts.project opts) commands projects
 
       case action of
         Nothing -> do
-          putStrLn "No project selected."
+          T.hPutStrLn IO.stderr "No project selected."
           exit (ExitFailure 1)
         Just (project, command) -> if Opts.select opts
           then printf (fp % "\n") (project_path project)

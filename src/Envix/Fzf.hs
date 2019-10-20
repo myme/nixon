@@ -60,7 +60,7 @@ data FzfResult = FzfCancel
 fzf :: FzfOpts -> [Text] -> IO FzfResult
 fzf opts candidates = do
   let input' = concatMap (toList . textToLines) candidates
-      args = build_args
+      args = "-1" : build_args
         [ flag "--border" (_border opts)
         , arg "--header" =<< _header opts
         , arg "--height" =<< format (d%"%") <$> _height opts
