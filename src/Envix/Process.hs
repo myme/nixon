@@ -38,7 +38,7 @@ run command args cwd' = do
       cp' = (proc (T.unpack command) (map T.unpack args)) { cwd }
   withCreateProcess cp' $ \_ _ _ handle -> void $ waitForProcess handle
 
--- | Spawn/for off a command in the background
+-- | Spawn/fork off a command in the background
 spawn :: Command -> [Text] -> Maybe FilePath -> IO ()
 spawn command args cwd' = void $ forkProcess $ do
   _ <- createSession
