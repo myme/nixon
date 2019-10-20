@@ -13,14 +13,15 @@ module Envix.Rofi
 
 import           Control.Arrow (second)
 import           Data.List.NonEmpty (toList)
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Data.Text.Read (decimal)
 import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
 import           Prelude hiding (FilePath)
-import           Turtle hiding (arg, decimal, s, d, f)
 import qualified Turtle as Tu
+import           Turtle hiding (arg, decimal, s, d, f, shell)
 
 -- | Data type for command line options to rofi
 data RofiOpts = RofiOpts
@@ -164,6 +165,8 @@ rofi_projects query commands projects = do
 
 rofi_exec :: Maybe Text -> Bool -> Project -> IO ()
 rofi_exec command = project_exec plain with_nix
-  where plain project = spawn "bash" bash_args (Just $ project_path project)
+  where plain project = do
+          shell <- fromMaybe "bash" <$> need "SHELL"
+          spawn shell bash_args (Just $ project_path project)
         with_nix nix_file = nix_shell_spawn nix_file command
         bash_args = maybe [] (("-c":) . pure) command

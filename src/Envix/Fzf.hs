@@ -21,7 +21,7 @@ import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
 import           Prelude hiding (filter)
-import           Turtle hiding (arg, header, sort)
+import           Turtle hiding (arg, header, sort, shell)
 
 data FzfOpts = FzfOpts
   { _border :: Bool
@@ -86,9 +86,10 @@ fzf opts candidates = do
 
 fzf_exec :: Maybe Text -> Bool -> Project -> IO ()
 fzf_exec command = project_exec plain with_nix
-  where plain project = run bash_command [] (Just $ project_path project)
+  where plain project = do
+          shell <- fromMaybe "bash" . (command <|>) <$> need "SHELL"
+          run shell [] (Just $ project_path project)
         with_nix nix_file = nix_shell nix_file command
-        bash_command = fromMaybe "bash" command
 
 fzf_format_project_name :: Project -> IO (Text, Project)
 fzf_format_project_name project = do
