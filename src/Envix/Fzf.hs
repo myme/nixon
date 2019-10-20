@@ -24,16 +24,22 @@ data FzfOpts = FzfOpts
   { _border :: Bool
   , _header :: Maybe Text
   , _height :: Maybe Integer
+  , _query :: Maybe Text
   }
 
 instance Semigroup FzfOpts where
   left <> right = FzfOpts { _border = _border right || _border left
                           , _header = _header right <|> _header left
                           , _height = _height right <|> _height left
+                          , _query = _query right <|> _query left
                           }
 
 instance Monoid FzfOpts where
-  mempty = FzfOpts { _border = False, _header = Nothing, _height = Nothing }
+  mempty = FzfOpts { _border = False
+                   , _header = Nothing
+                   , _height = Nothing
+                   , _query = Nothing
+                   }
 
 fzf_border :: FzfOpts
 fzf_border = mempty { _border = True }
@@ -43,6 +49,9 @@ fzf_header header = mempty { _header = Just header }
 
 fzf_height :: Integer -> FzfOpts
 fzf_height height = mempty { _height = Just height }
+
+fzf_query :: Text -> FzfOpts
+fzf_query query = mempty { _query = Just query }
 
 data FzfResult = FzfCancel
                | FzfEmpty
@@ -55,6 +64,7 @@ fzf opts candidates = do
         [ flag "--border" (_border opts)
         , arg "--header" =<< _header opts
         , arg "--height" =<< format (d%"%") <$> _height opts
+        , arg "--query" =<< _query opts
         ]
   (code, out) <- second T.strip <$> procStrict "fzf" args (select input')
   pure $ case code of
@@ -78,12 +88,13 @@ fzf_format_project_name project = do
     path = format fp (dir </> name)
   return (path, project)
 
-fzf_projects :: Commands -> [Project] -> IO (Maybe Selection)
-fzf_projects _ projects = do
+fzf_projects :: Maybe Text -> Commands -> [Project] -> IO (Maybe Selection)
+fzf_projects query _ projects = do
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
   let opts = fzf_header "Select project"
         <> fzf_border
         -- <> fzf_height 40
+        <> maybe mempty fzf_query query
   fzf opts (sort $ Map.keys candidates) >>= \case
     FzfCancel -> return Nothing
     FzfEmpty -> return Nothing

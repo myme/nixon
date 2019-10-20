@@ -44,7 +44,7 @@ main = do
     else do
       projects <- sort_projects <$> find_projects source_dirs
       action <- case Opts.project opts of
-        Nothing -> find commands projects
+        Nothing -> find Nothing commands projects
         Just project -> resolve_project project source_dirs >>= \case
           [] -> do
             printf ("No projects matching: " % fp % "\n") project
@@ -53,9 +53,9 @@ main = do
             path <- project_path <$> implode_home p
             printf ("Using matching project: " % fp % "\n") path
             pure $ Just (p, Opts.command opts)
-          matching -> do
+          _ -> do
             printf ("Found multiple projects matching: " % fp % "\n") project
-            find commands matching
+            find (Just $ format fp project) commands projects
 
       case action of
         Nothing -> do
