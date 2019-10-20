@@ -6,6 +6,8 @@ module Envix.Fzf
   , fzf_exec
   , fzf_format_project_name
   , fzf_projects
+  , fzf_query
+  , fzf_filter
   , FzfResult(..)
   ) where
 
@@ -18,6 +20,7 @@ import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
+import           Prelude hiding (filter)
 import           Turtle hiding (arg, header, sort)
 
 data FzfOpts = FzfOpts
@@ -25,6 +28,7 @@ data FzfOpts = FzfOpts
   , _header :: Maybe Text
   , _height :: Maybe Integer
   , _query :: Maybe Text
+  , _filter :: Maybe Text
   }
 
 instance Semigroup FzfOpts where
@@ -32,6 +36,7 @@ instance Semigroup FzfOpts where
                           , _header = _header right <|> _header left
                           , _height = _height right <|> _height left
                           , _query = _query right <|> _query left
+                          , _filter = _filter right <|> _filter left
                           }
 
 instance Monoid FzfOpts where
@@ -39,6 +44,7 @@ instance Monoid FzfOpts where
                    , _header = Nothing
                    , _height = Nothing
                    , _query = Nothing
+                   , _filter = Nothing
                    }
 
 fzf_border :: FzfOpts
@@ -53,6 +59,9 @@ fzf_height height = mempty { _height = Just height }
 fzf_query :: Text -> FzfOpts
 fzf_query query = mempty { _query = Just query }
 
+fzf_filter :: Text -> FzfOpts
+fzf_filter filter = mempty { _filter = Just filter }
+
 data FzfResult = FzfCancel
                | FzfEmpty
                | FzfDefault Text
@@ -60,12 +69,14 @@ data FzfResult = FzfCancel
 fzf :: FzfOpts -> [Text] -> IO FzfResult
 fzf opts candidates = do
   let input' = concatMap (toList . textToLines) candidates
-      args = "-1" : build_args
-        [ flag "--border" (_border opts)
-        , arg "--header" =<< _header opts
-        , arg "--height" =<< format (d%"%") <$> _height opts
-        , arg "--query" =<< _query opts
-        ]
+      args = case _filter opts of
+        Just filter -> ["--filter", filter]
+        Nothing -> "-1" : build_args
+          [ flag "--border" (_border opts)
+          , arg "--header" =<< _header opts
+          , arg "--height" =<< format (d%"%") <$> _height opts
+          , arg "--query" =<< _query opts
+          ]
   (code, out) <- second T.strip <$> procStrict "fzf" args (select input')
   pure $ case code of
     ExitSuccess -> FzfDefault out

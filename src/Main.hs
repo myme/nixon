@@ -1,9 +1,7 @@
 module Main where
 
 import           Data.Bool (bool)
-import           Data.List (sort)
 import           Data.Maybe (fromMaybe)
-import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Envix.Config as Opts
 import           Envix.Fzf
@@ -23,6 +21,7 @@ main = do
   let source_dirs = Opts.source_dirs opts
       -- TODO: Allow changing default command
       -- TODO: Allow format strings (%s) in commands to insert e.g. project path
+      -- TODO: Project local commands (project/path/.envix)
       commands = [("konsole", "Terminal")
                  ,("emacs", "Editor")
                  ,("dolphin", "Files")
@@ -34,17 +33,18 @@ main = do
         Opts.Fzf -> (fzf_projects, fzf_exec)
         Opts.Rofi -> (rofi_projects, rofi_exec)
 
+  projects <- sort_projects <$> find_projects source_dirs
+
   if Opts.list opts
     then do
-      matching <- resolve_project (fromMaybe "" $ Opts.project opts) source_dirs
-      projects <- traverse implode_home matching
-      let paths = map (format fp . project_path) projects
-      T.putStr $ T.unlines (sort paths)
+      paths <- fmap (format fp . project_path) <$> traverse implode_home projects
+      let fzf_opts = fzf_filter $ maybe "" (format fp) (Opts.project opts)
+      fzf fzf_opts paths >>= \case
+        FzfDefault matching -> T.putStr matching
+        _ -> T.hPutStrLn IO.stderr "No projects."
 
     else do
-      projects <- sort_projects <$> find_projects source_dirs
       action <- find (format fp <$> Opts.project opts) commands projects
-
       case action of
         Nothing -> do
           T.hPutStrLn IO.stderr "No project selected."

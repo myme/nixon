@@ -8,7 +8,6 @@ module Envix.Projects
   , mkproject
   , project_exec
   , project_path
-  , resolve_project
   , sort_projects
   ) where
 
@@ -88,17 +87,6 @@ expand_path path = do
 
 project_path :: Project -> FilePath
 project_path (Project name dir) = dir </> name
-
--- | Given a path, resolve it to a project
--- | path can be a relative/absolute path or a name from the project list.
-resolve_project :: FilePath -> [FilePath] -> IO [Project]
-resolve_project path source_dirs = do
-  let project = mkproject path
-      name = project_name project
-  is_dir <- testdir path
-  if is_dir
-    then pure [project]
-    else find_projects_by_name name source_dirs
 
 sort_projects :: [Project] -> [Project]
 sort_projects = sortBy (compare `on` project_name)
