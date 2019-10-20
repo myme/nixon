@@ -27,12 +27,6 @@ main = do
                  ,("dolphin", "Files")
                  ]
 
-  def_backend <- bool Opts.Rofi Opts.Fzf <$> IO.hIsTerminalDevice IO.stdin
-  let backend = fromMaybe def_backend (Opts.backend opts)
-      (find, exec) = case backend of
-        Opts.Fzf -> (fzf_projects, fzf_exec)
-        Opts.Rofi -> (rofi_projects, rofi_exec)
-
   projects <- sort_projects <$> find_projects source_dirs
 
   if Opts.list opts
@@ -44,6 +38,11 @@ main = do
         _ -> T.hPutStrLn IO.stderr "No projects."
 
     else do
+      def_backend <- bool Opts.Rofi Opts.Fzf <$> IO.hIsTerminalDevice IO.stdin
+      let backend = fromMaybe def_backend (Opts.backend opts)
+          (find, exec) = case backend of
+            Opts.Fzf -> (fzf_projects, fzf_exec)
+            Opts.Rofi -> (rofi_projects, rofi_exec)
       action <- find (format fp <$> Opts.project opts) commands projects
       case action of
         Nothing -> do
