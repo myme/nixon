@@ -12,14 +12,18 @@ import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           Turtle hiding (decimal, find, sort, sortBy)
 
+-- | Print a text message to stderr
+printErr :: Text -> IO ()
+printErr = T.hPutStrLn IO.stderr
+
 -- | List projects, filtering if a filter is specified.
-list :: Maybe FilePath -> [Project] -> IO ()
-list project projects = do
+list :: [Project] -> Opts.Options -> IO ()
+list projects opts = do
   paths <- fmap (format fp . project_path) <$> traverse implode_home projects
-  let fzf_opts = fzf_filter $ maybe "" (format fp) project
+  let fzf_opts = fzf_filter $ maybe "" (format fp) (Opts.project opts)
   fzf fzf_opts paths >>= \case
     FzfDefault matching -> T.putStr matching
-    _ -> T.hPutStrLn IO.stderr "No projects."
+    _ -> printErr "No projects."
 
 -- | Find/filter out a project and perform an action
 projectAction :: Commands -> [Project] -> Opts.Options -> IO ()
@@ -32,7 +36,7 @@ projectAction commands projects opts = do
   action <- find (format fp <$> Opts.project opts) commands projects
   case action of
     Nothing -> do
-      T.hPutStrLn IO.stderr "No project selected."
+      printErr "No project selected."
       exit (ExitFailure 1)
     Just (project, command) -> if Opts.select opts
       then printf (fp % "\n") (project_path project)
@@ -57,5 +61,5 @@ main = do
   projects <- sort_projects <$> find_projects source_dirs
 
   if Opts.list opts
-    then list (Opts.project opts) projects
+    then list projects opts
     else projectAction commands projects opts
