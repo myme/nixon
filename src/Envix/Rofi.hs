@@ -154,14 +154,14 @@ rofi_projects query commands projects = do
         rofi_prompt "Select project" <>
         rofi_format i <>
         rofi_markup <>
-        rofi_msg (rofi_build_message commands) <>
+        rofi_msg (rofi_build_message $ tail commands) <>
         maybe mempty rofi_query query
       project = (projects !!) . either (const undefined) fst . decimal
   candidates <- traverse rofi_format_project_name projects
   rofi opts candidates >>= \case
     RofiCancel -> return Nothing
-    RofiDefault idx -> return $ Just (project idx, Just "rofi -show run")
-    RofiAlternate i' idx -> return $ Just (project idx, Just . fst $ commands !! i')
+    RofiDefault idx -> return $ Just (project idx, Just . fst . head $ commands)
+    RofiAlternate i' idx -> return $ Just (project idx, Just . fst . (commands !!) $ i' + 1)
 
 rofi_exec :: Maybe Text -> Bool -> Project -> IO ()
 rofi_exec command = project_exec plain with_nix

@@ -53,7 +53,7 @@ main = do
       -- TODO: Allow changing default command
       -- TODO: Allow format strings (%s) in commands to insert e.g. project path
       -- TODO: Project local commands (project/path/.envix)
-      commands = [("konsole", "Terminal")
+      commands = [("x-terminal-emulator", "Terminal")
                  ,("emacs", "Editor")
                  ,("dolphin", "Files")
                  ]
