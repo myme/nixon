@@ -29,6 +29,7 @@ data FzfOpts = FzfOpts
   , _height :: Maybe Integer
   , _query :: Maybe Text
   , _filter :: Maybe Text
+  , _preview :: Maybe Text
   }
 
 instance Semigroup FzfOpts where
@@ -37,6 +38,7 @@ instance Semigroup FzfOpts where
                           , _height = _height right <|> _height left
                           , _query = _query right <|> _query left
                           , _filter = _filter right <|> _filter left
+                          , _preview = _preview right <|> _preview left
                           }
 
 instance Monoid FzfOpts where
@@ -45,6 +47,7 @@ instance Monoid FzfOpts where
                    , _height = Nothing
                    , _query = Nothing
                    , _filter = Nothing
+                   , _preview = Nothing
                    }
 
 fzf_border :: FzfOpts
@@ -62,6 +65,9 @@ fzf_query query = mempty { _query = Just query }
 fzf_filter :: Text -> FzfOpts
 fzf_filter filter = mempty { _filter = Just filter }
 
+fzf_preview :: Text -> FzfOpts
+fzf_preview command = mempty { _preview = Just command }
+
 data FzfResult = FzfCancel
                | FzfEmpty
                | FzfDefault Text
@@ -76,6 +82,7 @@ fzf opts candidates = do
           , arg "--header" =<< _header opts
           , arg "--height" =<< format (d%"%") <$> _height opts
           , arg "--query" =<< _query opts
+          , arg "--preview" =<< _preview opts
           ]
   (code, out) <- second T.strip <$> procStrict "fzf" args (select input')
   pure $ case code of
@@ -107,6 +114,7 @@ fzf_projects query _ projects = do
         <> fzf_border
         -- <> fzf_height 40
         <> maybe mempty fzf_query query
+        -- <> fzf_preview "ls $(eval echo {})"
   fzf opts (sort $ Map.keys candidates) >>= \case
     FzfCancel -> return Nothing
     FzfEmpty -> return Nothing
