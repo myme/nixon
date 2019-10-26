@@ -4,7 +4,6 @@ module Envix.Projects
   , find_projects
   , find_projects_by_name
   , implode_home
-  , is_project
   , mkproject
   , project_exec
   , project_path
@@ -12,6 +11,7 @@ module Envix.Projects
   ) where
 
 import qualified Control.Foldl as Fold
+import           Control.Monad
 import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
@@ -29,27 +29,28 @@ type Selection = (Project, Maybe Command)
 --      This should be configurable.
 -- This can then be paired up with a `--type <type>` cli arg to allow override
 -- which action to run. This can obsolete `--no-nix` with `--type plain`.
-project_markers :: [(FilePath -> IO Bool, FilePath)]
-project_markers = nix_files' ++
+marker_files :: [(FilePath -> IO Bool, FilePath)]
+marker_files = nix_files' ++
                   [(testdir, ".git")
                   ,(testdir, ".hg")
                   ,(testfile, ".project")
                   ]
   where nix_files' = map ((,) testfile) nix_files
 
-is_project :: FilePath -> IO Bool
-is_project path = do
+find_markers :: FilePath -> IO [FilePath]
+find_markers path = do
   is_dir <- isDirectory <$> stat path
   if not is_dir
-    then return False
-    else or <$> traverse has_marker project_markers
+    then return []
+    else fmap snd <$> filterM has_marker marker_files
   where has_marker (check, marker) = check (path </> marker)
 
 mkproject :: FilePath -> Project
-mkproject path = Project (filename path) (parent path)
+mkproject path = Project (filename path) (parent path) []
 
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
+                       , project_markers :: [FilePath]
                        }
 
 -- | Replace the value of $HOME in a path with "~"
@@ -73,11 +74,12 @@ find_projects :: [FilePath] -> IO [Project]
 find_projects source_dirs = reduce Fold.list $ do
   expanded <- liftIO $ traverse expand_path source_dirs
   candidate <- cat $ map ls (concat expanded)
-  is_project' <- liftIO (is_project candidate)
-  if not is_project'
+  markers <- liftIO (find_markers candidate)
+  if null markers
     then mzero
     else return Project { project_name = filename candidate
                         , project_dir = parent candidate
+                        , project_markers = markers
                         }
 
 expand_path :: FilePath -> IO [FilePath]
@@ -86,7 +88,7 @@ expand_path path = do
   return $ either (const []) (map fromString) expanded
 
 project_path :: Project -> FilePath
-project_path (Project name dir) = dir </> name
+project_path (Project name dir _) = dir </> name
 
 sort_projects :: [Project] -> [Project]
 sort_projects = sortBy (compare `on` project_name)
