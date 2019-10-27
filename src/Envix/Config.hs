@@ -75,11 +75,8 @@ parse_args = do
   cli_opts <- arg_parser
   let config_file = fromMaybe (home' </> ".config/envix") (config cli_opts)
   file_args <- map T.unpack <$> read_config config_file
-  opts <- if null file_args
+  if null file_args
     then pure cli_opts
     else do
       file_opts <- withArgs file_args arg_parser
       pure $ merge_opts file_opts cli_opts
-  if not . null $ source_dirs opts
-    then pure opts
-    else pure $ opts { source_dirs = ["~/src", "~/projects"] }
