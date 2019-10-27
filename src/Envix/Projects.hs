@@ -29,21 +29,21 @@ type Selection = (Project, Maybe Command)
 --      This should be configurable.
 -- This can then be paired up with a `--type <type>` cli arg to allow override
 -- which action to run. This can obsolete `--no-nix` with `--type plain`.
-marker_files :: [(FilePath -> IO Bool, FilePath)]
-marker_files = nix_files' ++
-                  [(testdir, ".git")
-                  ,(testdir, ".hg")
-                  ,(testfile, ".project")
-                  ]
-  where nix_files' = map ((,) testfile) nix_files
+marker_files :: [FilePath]
+marker_files = nix_files ++
+             [".git"
+             ,".hg"
+             ,".project"
+             ,".envrc"
+             ]
 
 find_markers :: FilePath -> IO [FilePath]
 find_markers path = do
   is_dir <- isDirectory <$> stat path
   if not is_dir
     then return []
-    else fmap snd <$> filterM has_marker marker_files
-  where has_marker (check, marker) = check (path </> marker)
+    else filterM has_marker marker_files
+  where has_marker marker = testpath (path </> marker)
 
 mkproject :: FilePath -> Project
 mkproject path = Project (filename path) (parent path) []
