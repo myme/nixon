@@ -51,7 +51,7 @@ mkproject path = Project (filename path) (parent path) []
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
                        , project_markers :: [FilePath]
-                       }
+                       } deriving Show
 
 -- | Replace the value of $HOME in a path with "~"
 implode_home :: Project -> IO Project
