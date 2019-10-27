@@ -8,6 +8,7 @@ module Envix.Fzf
   , fzf_projects
   , fzf_query
   , fzf_filter
+  , fzf_preview
   , FzfResult(..)
   ) where
 
