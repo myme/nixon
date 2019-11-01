@@ -169,6 +169,8 @@ rofi_exec command = project_exec plain with_nix
 rofi_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
 rofi_project_command query path = do
   commands <- find_project_commands path
-  rofi (maybe mempty rofi_query query) (to_text <$> commands) >>= \case
+  let opts = rofi_prompt "Select command"
+        <> maybe mempty rofi_query query
+  rofi opts (to_text <$> commands) >>= \case
     RofiDefault cmd -> return $ Just (from_text cmd)
     _ -> return Nothing
