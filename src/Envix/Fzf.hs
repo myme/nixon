@@ -9,6 +9,7 @@ module Envix.Fzf
   , fzf_query
   , fzf_filter
   , fzf_preview
+  , fzf_project_command
   , FzfResult(..)
   ) where
 
@@ -21,7 +22,7 @@ import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
-import           Prelude hiding (filter)
+import           Prelude hiding (FilePath, filter)
 import           Turtle hiding (arg, header, sort, shell)
 
 data FzfOpts = FzfOpts
@@ -105,8 +106,8 @@ fzf_format_project_name project = do
   path <- implode_home (project_path project)
   return (format fp path, project)
 
-fzf_projects :: Maybe Text -> Commands -> [Project] -> IO (Maybe Selection)
-fzf_projects query _ projects = do
+fzf_projects :: Maybe Text -> [Project] -> IO (Maybe Project)
+fzf_projects query projects = do
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
   let opts = fzf_header "Select project"
         <> fzf_border
@@ -116,4 +117,11 @@ fzf_projects query _ projects = do
   fzf opts (sort $ Map.keys candidates) >>= \case
     FzfCancel -> return Nothing
     FzfEmpty -> return Nothing
-    FzfDefault out -> return ((, Nothing) <$> Map.lookup out candidates)
+    FzfDefault out -> return (Map.lookup out candidates)
+
+fzf_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
+fzf_project_command query path = do
+  commands <- find_project_commands path
+  fzf (maybe mempty fzf_query query) commands >>= \case
+    FzfDefault cmd -> return $ Just (from_text cmd)
+    _ -> return Nothing

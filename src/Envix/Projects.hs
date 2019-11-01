@@ -1,6 +1,5 @@
 module Envix.Projects
   ( Project (..)
-  , Selection
   , find_projects
   , find_projects_by_name
   , find_project_commands
@@ -18,12 +17,10 @@ import           Data.List (sortBy)
 import           Data.Maybe (mapMaybe)
 import           Data.Text (isInfixOf)
 import           Envix.Nix
-import           Envix.Process
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
 
-type Selection = (Project, Maybe Command)
 
 generic_commands :: [(Text, Text)]
 generic_commands = [("x-terminal-emulator", "Terminal")

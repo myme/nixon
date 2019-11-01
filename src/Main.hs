@@ -10,7 +10,7 @@ import           Envix.Projects
 import           Envix.Rofi hiding (d, s)
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
-import           Turtle hiding (decimal, find, sort, sortBy)
+import           Turtle hiding (decimal, find, sort, shell, sortBy)
 
 -- | Print a text message to stderr
 printErr :: Text -> IO ()
@@ -25,29 +25,25 @@ list projects opts = do
     FzfDefault matching -> T.putStr matching
     _ -> printErr "No projects."
 
-projectExecute :: FilePath -> IO ()
-projectExecute path = do
-  commands <- find_project_commands path
-  fzf mempty commands >>= \case
-    FzfDefault cmd -> print cmd
-    _ -> printErr "No command selected"
-
 -- | Find/filter out a project and perform an action
-projectAction :: Commands -> [Project] -> Opts.Options -> IO ()
-projectAction commands projects opts = do
+projectAction :: [Project] -> Opts.Options -> IO ()
+projectAction projects opts = do
   def_backend <- bool Opts.Rofi Opts.Fzf <$> IO.hIsTerminalDevice IO.stdin
   let backend = fromMaybe def_backend (Opts.backend opts)
-      (find, exec) = case backend of
-        Opts.Fzf -> (fzf_projects, fzf_exec)
-        Opts.Rofi -> (rofi_projects, rofi_exec)
-  action <- find (format fp <$> Opts.project opts) commands projects
-  case action of
+      (find_project, find_command, exec) = case backend of
+        Opts.Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
+        Opts.Rofi -> (rofi_projects, rofi_project_command, rofi_exec)
+  find_project (format fp <$> Opts.project opts) projects >>= \case
     Nothing -> do
       printErr "No project selected."
       exit (ExitFailure 1)
-    Just (project, command)
+    Just project
       | Opts.select opts -> printf (fp % "\n") (project_path project)
-      | otherwise -> exec (Opts.command opts <|> command) (Opts.use_nix opts) project
+      | otherwise -> do
+          cmd <- find_command (Opts.command opts) (project_path project)
+          shell <- from_text . fromMaybe "bash" <$> need "SHELL"
+          let command = Just $ fromMaybe shell cmd
+          exec command (Opts.use_nix opts) project
 
 -- TODO: Integrate with `direnv`
 -- TODO: Launch terminal with nix-shell output if taking a long time.
@@ -60,13 +56,10 @@ main = do
       -- TODO: Allow changing default command
       -- TODO: Allow format strings (%s) in commands to insert e.g. project path
       -- TODO: Project local commands (project/path/.envix)
-      commands = [("x-terminal-emulator", "Terminal")
-                 ,("emacs", "Editor")
-                 ,("dolphin", "Files")
-                 ]
+      -- TODO: Pingbot integration?
 
   projects <- sort_projects <$> find_projects source_dirs
 
   if Opts.list opts
     then list projects opts
-    else projectAction commands projects opts
+    else projectAction projects opts

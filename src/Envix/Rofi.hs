@@ -7,6 +7,7 @@ module Envix.Rofi
   , rofi_msg
   , rofi_projects
   , rofi_prompt
+  , rofi_project_command
   , s, i, d, q, f, f'
   , RofiResult(..)
   ) where
@@ -142,26 +143,20 @@ rofi_format_project_name project = do
     dir = directory path
   return $ format (Tu.s % " <i>" % fp % "</i>") name_padded dir
 
--- | Build a help message of alternate commands with short description
-rofi_build_message :: [(Text, Text)] -> Text
-rofi_build_message = T.intercalate ", " . zipWith (curry format_command) [1 :: Int ..]
-  where format_command (idx, (_, desc)) = format ("<b>Alt+"%Tu.d%"</b>: "%Tu.s) idx desc
-
 -- | Launch rofi with a list of projects as candidates
-rofi_projects :: Maybe Text -> Commands -> [Project] -> IO (Maybe Selection)
-rofi_projects query commands projects = do
+rofi_projects :: Maybe Text -> [Project] -> IO (Maybe Project)
+rofi_projects query projects = do
   let opts =
         rofi_prompt "Select project" <>
         rofi_format i <>
         rofi_markup <>
-        rofi_msg (rofi_build_message $ tail commands) <>
         maybe mempty rofi_query query
       project = (projects !!) . either (const undefined) fst . decimal
   candidates <- traverse rofi_format_project_name projects
   rofi opts candidates >>= \case
     RofiCancel -> return Nothing
-    RofiDefault idx -> return $ Just (project idx, Just . from_text . fst . head $ commands)
-    RofiAlternate i' idx -> return $ Just (project idx, Just . from_text . fst . (commands !!) $ i' + 1)
+    RofiDefault idx -> return $ Just (project idx)
+    RofiAlternate _ idx -> return $ Just (project idx)
 
 rofi_exec :: Maybe Command -> Bool -> Project -> IO ()
 rofi_exec command = project_exec plain with_nix
@@ -169,4 +164,11 @@ rofi_exec command = project_exec plain with_nix
           shell <- fromMaybe "bash" <$> need "SHELL"
           spawn (Command shell bash_args) (Just $ project_path project)
         with_nix nix_file = nix_shell_spawn nix_file command
-        bash_args = maybe [] (("-c":) . pure) (to_text <$> command)
+        bash_args = build_args [arg "-c" =<< to_text <$> command]
+
+rofi_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
+rofi_project_command query path = do
+  commands <- find_project_commands path
+  rofi (maybe mempty rofi_query query) commands >>= \case
+    RofiDefault cmd -> return $ Just (from_text cmd)
+    _ -> return Nothing
