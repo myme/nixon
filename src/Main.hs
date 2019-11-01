@@ -25,6 +25,13 @@ list projects opts = do
     FzfDefault matching -> T.putStr matching
     _ -> printErr "No projects."
 
+projectExecute :: FilePath -> IO ()
+projectExecute path = do
+  commands <- find_project_commands path
+  fzf mempty commands >>= \case
+    FzfDefault cmd -> print cmd
+    _ -> putStrLn "No command selected"
+
 -- | Find/filter out a project and perform an action
 projectAction :: Commands -> [Project] -> Opts.Options -> IO ()
 projectAction commands projects opts = do
@@ -40,7 +47,9 @@ projectAction commands projects opts = do
       exit (ExitFailure 1)
     Just (project, command) -> if Opts.select opts
       then printf (fp % "\n") (project_path project)
-      else exec (Opts.command opts <|> command) (Opts.use_nix opts) project
+      else if Opts.execute opts
+        then projectExecute (project_path project)
+        else exec (Opts.command opts <|> command) (Opts.use_nix opts) project
 
 -- TODO: Integrate with `direnv`
 -- TODO: Launch terminal with nix-shell output if taking a long time.
