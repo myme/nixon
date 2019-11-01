@@ -30,6 +30,7 @@ data Options = Options { project :: Maybe FilePath
                        , config :: Maybe FilePath
                        , list :: Bool
                        , select :: Bool
+                       , execute :: Bool
                        } deriving Show
 
 data Backend = Fzf | Rofi deriving Show
@@ -44,6 +45,7 @@ parser = Options
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/envix)")
   <*> switch "list" 'l' "List projects"
   <*> switch "select" 's' "Select a project and output on stdout"
+  <*> switch "execute" 'x' "Execute a project action"
   where parse_backend "fzf" = Just Fzf
         parse_backend "rofi" = Just Rofi
         parse_backend _ = Nothing
@@ -65,6 +67,7 @@ merge_opts secondary primary = Options
   , config = config primary
   , list = list primary
   , select = select primary
+  , execute = execute primary
   }
 
 -- | Read configuration from config file and command line arguments
