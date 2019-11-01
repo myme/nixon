@@ -25,6 +25,15 @@ import           Turtle hiding (find, sort, sortBy, toText)
 
 type Selection = (Project, Maybe Command)
 
+generic_commands :: [(Text, Text)]
+generic_commands = [("x-terminal-emulator", "Terminal")
+                   ,("emacs", "Emacs")
+                   ,("vim", "Vim")
+                   ,("dolphin", "Files")
+                   ,("rofi -show run", "Run")
+                   ]
+
+-- TODO: Parse e.g. package.json for npm scripts?
 project_commands :: [(FilePath, [Text])]
 project_commands =
   [("package.json", ["npm start"
@@ -34,7 +43,8 @@ project_commands =
               ,"direnv deny"
               ,"direnv reload"
               ])
-  ,(".git", ["git fetch"])
+  ,(".git", ["git fetch"
+            ,"git log"])
   ]
 
 -- TODO: Add associated action with each project type
@@ -44,7 +54,7 @@ project_commands =
 -- This can then be paired up with a `--type <type>` cli arg to allow override
 -- which action to run. This can obsolete `--no-nix` with `--type plain`.
 marker_files :: [FilePath]
-marker_files = nix_files ++ (map fst project_commands) ++
+marker_files = nix_files ++ map fst project_commands ++
              [".hg"
              ,".project"
              ]
@@ -92,8 +102,10 @@ find_projects source_dirs = reduce Fold.list $ do
                         }
 
 find_project_commands :: FilePath -> IO [Text]
-find_project_commands path =
-  concat . mapMaybe (flip lookup project_commands) <$> find_markers path
+find_project_commands path = do
+  commands <- lookup_commands <$> find_markers path
+  return $ map fst generic_commands ++ commands
+  where lookup_commands = concat . mapMaybe (`lookup` project_commands)
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path = do
