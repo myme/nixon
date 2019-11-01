@@ -22,12 +22,12 @@ import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
 
 
-generic_commands :: [(Text, Text)]
-generic_commands = [("x-terminal-emulator", "Terminal")
-                   ,("emacs", "Emacs")
-                   ,("vim", "Vim")
-                   ,("dolphin", "Files")
-                   ,("rofi -show run", "Run")
+generic_commands :: [Text]
+generic_commands = ["x-terminal-emulator"
+                   ,"emacs"
+                   ,"vim"
+                   ,"dolphin"
+                   ,"rofi -show run"
                    ]
 
 -- TODO: Parse e.g. package.json for npm scripts?
@@ -101,7 +101,7 @@ find_projects source_dirs = reduce Fold.list $ do
 find_project_commands :: FilePath -> IO [Text]
 find_project_commands path = do
   commands <- lookup_commands <$> find_markers path
-  return $ map fst generic_commands ++ commands
+  return $ generic_commands ++ commands
   where lookup_commands = concat . mapMaybe (`lookup` project_commands)
 
 expand_path :: FilePath -> IO [FilePath]
