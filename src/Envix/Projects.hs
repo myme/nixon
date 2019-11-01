@@ -3,6 +3,7 @@ module Envix.Projects
   , Selection
   , find_projects
   , find_projects_by_name
+  , find_project_commands
   , implode_home
   , mkproject
   , project_exec
@@ -14,6 +15,7 @@ import qualified Control.Foldl as Fold
 import           Control.Monad
 import           Data.Function (on)
 import           Data.List (sortBy)
+import           Data.Maybe (mapMaybe)
 import           Data.Text (isInfixOf)
 import           Envix.Nix
 import           Envix.Process
@@ -23,6 +25,18 @@ import           Turtle hiding (find, sort, sortBy, toText)
 
 type Selection = (Project, Maybe Command)
 
+project_commands :: [(FilePath, [Text])]
+project_commands =
+  [("package.json", ["npm start"
+                    ,"npm test"
+                    ])
+  ,(".envrc", ["direnv allow"
+              ,"direnv deny"
+              ,"direnv reload"
+              ])
+  ,(".git", ["git fetch"])
+  ]
+
 -- TODO: Add associated action with each project type
 -- e.g. for *.nix invoke nix-shell
 --      for .git do a fetch?
@@ -30,11 +44,9 @@ type Selection = (Project, Maybe Command)
 -- This can then be paired up with a `--type <type>` cli arg to allow override
 -- which action to run. This can obsolete `--no-nix` with `--type plain`.
 marker_files :: [FilePath]
-marker_files = nix_files ++
-             [".git"
-             ,".hg"
+marker_files = nix_files ++ (map fst project_commands) ++
+             [".hg"
              ,".project"
-             ,".envrc"
              ]
 
 find_markers :: FilePath -> IO [FilePath]
@@ -46,12 +58,11 @@ find_markers path = do
   where has_marker marker = testpath (path </> marker)
 
 mkproject :: FilePath -> Project
-mkproject path = Project (filename path) (parent path) [] []
+mkproject path = Project (filename path) (parent path) []
 
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
                        , project_markers :: [FilePath]
-                       , project_commands :: [Text]
                        } deriving Show
 
 -- | Replace the value of $HOME in a path with "~"
@@ -78,8 +89,11 @@ find_projects source_dirs = reduce Fold.list $ do
     else return Project { project_name = filename candidate
                         , project_dir = parent candidate
                         , project_markers = markers
-                        , project_commands = []
                         }
+
+find_project_commands :: FilePath -> IO [Text]
+find_project_commands path =
+  concat . mapMaybe (flip lookup project_commands) <$> find_markers path
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path = do
