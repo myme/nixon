@@ -16,25 +16,28 @@ import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Maybe (mapMaybe)
 import           Data.Text (isInfixOf)
+import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Process
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
 
+data Argument = TextArg Text | ProjectPath
+
+instance IsString Argument where
+  fromString = TextArg . T.pack
+
 data Cmd = Cmd { _cmd :: Text
-               , _args :: [Text]
+               , _args :: [Argument]
                , _desc :: Text
                }
-
-to_command :: Cmd -> Command
-to_command (Cmd c a _) = Command c a
 
 generic_commands :: [Cmd]
 generic_commands = [Cmd "x-terminal-emulator" [] "Terminal"
                    ,Cmd "emacs" [] "Emacs"
                    ,Cmd "vim" [] "Vim"
-                   ,Cmd "dolphin" [] "Files"
+                   ,Cmd "dolphin" [ProjectPath] "Files"
                    ,Cmd "rofi" ["-show", "run"] "Run"
                    ]
 
@@ -112,6 +115,9 @@ find_project_commands path = do
   commands <- lookup_commands <$> find_markers path
   return $ to_command <$> generic_commands ++ commands
   where lookup_commands = concat . mapMaybe (`lookup` project_commands)
+        to_command (Cmd c a _) = Command c (map expand_arg a)
+        expand_arg (TextArg t) = t
+        expand_arg ProjectPath = format fp path
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path = do
