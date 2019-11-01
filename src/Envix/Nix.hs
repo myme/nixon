@@ -29,18 +29,18 @@ find_nix_file dir = do
         handle_error _ = return False
 
 -- | Evaluate a command in a nix-shell
-nix_shell :: FilePath -> Maybe Text -> IO ()
+nix_shell :: FilePath -> Maybe Command -> IO ()
 nix_shell = nix_run run
 
 -- | Fork and evaluate a command in a nix-shell
-nix_shell_spawn :: FilePath -> Maybe Text -> IO ()
+nix_shell_spawn :: FilePath -> Maybe Command -> IO ()
 nix_shell_spawn = nix_run spawn
 
-type Runner = Text -> [Text] -> Maybe FilePath -> IO ()
+type Runner = Command -> Maybe FilePath -> IO ()
 
-nix_run :: Runner -> FilePath -> Maybe Text -> IO ()
+nix_run :: Runner -> FilePath -> Maybe Command -> IO ()
 nix_run run' nix_file command = do
   let nix_file' = format fp nix_file
-      args = build_args [ pure [nix_file']
-                        , arg "--run" =<< command]
-  run' "nix-shell" args (Just $ parent nix_file)
+      args = build_args [pure [nix_file']
+                        , arg "--run" =<< to_text <$> command]
+  run' (Command "nix-shell" args) (Just $ parent nix_file)

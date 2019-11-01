@@ -47,7 +47,6 @@ projectAction commands projects opts = do
       exit (ExitFailure 1)
     Just (project, command)
       | Opts.select opts -> printf (fp % "\n") (project_path project)
-      | Opts.execute opts -> projectExecute (project_path project)
       | otherwise -> exec (Opts.command opts <|> command) (Opts.use_nix opts) project
 
 -- TODO: Integrate with `direnv`

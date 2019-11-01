@@ -160,13 +160,13 @@ rofi_projects query commands projects = do
   candidates <- traverse rofi_format_project_name projects
   rofi opts candidates >>= \case
     RofiCancel -> return Nothing
-    RofiDefault idx -> return $ Just (project idx, Just . fst . head $ commands)
-    RofiAlternate i' idx -> return $ Just (project idx, Just . fst . (commands !!) $ i' + 1)
+    RofiDefault idx -> return $ Just (project idx, Just . from_text . fst . head $ commands)
+    RofiAlternate i' idx -> return $ Just (project idx, Just . from_text . fst . (commands !!) $ i' + 1)
 
-rofi_exec :: Maybe Text -> Bool -> Project -> IO ()
+rofi_exec :: Maybe Command -> Bool -> Project -> IO ()
 rofi_exec command = project_exec plain with_nix
   where plain project = do
           shell <- fromMaybe "bash" <$> need "SHELL"
-          spawn shell bash_args (Just $ project_path project)
+          spawn (Command shell bash_args) (Just $ project_path project)
         with_nix nix_file = nix_shell_spawn nix_file command
-        bash_args = maybe [] (("-c":) . pure) command
+        bash_args = maybe [] (("-c":) . pure) (to_text <$> command)

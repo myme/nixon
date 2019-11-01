@@ -92,11 +92,12 @@ fzf opts candidates = do
     ExitFailure 130 -> FzfCancel
     ExitFailure _ -> undefined
 
-fzf_exec :: Maybe Text -> Bool -> Project -> IO ()
+fzf_exec :: Maybe Command -> Bool -> Project -> IO ()
 fzf_exec command = project_exec plain with_nix
   where plain project = do
-          shell <- fromMaybe "bash" . (command <|>) <$> need "SHELL"
-          run shell [] (Just $ project_path project)
+          shell <- from_text . fromMaybe "bash" <$> need "SHELL"
+          let cmd = fromMaybe shell command
+          run cmd (Just $ project_path project)
         with_nix nix_file = nix_shell nix_file command
 
 fzf_format_project_name :: Project -> IO (Text, Project)
