@@ -18,9 +18,9 @@ import           System.Posix
 import           System.Process
 import           Turtle hiding (arg, proc)
 
-data Command = Command { command :: Text
-                       , args :: [Text]
-                       , description :: Text
+data Command = Command { cmd_command :: Text
+                       , cmd_args :: [Text]
+                       , cmd_description :: Text
                        } deriving Show
 
 from_text :: Text -> Command
@@ -28,7 +28,7 @@ from_text cmd = Command (head parts) (tail parts) ""
   where parts = T.words cmd
 
 to_text :: Command -> Text
-to_text cmd = T.unwords $ command cmd : args cmd
+to_text cmd = T.unwords $ cmd_command cmd : cmd_args cmd
 
 type Commands = [(Text, Text)]
 
@@ -48,7 +48,7 @@ build_args = concat . catMaybes
 run :: Command -> Maybe FilePath -> IO ()
 run cmd cwd' = do
   let cwd = T.unpack . format fp <$> cwd'
-      cp' = (proc (T.unpack $ command cmd) (map T.unpack $ args cmd)) { cwd }
+      cp' = (proc (T.unpack $ cmd_command cmd) (map T.unpack $ cmd_args cmd)) { cwd }
   withCreateProcess cp' $ \_ _ _ handle -> void $ waitForProcess handle
 
 -- | Spawn/fork off a command in the background
