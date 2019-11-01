@@ -122,6 +122,6 @@ fzf_projects query projects = do
 fzf_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
 fzf_project_command query path = do
   commands <- find_project_commands path
-  fzf (maybe mempty fzf_query query) commands >>= \case
+  fzf (maybe mempty fzf_query query) (to_text <$> commands) >>= \case
     FzfDefault cmd -> return $ Just (from_text cmd)
     _ -> return Nothing

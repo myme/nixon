@@ -17,31 +17,33 @@ import           Data.List (sortBy)
 import           Data.Maybe (mapMaybe)
 import           Data.Text (isInfixOf)
 import           Envix.Nix
+import           Envix.Process
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
 
 
-generic_commands :: [Text]
-generic_commands = ["x-terminal-emulator"
-                   ,"emacs"
-                   ,"vim"
-                   ,"dolphin"
-                   ,"rofi -show run"
+generic_commands :: [Command]
+generic_commands = [Command "x-terminal-emulator" [] -- "Terminal"
+                   ,Command "emacs" [] -- "Emacs"
+                   ,Command "vim" [] -- "Vim"
+                   ,Command "dolphin" [] -- "Files"
+                   ,Command "rofi" ["-show", "run"] -- "Run"
                    ]
 
 -- TODO: Parse e.g. package.json for npm scripts?
-project_commands :: [(FilePath, [Text])]
+project_commands :: [(FilePath, [Command])]
 project_commands =
-  [("package.json", ["npm start"
-                    ,"npm test"
+  [("package.json", [Command "npm" ["start"]
+                    ,Command "npm" ["test"]
                     ])
-  ,(".envrc", ["direnv allow"
-              ,"direnv deny"
-              ,"direnv reload"
+  ,(".envrc", [Command "direnv" ["allow"]
+              ,Command "direnv" ["deny"]
+              ,Command "direnv" ["reload"]
               ])
-  ,(".git", ["git fetch"
-            ,"git log"])
+  ,(".git", [Command "git" ["fetch"]
+            ,Command "git" ["log"]
+            ])
   ]
 
 -- TODO: Add associated action with each project type
@@ -98,7 +100,7 @@ find_projects source_dirs = reduce Fold.list $ do
                         , project_markers = markers
                         }
 
-find_project_commands :: FilePath -> IO [Text]
+find_project_commands :: FilePath -> IO [Command]
 find_project_commands path = do
   commands <- lookup_commands <$> find_markers path
   return $ generic_commands ++ commands
