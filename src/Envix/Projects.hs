@@ -46,11 +46,12 @@ find_markers path = do
   where has_marker marker = testpath (path </> marker)
 
 mkproject :: FilePath -> Project
-mkproject path = Project (filename path) (parent path) []
+mkproject path = Project (filename path) (parent path) [] []
 
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
                        , project_markers :: [FilePath]
+                       , project_commands :: [Text]
                        } deriving Show
 
 -- | Replace the value of $HOME in a path with "~"
@@ -80,6 +81,7 @@ find_projects source_dirs = reduce Fold.list $ do
     else return Project { project_name = filename candidate
                         , project_dir = parent candidate
                         , project_markers = markers
+                        , project_commands = []
                         }
 
 expand_path :: FilePath -> IO [FilePath]
@@ -88,7 +90,7 @@ expand_path path = do
   return $ either (const []) (map fromString) expanded
 
 project_path :: Project -> FilePath
-project_path (Project name dir _) = dir </> name
+project_path project = project_dir project </> project_name project
 
 sort_projects :: [Project] -> [Project]
 sort_projects = sortBy (compare `on` project_name)
