@@ -162,7 +162,7 @@ rofi_exec :: Maybe Command -> Bool -> Project -> IO ()
 rofi_exec command = project_exec plain with_nix
   where plain project = do
           shell <- fromMaybe "bash" <$> need "SHELL"
-          spawn (Command shell bash_args) (Just $ project_path project)
+          spawn (Command shell bash_args "") (Just $ project_path project)
         with_nix nix_file = nix_shell_spawn nix_file command
         bash_args = build_args [arg "-c" =<< to_text <$> command]
 

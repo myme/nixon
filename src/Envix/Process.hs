@@ -20,10 +20,11 @@ import           Turtle hiding (arg, proc)
 
 data Command = Command { command :: Text
                        , args :: [Text]
+                       , description :: Text
                        } deriving Show
 
 from_text :: Text -> Command
-from_text cmd = Command (head parts) (tail parts)
+from_text cmd = Command (head parts) (tail parts) ""
   where parts = T.words cmd
 
 to_text :: Command -> Text

@@ -24,25 +24,25 @@ import           Turtle hiding (find, sort, sortBy, toText)
 
 
 generic_commands :: [Command]
-generic_commands = [Command "x-terminal-emulator" [] -- "Terminal"
-                   ,Command "emacs" [] -- "Emacs"
-                   ,Command "vim" [] -- "Vim"
-                   ,Command "dolphin" [] -- "Files"
-                   ,Command "rofi" ["-show", "run"] -- "Run"
+generic_commands = [Command "x-terminal-emulator" [] "Terminal"
+                   ,Command "emacs" [] "Emacs"
+                   ,Command "vim" [] "Vim"
+                   ,Command "dolphin" [] "Files"
+                   ,Command "rofi" ["-show", "run"] "Run"
                    ]
 
 -- TODO: Parse e.g. package.json for npm scripts?
 project_commands :: [(FilePath, [Command])]
 project_commands =
-  [("package.json", [Command "npm" ["start"]
-                    ,Command "npm" ["test"]
+  [("package.json", [Command "npm" ["start"] ""
+                    ,Command "npm" ["test"] ""
                     ])
-  ,(".envrc", [Command "direnv" ["allow"]
-              ,Command "direnv" ["deny"]
-              ,Command "direnv" ["reload"]
+  ,(".envrc", [Command "direnv" ["allow"] ""
+              ,Command "direnv" ["deny"] ""
+              ,Command "direnv" ["reload"] ""
               ])
-  ,(".git", [Command "git" ["fetch"]
-            ,Command "git" ["log"]
+  ,(".git", [Command "git" ["fetch"] ""
+            ,Command "git" ["log"] ""
             ])
   ]
 

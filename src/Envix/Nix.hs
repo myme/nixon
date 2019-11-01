@@ -43,4 +43,4 @@ nix_run run' nix_file command = do
   let nix_file' = format fp nix_file
       args = build_args [pure [nix_file']
                         , arg "--run" =<< to_text <$> command]
-  run' (Command "nix-shell" args) (Just $ parent nix_file)
+  run' (Command "nix-shell" args "") (Just $ parent nix_file)
