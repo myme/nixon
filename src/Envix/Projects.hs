@@ -55,15 +55,12 @@ data Project = Project { project_name :: FilePath
                        } deriving Show
 
 -- | Replace the value of $HOME in a path with "~"
-implode_home :: Project -> IO Project
-implode_home project = do
+implode_home :: FilePath -> IO FilePath
+implode_home path = do
   home' <- home
-  let
-    path = project_dir project
-    dir = case stripPrefix (home' </> "") path of
-      Nothing -> path
-      Just rest -> "~" </> rest
-  return $ project { project_dir = dir }
+  return $ case stripPrefix (home' </> "") path of
+    Nothing -> path
+    Just rest -> "~" </> rest
 
 find_projects_by_name :: FilePath -> [FilePath] -> IO [Project]
 find_projects_by_name project = fmap find_matching . find_projects

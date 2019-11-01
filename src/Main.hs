@@ -19,7 +19,7 @@ printErr = T.hPutStrLn IO.stderr
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Opts.Options -> IO ()
 list projects opts = do
-  paths <- fmap (format fp . project_path) <$> traverse implode_home projects
+  paths <- fmap (format fp) <$> traverse (implode_home . project_path) projects
   let fzf_opts = fzf_filter $ maybe "" (format fp) (Opts.project opts)
   fzf fzf_opts paths >>= \case
     FzfDefault matching -> T.putStr matching

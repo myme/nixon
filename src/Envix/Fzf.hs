@@ -101,12 +101,8 @@ fzf_exec command = project_exec plain with_nix
 
 fzf_format_project_name :: Project -> IO (Text, Project)
 fzf_format_project_name project = do
-  project' <- implode_home project
-  let
-    dir = project_dir project'
-    name = project_name project'
-    path = format fp (dir </> name)
-  return (path, project)
+  path <- implode_home (project_path project)
+  return (format fp path, project)
 
 fzf_projects :: Maybe Text -> Commands -> [Project] -> IO (Maybe Selection)
 fzf_projects query _ projects = do

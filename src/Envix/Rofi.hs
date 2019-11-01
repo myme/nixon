@@ -134,12 +134,12 @@ rofi opts candidates = do
 -- | Format project names suited to rofi selection list
 rofi_format_project_name :: Project -> IO Text
 rofi_format_project_name project = do
-  project' <- implode_home project
+  path <- implode_home (project_dir project)
   let
     pad_width = 30
     name = format fp (project_name project)
     name_padded = name <> T.replicate (pad_width - T.length name) " "
-    dir = project_dir project'
+    dir = directory path
   return $ format (Tu.s % " <i>" % fp % "</i>") name_padded dir
 
 -- | Build a help message of alternate commands with short description
