@@ -22,10 +22,10 @@ import           Turtle hiding (select)
 --      --backend-arg "rofi: ..."
 -- | Command line options.
 data Options = Options { project :: Maybe FilePath
+                       , command :: Maybe Text
                        , backend :: Maybe Backend
                        -- , backend_args :: [Text]
                        , source_dirs :: [FilePath]
-                       , command :: Maybe Text
                        , use_nix :: Bool
                        , config :: Maybe FilePath
                        , list :: Bool
@@ -38,9 +38,9 @@ data Backend = Fzf | Rofi deriving Show
 parser :: Parser Options
 parser = Options
   <$> optional (argPath "project" "Project to jump into")
+  <*> optional (argText "command" "Command to run")
   <*> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
   <*> many (optPath "path" 'p' "Project directory")
-  <*> optional (optText "command" 'c' "Command to run")
   <*> switch "nix" 'n' "Invoke nix-shell if *.nix files are found"
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/envix)")
   <*> switch "list" 'l' "List projects"
@@ -60,9 +60,9 @@ read_config path = T.words <$> (readTextFile path `catch` as_empty)
 merge_opts :: Options -> Options -> Options
 merge_opts secondary primary = Options
   { project = project primary <|> project secondary
+  , command = command primary <|> command secondary
   , backend = backend primary <|> backend secondary
   , source_dirs = source_dirs secondary ++ source_dirs primary
-  , command = command primary <|> command secondary
   , use_nix = use_nix primary || use_nix secondary
   , config = config primary
   , list = list primary
