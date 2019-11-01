@@ -22,27 +22,34 @@ import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
 
+data Cmd = Cmd { _cmd :: Text
+               , _args :: [Text]
+               , _desc :: Text
+               }
 
-generic_commands :: [Command]
-generic_commands = [Command "x-terminal-emulator" [] "Terminal"
-                   ,Command "emacs" [] "Emacs"
-                   ,Command "vim" [] "Vim"
-                   ,Command "dolphin" [] "Files"
-                   ,Command "rofi" ["-show", "run"] "Run"
+to_command :: Cmd -> Command
+to_command (Cmd c a _) = Command c a
+
+generic_commands :: [Cmd]
+generic_commands = [Cmd "x-terminal-emulator" [] "Terminal"
+                   ,Cmd "emacs" [] "Emacs"
+                   ,Cmd "vim" [] "Vim"
+                   ,Cmd "dolphin" [] "Files"
+                   ,Cmd "rofi" ["-show", "run"] "Run"
                    ]
 
 -- TODO: Parse e.g. package.json for npm scripts?
-project_commands :: [(FilePath, [Command])]
+project_commands :: [(FilePath, [Cmd])]
 project_commands =
-  [("package.json", [Command "npm" ["start"] ""
-                    ,Command "npm" ["test"] ""
+  [("package.json", [Cmd "npm" ["start"] ""
+                    ,Cmd "npm" ["test"] ""
                     ])
-  ,(".envrc", [Command "direnv" ["allow"] ""
-              ,Command "direnv" ["deny"] ""
-              ,Command "direnv" ["reload"] ""
+  ,(".envrc", [Cmd "direnv" ["allow"] ""
+              ,Cmd "direnv" ["deny"] ""
+              ,Cmd "direnv" ["reload"] ""
               ])
-  ,(".git", [Command "git" ["fetch"] ""
-            ,Command "git" ["log"] ""
+  ,(".git", [Cmd "git" ["fetch"] ""
+            ,Cmd "git" ["log"] ""
             ])
   ]
 
@@ -103,7 +110,7 @@ find_projects source_dirs = reduce Fold.list $ do
 find_project_commands :: FilePath -> IO [Command]
 find_project_commands path = do
   commands <- lookup_commands <$> find_markers path
-  return $ generic_commands ++ commands
+  return $ to_command <$> generic_commands ++ commands
   where lookup_commands = concat . mapMaybe (`lookup` project_commands)
 
 expand_path :: FilePath -> IO [FilePath]
