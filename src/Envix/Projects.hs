@@ -34,7 +34,8 @@ generic_commands = [Cmd "x-terminal-emulator" [] "Terminal"
 -- TODO: Parse e.g. package.json for npm scripts?
 project_commands :: [(FilePath, [Cmd])]
 project_commands =
-  [("package.json", [Cmd "npm" ["start"] ""
+  [("package.json", [Cmd "npm" ["install"] ""
+                    ,Cmd "npm" ["start"] ""
                     ,Cmd "npm" ["test"] ""
                     ])
   ,(".envrc", [Cmd "direnv" ["allow"] ""
