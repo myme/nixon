@@ -8,7 +8,6 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Envix.Config as Opts
 import           Envix.Fzf
-import           Envix.Process
 import           Envix.Projects
 import           Envix.Rofi hiding (d, s)
 import           Prelude hiding (FilePath)
@@ -58,9 +57,11 @@ projectAction projects opts = do
       | Opts.select opts -> printf (fp % "\n") (project_path project')
       | otherwise -> do
           cmd <- find_command (Opts.command opts) (project_path project')
-          shell <- from_text . fromMaybe "bash" <$> need "SHELL"
-          let command = Just $ fromMaybe shell cmd
-          exec command (Opts.use_nix opts) project'
+          case cmd of
+            Nothing -> do
+              printErr "No command selected."
+              exit (ExitFailure 1)
+            Just cmd' -> exec (Just cmd') (Opts.use_nix opts) project'
 
 -- TODO: Integrate with `direnv`
 -- TODO: Launch terminal with nix-shell output if taking a long time.
