@@ -1,6 +1,7 @@
 module Main where
 
 import           Data.Bool (bool)
+import           Data.Function (on)
 import           Data.List (find)
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
@@ -29,8 +30,8 @@ list projects opts = do
 
 -- | Find/filter out a project in which path is a subdirectory.
 find_in_project :: [Project] -> FilePath -> Maybe Project
-find_in_project projects path = find (is_prefix . format fp . project_path) projects
-  where is_prefix project = T.isPrefixOf project (format fp path)
+find_in_project projects path = find (is_prefix . project_path) projects
+  where is_prefix project = (T.isPrefixOf `on` format fp) project path
 
 -- | Find/filter out a project and perform an action.
 projectAction :: [Project] -> Opts.Options -> IO ()
