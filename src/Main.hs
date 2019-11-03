@@ -1,7 +1,9 @@
 module Main where
 
 import           Data.Bool (bool)
+import           Data.List (find)
 import           Data.Maybe (fromMaybe)
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Envix.Config as Opts
 import           Envix.Fzf
@@ -25,6 +27,10 @@ list projects opts = do
     FzfDefault matching -> T.putStr matching
     _ -> printErr "No projects."
 
+find_local_project :: FilePath -> [Project] -> Maybe Project
+find_local_project path = find (is_prefix . format fp . project_path)
+  where is_prefix project = T.isPrefixOf project (format fp path)
+
 -- | Find/filter out a project and perform an action
 projectAction :: [Project] -> Opts.Options -> IO ()
 projectAction projects opts = do
@@ -33,17 +39,25 @@ projectAction projects opts = do
       (find_project, find_command, exec) = case backend of
         Opts.Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
         Opts.Rofi -> (rofi_projects, rofi_project_command, rofi_exec)
-  find_project (format fp <$> Opts.project opts) projects >>= \case
+
+  project <- case Opts.project opts of
+    Just query | query == "."  -> (`find_local_project` projects) <$> pwd >>= \case
+                   Nothing -> find_project Nothing projects
+                   Just p  -> return (Just p)
+               | otherwise -> find_project (Just $ format fp query) projects
+    Nothing -> find_project Nothing projects
+
+  case project of
     Nothing -> do
       printErr "No project selected."
       exit (ExitFailure 1)
-    Just project
-      | Opts.select opts -> printf (fp % "\n") (project_path project)
+    Just project'
+      | Opts.select opts -> printf (fp % "\n") (project_path project')
       | otherwise -> do
-          cmd <- find_command (Opts.command opts) (project_path project)
+          cmd <- find_command (Opts.command opts) (project_path project')
           shell <- from_text . fromMaybe "bash" <$> need "SHELL"
           let command = Just $ fromMaybe shell cmd
-          exec command (Opts.use_nix opts) project
+          exec command (Opts.use_nix opts) project'
 
 -- TODO: Integrate with `direnv`
 -- TODO: Launch terminal with nix-shell output if taking a long time.
