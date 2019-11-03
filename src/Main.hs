@@ -27,27 +27,29 @@ list projects opts = do
     FzfDefault matching -> T.putStr matching
     _ -> printErr "No projects."
 
-find_local_project :: FilePath -> [Project] -> Maybe Project
-find_local_project path = find (is_prefix . format fp . project_path)
+-- | Find/filter out a project in which path is a subdirectory.
+find_in_project :: [Project] -> FilePath -> Maybe Project
+find_in_project projects path = find (is_prefix . format fp . project_path) projects
   where is_prefix project = T.isPrefixOf project (format fp path)
 
--- | Find/filter out a project and perform an action
+-- | Find/filter out a project and perform an action.
 projectAction :: [Project] -> Opts.Options -> IO ()
 projectAction projects opts = do
   def_backend <- bool Opts.Rofi Opts.Fzf <$> IO.hIsTerminalDevice IO.stdin
   let backend = fromMaybe def_backend (Opts.backend opts)
+
       (find_project, find_command, exec) = case backend of
         Opts.Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
         Opts.Rofi -> (rofi_projects, rofi_project_command, rofi_exec)
 
-  project <- case Opts.project opts of
-    Just query | query == "."  -> (`find_local_project` projects) <$> pwd >>= \case
-                   Nothing -> find_project Nothing projects
-                   Just p  -> return (Just p)
-               | otherwise -> find_project (Just $ format fp query) projects
-    Nothing -> find_project Nothing projects
+      find_project' :: Maybe Text -> IO (Maybe Project)
+      find_project' query
+        | query == Just "." = find_in_project projects <$> pwd >>= \case
+            Nothing  -> find_project Nothing projects
+            project' -> return project'
+        | otherwise = find_project query projects
 
-  case project of
+  find_project' (format fp <$> Opts.project opts) >>= \case
     Nothing -> do
       printErr "No project selected."
       exit (ExitFailure 1)
