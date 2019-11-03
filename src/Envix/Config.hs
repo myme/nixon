@@ -21,7 +21,7 @@ import           Turtle hiding (select)
 -- E.g. --backend-arg "fzf: --height 40"
 --      --backend-arg "rofi: ..."
 -- | Command line options.
-data Options = Options { project :: Maybe FilePath
+data Options = Options { project :: Maybe Text
                        , command :: Maybe Text
                        , backend :: Maybe Backend
                        -- , backend_args :: [Text]
@@ -36,7 +36,7 @@ data Backend = Fzf | Rofi deriving Show
 
 parser :: Parser Options
 parser = Options
-  <$> optional (argPath "project" "Project to jump into")
+  <$> optional (argText "project" "Project to jump into")
   <*> optional (argText "command" "Command to run")
   <*> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
   <*> many (optPath "path" 'p' "Project directory")

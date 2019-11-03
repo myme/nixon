@@ -23,7 +23,7 @@ printErr = T.hPutStrLn IO.stderr
 list :: [Project] -> Opts.Options -> IO ()
 list projects opts = do
   paths <- fmap (format fp) <$> traverse (implode_home . project_path) projects
-  let fzf_opts = fzf_filter $ maybe "" (format fp) (Opts.project opts)
+  let fzf_opts = fzf_filter $ fromMaybe "" (Opts.project opts)
   fzf fzf_opts paths >>= \case
     FzfDefault matching -> T.putStr matching
     _ -> printErr "No projects."
@@ -50,7 +50,7 @@ projectAction projects opts = do
             project' -> return project'
         | otherwise = find_project query projects
 
-  find_project' (format fp <$> Opts.project opts) >>= \case
+  find_project' (Opts.project opts) >>= \case
     Nothing -> do
       printErr "No project selected."
       exit (ExitFailure 1)
