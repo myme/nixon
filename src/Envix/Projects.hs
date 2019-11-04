@@ -14,11 +14,11 @@ import qualified Control.Foldl as Fold
 import           Control.Monad
 import           Data.Function (on)
 import           Data.List (sortBy)
-import           Data.Maybe (mapMaybe)
 import           Data.Text (isInfixOf)
 import           Envix.Commands
 import           Envix.Nix
 import           Envix.Process
+import           Envix.Projects.Types
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
@@ -27,13 +27,19 @@ generic_commands :: [Cmd]
 generic_commands = [Cmd "x-terminal-emulator" [] "Terminal"
                    ,Cmd "emacs" [] "Emacs"
                    ,Cmd "vim" [] "Vim"
-                   ,Cmd "dolphin" [ProjectPath] "Files"
+                   ,Cmd "dolphin" [ArgPath] "Files"
                    ,Cmd "rofi" ["-show", "run"] "Run"
                    ]
 
 -- TODO: Parse e.g. package.json for npm scripts?
-project_commands :: [(FilePath, [Cmd])]
-project_commands =
+-- TODO: Add associated action with each project type
+-- e.g. for *.nix invoke nix-shell
+--      for .git do a fetch?
+--      This should be configurable.
+-- This can then be paired up with a `--type <type>` cli arg to allow override
+-- which action to run. This can obsolete `--no-nix` with `--type plain`.
+project_markers :: [(ProjectMarker, [Cmd])]
+project_markers =
   [("cabal.project", [Cmd "cabal" ["new-build"] "build"
                      ,Cmd "cabal" ["new-repl"] "repl"
                      ,Cmd "cabal" ["new-run"] "run"
@@ -50,34 +56,30 @@ project_commands =
   ,(".git", [Cmd "git" ["fetch"] ""
             ,Cmd "git" ["log"] ""
             ])
-  ]
+  ,(".hg", [])
+  ,(".project", [])
+  ] ++ map ((, []) . ProjectFile) nix_files
 
--- TODO: Add associated action with each project type
--- e.g. for *.nix invoke nix-shell
---      for .git do a fetch?
---      This should be configurable.
--- This can then be paired up with a `--type <type>` cli arg to allow override
--- which action to run. This can obsolete `--no-nix` with `--type plain`.
-marker_files :: [FilePath]
-marker_files = nix_files ++ map fst project_commands ++
-             [".hg"
-             ,".project"
-             ]
+test_marker :: ProjectMarker -> FilePath -> IO Bool
+test_marker (ProjectPath marker) path = testpath (path </> marker)
+test_marker (ProjectFile marker) path = testfile (path </> marker)
+test_marker (ProjectDir  marker) path = testdir (path </> marker)
+test_marker (ProjectFunc marker) path = marker path
 
-find_markers :: FilePath -> IO [FilePath]
+find_markers :: FilePath -> IO [Cmd]
 find_markers path = do
   is_dir <- isDirectory <$> stat path
   if not is_dir
     then return []
-    else filterM has_marker marker_files
-  where has_marker marker = testpath (path </> marker)
+    else concatMap snd <$> filterM has_marker project_markers
+  where has_marker (marker, _) = test_marker marker path
 
 mkproject :: FilePath -> Project
 mkproject path = Project (filename path) (parent path) []
 
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
-                       , project_markers :: [FilePath]
+                       , project_commands :: [Cmd]
                        } deriving Show
 
 -- | Replace the value of $HOME in a path with "~"
@@ -98,19 +100,18 @@ find_projects :: [FilePath] -> IO [Project]
 find_projects source_dirs = reduce Fold.list $ do
   expanded <- liftIO $ traverse expand_path source_dirs
   candidate <- cat $ map ls (concat expanded)
-  markers <- liftIO (find_markers candidate)
-  if null markers
+  commands <- liftIO (find_markers candidate)
+  if null commands
     then mzero
     else return Project { project_name = filename candidate
                         , project_dir = parent candidate
-                        , project_markers = markers
+                        , project_commands = commands
                         }
 
 find_project_commands :: FilePath -> IO [Command]
 find_project_commands path = do
-  commands <- lookup_commands <$> find_markers path
+  commands <- find_markers path
   return $ resolve_commands path (generic_commands ++ commands)
-  where lookup_commands = concat . mapMaybe (`lookup` project_commands)
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path = do

@@ -36,6 +36,7 @@ executable envix
                      , Envix.Nix
                      , Envix.Process
                      , Envix.Projects
+                     , Envix.Projects.Types
                      , Envix.Rofi
   -- other-extensions:
   build-depends:       base >=4.12 && <4.13
