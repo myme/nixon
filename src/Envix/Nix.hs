@@ -5,7 +5,6 @@ module Envix.Nix
   , nix_shell_spawn
   ) where
 
-import Control.Exception (IOException, catch)
 import Control.Monad (filterM)
 import Data.Maybe (listToMaybe)
 import Envix.Process
@@ -20,13 +19,8 @@ nix_files = ["shell.nix"
 
 -- | Return the path to a project's Nix file, if there is one
 find_nix_file :: FilePath -> IO (Maybe FilePath)
-find_nix_file dir = do
-  let candidates = map (dir </>) nix_files
-  existing <- filterM check_existing candidates
-  return $ listToMaybe existing
-  where check_existing path = (isRegularFile <$> stat path) `catch` handle_error
-        handle_error :: IOException -> IO Bool
-        handle_error _ = return False
+find_nix_file dir = listToMaybe <$> filter_path nix_files
+  where filter_path = filterM (testpath . (dir </>))
 
 -- | Evaluate a command in a nix-shell
 nix_shell :: FilePath -> Maybe Command -> IO ()
