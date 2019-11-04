@@ -1,15 +1,17 @@
 module Envix.Projects.Types
-  ( ProjectType (..)
+  ( Cmd (..)
+  , ProjectType (..)
   , find_markers
   , proj
   , project_types
+  , resolve_commands
   , test_marker
   ) where
 
 import           Control.Monad (filterM)
 import qualified Data.Text as T
-import           Envix.Commands
 import           Envix.Nix
+import           Envix.Process
 import           Prelude hiding (FilePath)
 import           Turtle
 
@@ -100,3 +102,21 @@ find_markers path = do
     then return []
     else concatMap project_commands <$> filterM has_markers project_types
   where has_markers = fmap and . traverse (`test_marker` path) . project_markers
+
+data Argument = ArgText Text | ArgPath
+              deriving Show
+
+instance IsString Argument where
+  fromString = ArgText . T.pack
+
+data Cmd = Cmd { _cmd :: Text
+               , _args :: [Argument]
+               , _desc :: Text
+               } deriving Show
+
+resolve_commands :: FilePath -> [Cmd] -> [Command]
+resolve_commands path commands = to_command <$> commands
+  where
+        to_command (Cmd c a _) = Command c (map expand_arg a)
+        expand_arg (ArgText t) = t
+        expand_arg ArgPath = format fp path

@@ -14,10 +14,9 @@ import qualified Control.Foldl as Fold
 import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
-import           Envix.Commands
 import           Envix.Nix
 import           Envix.Process
-import           Envix.Projects.Types (find_markers)
+import           Envix.Projects.Types (Cmd, find_markers, resolve_commands)
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
