@@ -23,14 +23,18 @@ import           System.Posix
 import           System.Process
 import           Turtle hiding (arg, proc)
 
+-- | Arguments to command descriptions.
+-- | Can support interpolation of e.g. project path.
 data CmdDescArg = ArgText Text | ArgPath
                 deriving Show
 
 instance IsString CmdDescArg where
   fromString = ArgText . T.pack
 
+-- | Command type, either graphical or terminal.
 data CmdType = Terminal | GUI deriving Show
 
+-- | Command description.
 data CmdDesc = CmdDesc
   { cmd_desc_type :: CmdType
   , cmd_desc_command :: Text
@@ -38,6 +42,7 @@ data CmdDesc = CmdDesc
   , cmd_desc_description :: Text
   } deriving Show
 
+-- | "Real" command.
 data Command = Command { cmd_command :: Text
                        , cmd_args :: [Text]
                        } deriving Show
