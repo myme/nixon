@@ -20,6 +20,8 @@ import           Turtle
 --      This should be configurable.
 -- This can then be paired up with a `--type <type>` cli arg to allow override
 -- which action to run. This can obsolete `--no-nix` with `--type plain`.
+-- TODO: Add support for local overrides with an .envix project file
+-- TODO: Record commands made within a project and add to list
 project_types :: [ProjectType]
 project_types =
   [proj ["cabal.project"] "Cabal new-style project"
