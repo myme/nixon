@@ -18,7 +18,8 @@ import           Data.Text (isInfixOf)
 import           Envix.Commands
 import           Envix.Nix
 import           Envix.Process
-import           Envix.Projects.Types
+import           Envix.Projects.Types (ProjectMarker(..), ProjectType, proj, project_marker)
+import qualified Envix.Projects.Types as P
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
@@ -38,27 +39,31 @@ generic_commands = [Cmd "x-terminal-emulator" [] "Terminal"
 --      This should be configurable.
 -- This can then be paired up with a `--type <type>` cli arg to allow override
 -- which action to run. This can obsolete `--no-nix` with `--type plain`.
-project_markers :: [(ProjectMarker, [Cmd])]
-project_markers =
-  [("cabal.project", [Cmd "cabal" ["new-build"] "build"
-                     ,Cmd "cabal" ["new-repl"] "repl"
-                     ,Cmd "cabal" ["new-run"] "run"
-                     ,Cmd "cabal" ["new-test"] "test"
-                     ])
-  ,("package.json", [Cmd "npm" ["install"] "install"
-                    ,Cmd "npm" ["start"] "run"
-                    ,Cmd "npm" ["test"] "test"
-                    ])
-  ,(".envrc", [Cmd "direnv" ["allow"] ""
-              ,Cmd "direnv" ["deny"] ""
-              ,Cmd "direnv" ["reload"] ""
-              ])
-  ,(".git", [Cmd "git" ["fetch"] ""
-            ,Cmd "git" ["log"] ""
-            ])
-  ,(".hg", [])
-  ,(".project", [])
-  ] ++ map ((, []) . ProjectFile) nix_files
+project_types :: [ProjectType]
+project_types =
+  [proj "cabal.project" "Cabal new-style project"
+   [Cmd "cabal" ["new-build"] "build"
+   ,Cmd "cabal" ["new-repl"] "repl"
+   ,Cmd "cabal" ["new-run"] "run"
+   ,Cmd "cabal" ["new-test"] "test"
+   ]
+  ,proj "package.json" "NPM project"
+   [Cmd "npm" ["install"] "install"
+   ,Cmd "npm" ["start"] "run"
+   ,Cmd "npm" ["test"] "test"
+   ]
+  ,proj ".envrc" "Direnv project"
+   [Cmd "direnv" ["allow"] "direnv allow"
+   ,Cmd "direnv" ["deny"] "direnv deny"
+   ,Cmd "direnv" ["reload"] "direnv reload"
+   ]
+  ,proj ".git" "Git repository"
+   [Cmd "git" ["fetch"] "fetch"
+   ,Cmd "git" ["log"] "log"
+   ]
+  ,proj ".hg" "Mercurial project" []
+  ,proj ".project" "Generic project" []
+  ] -- ++ map () nix_files
 
 test_marker :: ProjectMarker -> FilePath -> IO Bool
 test_marker (ProjectPath marker) path = testpath (path </> marker)
@@ -71,8 +76,8 @@ find_markers path = do
   is_dir <- isDirectory <$> stat path
   if not is_dir
     then return []
-    else concatMap snd <$> filterM has_marker project_markers
-  where has_marker (marker, _) = test_marker marker path
+    else concatMap P.project_commands <$> filterM has_marker project_types
+  where has_marker = (`test_marker` path) . project_marker
 
 mkproject :: FilePath -> Project
 mkproject path = Project (filename path) (parent path) []

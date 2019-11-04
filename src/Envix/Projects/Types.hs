@@ -1,10 +1,21 @@
 module Envix.Projects.Types
-  ( ProjectMarker(..)
+  ( ProjectMarker (..)
+  , ProjectType (..)
+  , proj
   ) where
 
 import qualified Data.Text as T
+import           Envix.Commands
 import           Prelude hiding (FilePath)
 import           Turtle
+
+data ProjectType = ProjectType { project_marker :: ProjectMarker
+                               , project_description :: Text
+                               , project_commands :: [Cmd]
+                               }
+
+proj :: ProjectMarker -> Text -> [Cmd] -> ProjectType
+proj = ProjectType
 
 data ProjectMarker = ProjectPath FilePath
                    | ProjectFile FilePath
