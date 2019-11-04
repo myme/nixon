@@ -24,14 +24,6 @@ import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
 
-generic_commands :: [Cmd]
-generic_commands = [Cmd "x-terminal-emulator" [] "Terminal"
-                   ,Cmd "emacs" [] "Emacs"
-                   ,Cmd "vim" [] "Vim"
-                   ,Cmd "dolphin" [ArgPath] "Files"
-                   ,Cmd "rofi" ["-show", "run"] "Run"
-                   ]
-
 -- TODO: Parse e.g. package.json for npm scripts?
 -- TODO: Add associated action with each project type
 -- e.g. for *.nix invoke nix-shell
@@ -62,7 +54,14 @@ project_types =
    ,Cmd "git" ["log"] "log"
    ]
   ,proj ".hg" "Mercurial project" []
-  ,proj ".project" "Generic project" []
+  ,proj ".project" "Ad-hoc project" []
+  ,proj (ProjectFunc . const $ pure True) "Generic project"
+   [Cmd "x-terminal-emulator" [] "Terminal"
+   ,Cmd "emacs" [] "Emacs"
+   ,Cmd "vim" [] "Vim"
+   ,Cmd "dolphin" [ArgPath] "Files"
+   ,Cmd "rofi" ["-show", "run"] "Run"
+   ]
   ] -- ++ map () nix_files
 
 test_marker :: ProjectMarker -> FilePath -> IO Bool
@@ -114,9 +113,7 @@ find_projects source_dirs = reduce Fold.list $ do
                         }
 
 find_project_commands :: FilePath -> IO [Command]
-find_project_commands path = do
-  commands <- find_markers path
-  return $ resolve_commands path (generic_commands ++ commands)
+find_project_commands path = resolve_commands path <$> find_markers path
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path = do
