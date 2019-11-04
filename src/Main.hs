@@ -24,7 +24,7 @@ list projects opts = do
   paths <- fmap (format fp) <$> traverse (implode_home . project_path) projects
   let fzf_opts = fzf_filter $ fromMaybe "" (Opts.project opts)
   fzf fzf_opts paths >>= \case
-    FzfDefault matching -> T.putStr matching
+    FzfSelection _ matching -> T.putStr matching
     _ -> printErr "No projects."
 
 -- | Find/filter out a project in which path is a subdirectory.

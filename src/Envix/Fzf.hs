@@ -14,6 +14,7 @@ module Envix.Fzf
   ) where
 
 import           Control.Arrow (second)
+import           Control.Exception (bracket)
 import           Data.List (sort)
 import           Data.List.NonEmpty (toList)
 import qualified Data.Map as Map
@@ -23,7 +24,8 @@ import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
 import           Prelude hiding (FilePath, filter)
-import           Turtle hiding (arg, header, sort, shell)
+import           System.Console.Readline
+import           Turtle hiding (arg, header, readline, sort, shell)
 
 data FzfOpts = FzfOpts
   { _border :: Bool
@@ -70,28 +72,32 @@ fzf_filter filter = mempty { _filter = Just filter }
 fzf_preview :: Text -> FzfOpts
 fzf_preview command = mempty { _preview = Just command }
 
+data FzfSelectionType = FzfDefault | FzfAlternate
 data FzfResult = FzfCancel
                | FzfEmpty
-               | FzfDefault Text
+               | FzfSelection FzfSelectionType Text
 
 fzf :: FzfOpts -> [Text] -> IO FzfResult
 fzf opts candidates = do
   let input' = concatMap (toList . textToLines) candidates
       args = case _filter opts of
         Just filter -> ["--filter", filter]
-        Nothing -> "-1" : build_args
+        Nothing -> "-1" : "--expect=alt-enter" : build_args
           [ flag "--border" (_border opts)
           , arg "--header" =<< _header opts
           , arg "--height" =<< format (d%"%") <$> _height opts
           , arg "--query" =<< _query opts
           , arg "--preview" =<< _preview opts
           ]
-  (code, out) <- second T.strip <$> procStrict "fzf" args (select input')
+  (code, out) <- second T.lines <$> procStrict "fzf" args (select input')
   pure $ case code of
-    ExitSuccess -> FzfDefault out
     ExitFailure 1 -> FzfEmpty
     ExitFailure 130 -> FzfCancel
     ExitFailure _ -> undefined
+    ExitSuccess -> case out of
+      ["", selection] -> FzfSelection FzfDefault selection
+      ["alt-enter", selection] -> FzfSelection FzfAlternate selection
+      _ -> undefined
 
 fzf_exec :: Maybe Command -> Bool -> Project -> IO ()
 fzf_exec command = project_exec plain with_nix
@@ -106,6 +112,7 @@ fzf_format_project_name project = do
   path <- implode_home (project_path project)
   return (format fp path, project)
 
+-- | Find projects
 fzf_projects :: Maybe Text -> [Project] -> IO (Maybe Project)
 fzf_projects query projects = do
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
@@ -117,13 +124,25 @@ fzf_projects query projects = do
   fzf opts (sort $ Map.keys candidates) >>= \case
     FzfCancel -> return Nothing
     FzfEmpty -> return Nothing
-    FzfDefault out -> return (Map.lookup out candidates)
+    FzfSelection _ out -> return (Map.lookup out candidates)
 
+-- | Find commands applicable to a project
 fzf_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
 fzf_project_command query path = do
   commands <- find_project_commands path
   let opts = fzf_header "Select command"
         <> maybe mempty fzf_query query
   fzf opts (to_text <$> commands) >>= \case
-    FzfDefault cmd -> return $ Just (from_text cmd)
+    FzfSelection FzfDefault cmd -> return $ Just (from_text cmd)
+    FzfSelection FzfAlternate cmd -> fzf_edit_selection cmd
     _ -> return Nothing
+
+-- | Use readline to manipulate/change a fzf selection
+fzf_edit_selection :: Text -> IO (Maybe Command)
+fzf_edit_selection selection = bracket setup teardown read_input
+  where setup = setPreInputHook (Just fill_input)
+        teardown _ = setPreInputHook Nothing
+        fill_input = insertText (T.unpack selection) >> redisplay
+        read_input _ = readline "> " >>= \case
+          Just "" -> return Nothing
+          line    -> return $ fmap (from_text . T.pack) line
