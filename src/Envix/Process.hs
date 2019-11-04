@@ -6,7 +6,8 @@ module Envix.Process
   , arg
   , arg_fmt
   , build_args
-  , command
+  , term
+  , gui
   , flag
   , from_text
   , resolve_command
@@ -28,8 +29,11 @@ data CmdDescArg = ArgText Text | ArgPath
 instance IsString CmdDescArg where
   fromString = ArgText . T.pack
 
+data CmdType = Terminal | GUI deriving Show
+
 data CmdDesc = CmdDesc
-  { cmd_desc_command :: Text
+  { cmd_desc_type :: CmdType
+  , cmd_desc_command :: Text
   , cmd_desc_args :: [CmdDescArg]
   , cmd_desc_description :: Text
   } deriving Show
@@ -38,11 +42,14 @@ data Command = Command { cmd_command :: Text
                        , cmd_args :: [Text]
                        } deriving Show
 
-command :: Text -> [CmdDescArg] -> Text -> CmdDesc
-command = CmdDesc
+term :: Text -> [CmdDescArg] -> Text -> CmdDesc
+term = CmdDesc Terminal
+
+gui :: Text -> [CmdDescArg] -> Text -> CmdDesc
+gui = CmdDesc GUI
 
 resolve_command :: FilePath -> CmdDesc -> Command
-resolve_command path (CmdDesc c a _) = Command c (map expand_arg a)
+resolve_command path (CmdDesc _ c a _) = Command c (map expand_arg a)
   where expand_arg (ArgText t) = t
         expand_arg ArgPath = format fp path
 

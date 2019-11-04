@@ -27,39 +27,39 @@ import           Turtle
 project_types :: [ProjectType]
 project_types =
   [proj ["cabal.project"] "Cabal new-style project"
-   [command "cabal" ["new-build"] "build"
-   ,command "cabal" ["new-repl"] "repl"
-   ,command "cabal" ["new-run"] "run"
-   ,command "cabal" ["new-test"] "test"
+   [term "cabal" ["new-build"] "build"
+   ,term "cabal" ["new-repl"] "repl"
+   ,term "cabal" ["new-run"] "run"
+   ,term "cabal" ["new-test"] "test"
    ]
   ,proj ["package.json"] "NPM project"
-   [command "npm" ["install"] "install"
-   ,command "npm" ["start"] "run"
-   ,command "npm" ["test"] "test"
+   [term "npm" ["install"] "install"
+   ,term "npm" ["start"] "run"
+   ,term "npm" ["test"] "test"
    ]
   ,proj (map ProjectPath nix_files) "Nix project"
-   [command "nix-build" [] "build"
-   ,command "nix-shell" [] "shell"
+   [term "nix-build" [] "build"
+   ,term "nix-shell" [] "shell"
    ]
   ,proj [".envrc"] "Direnv project"
-   [command "direnv" ["allow"] "direnv allow"
-   ,command "direnv" ["deny"] "direnv deny"
-   ,command "direnv" ["reload"] "direnv reload"
+   [term "direnv" ["allow"] "direnv allow"
+   ,term "direnv" ["deny"] "direnv deny"
+   ,term "direnv" ["reload"] "direnv reload"
    ]
   ,proj [".git"] "Git repository"
-   [command "git" ["fetch"] "Git fetch"
-   ,command "git" ["log"] "Git log"
-   ,command "git" ["rebase"] "Git rebase"
-   ,command "git" ["status"] "Git status"
+   [term "git" ["fetch"] "Git fetch"
+   ,term "git" ["log"] "Git log"
+   ,term "git" ["rebase"] "Git rebase"
+   ,term "git" ["status"] "Git status"
    ]
   ,proj [".hg"] "Mercurial project" []
   ,proj [".project"] "Ad-hoc project" []
   ,proj [ProjectFunc . const $ pure True] "Generic project"
-   [command "x-terminal-emulator" [] "Terminal"
-   ,command "emacs" [] "Emacs"
-   ,command "vim" [] "Vim"
-   ,command "dolphin" [ArgPath] "Files"
-   ,command "rofi" ["-show", "run"] "Run"
+   [gui "x-terminal-emulator" [] "Terminal"
+   ,gui "emacs" [] "Emacs"
+   ,gui "vim" [] "Vim"
+   ,gui "dolphin" [ArgPath] "Files"
+   ,gui "rofi" ["-show", "run"] "Run"
    ]
   ]
 
