@@ -16,7 +16,7 @@ import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
 import           Envix.Nix
 import           Envix.Process
-import           Envix.Projects.Types (Cmd, find_markers, resolve_commands)
+import           Envix.Projects.Types (find_markers)
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
@@ -26,7 +26,7 @@ mkproject path = Project (filename path) (parent path) []
 
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
-                       , project_commands :: [Cmd]
+                       , project_commands :: [CmdDesc]
                        } deriving Show
 
 -- | Replace the value of $HOME in a path with "~"
@@ -56,7 +56,7 @@ find_projects source_dirs = reduce Fold.list $ do
                         }
 
 find_project_commands :: FilePath -> IO [Command]
-find_project_commands path = resolve_commands path <$> find_markers path
+find_project_commands path = map (resolve_command path) <$> find_markers path
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path = do

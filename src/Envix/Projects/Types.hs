@@ -1,10 +1,8 @@
 module Envix.Projects.Types
-  ( Cmd (..)
-  , ProjectType (..)
+  ( ProjectType (..)
   , find_markers
   , proj
   , project_types
-  , resolve_commands
   , test_marker
   ) where
 
@@ -29,48 +27,48 @@ import           Turtle
 project_types :: [ProjectType]
 project_types =
   [proj ["cabal.project"] "Cabal new-style project"
-   [Cmd "cabal" ["new-build"] "build"
-   ,Cmd "cabal" ["new-repl"] "repl"
-   ,Cmd "cabal" ["new-run"] "run"
-   ,Cmd "cabal" ["new-test"] "test"
+   [command "cabal" ["new-build"] "build"
+   ,command "cabal" ["new-repl"] "repl"
+   ,command "cabal" ["new-run"] "run"
+   ,command "cabal" ["new-test"] "test"
    ]
   ,proj ["package.json"] "NPM project"
-   [Cmd "npm" ["install"] "install"
-   ,Cmd "npm" ["start"] "run"
-   ,Cmd "npm" ["test"] "test"
+   [command "npm" ["install"] "install"
+   ,command "npm" ["start"] "run"
+   ,command "npm" ["test"] "test"
    ]
   ,proj (map ProjectPath nix_files) "Nix project"
-   [Cmd "nix-build" [] "build"
-   ,Cmd "nix-shell" [] "shell"
+   [command "nix-build" [] "build"
+   ,command "nix-shell" [] "shell"
    ]
   ,proj [".envrc"] "Direnv project"
-   [Cmd "direnv" ["allow"] "direnv allow"
-   ,Cmd "direnv" ["deny"] "direnv deny"
-   ,Cmd "direnv" ["reload"] "direnv reload"
+   [command "direnv" ["allow"] "direnv allow"
+   ,command "direnv" ["deny"] "direnv deny"
+   ,command "direnv" ["reload"] "direnv reload"
    ]
   ,proj [".git"] "Git repository"
-   [Cmd "git" ["fetch"] "Git fetch"
-   ,Cmd "git" ["log"] "Git log"
-   ,Cmd "git" ["rebase"] "Git rebase"
-   ,Cmd "git" ["status"] "Git status"
+   [command "git" ["fetch"] "Git fetch"
+   ,command "git" ["log"] "Git log"
+   ,command "git" ["rebase"] "Git rebase"
+   ,command "git" ["status"] "Git status"
    ]
   ,proj [".hg"] "Mercurial project" []
   ,proj [".project"] "Ad-hoc project" []
   ,proj [ProjectFunc . const $ pure True] "Generic project"
-   [Cmd "x-terminal-emulator" [] "Terminal"
-   ,Cmd "emacs" [] "Emacs"
-   ,Cmd "vim" [] "Vim"
-   ,Cmd "dolphin" [ArgPath] "Files"
-   ,Cmd "rofi" ["-show", "run"] "Run"
+   [command "x-terminal-emulator" [] "Terminal"
+   ,command "emacs" [] "Emacs"
+   ,command "vim" [] "Vim"
+   ,command "dolphin" [ArgPath] "Files"
+   ,command "rofi" ["-show", "run"] "Run"
    ]
   ]
 
 data ProjectType = ProjectType { project_markers :: [ProjectMarker]
                                , project_description :: Text
-                               , project_commands :: [Cmd]
+                               , project_commands :: [CmdDesc]
                                }
 
-proj :: [ProjectMarker] -> Text -> [Cmd] -> ProjectType
+proj :: [ProjectMarker] -> Text -> [CmdDesc] -> ProjectType
 proj = ProjectType
 
 data ProjectMarker = ProjectPath FilePath
@@ -95,28 +93,10 @@ test_marker (ProjectDir  marker) path = testdir (path </> marker)
 test_marker (ProjectFunc marker) path = marker path
 
 -- | Given a path, find markers and associated commands.
-find_markers :: FilePath -> IO [Cmd]
+find_markers :: FilePath -> IO [CmdDesc]
 find_markers path = do
   is_dir <- isDirectory <$> stat path
   if not is_dir
     then return []
     else concatMap project_commands <$> filterM has_markers project_types
   where has_markers = fmap and . traverse (`test_marker` path) . project_markers
-
-data Argument = ArgText Text | ArgPath
-              deriving Show
-
-instance IsString Argument where
-  fromString = ArgText . T.pack
-
-data Cmd = Cmd { _cmd :: Text
-               , _args :: [Argument]
-               , _desc :: Text
-               } deriving Show
-
-resolve_commands :: FilePath -> [Cmd] -> [Command]
-resolve_commands path commands = to_command <$> commands
-  where
-        to_command (Cmd c a _) = Command c (map expand_arg a)
-        expand_arg (ArgText t) = t
-        expand_arg ArgPath = format fp path

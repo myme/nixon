@@ -1,11 +1,15 @@
 module Envix.Process
   ( Command (..)
   , Commands
+  , CmdDesc (..)
+  , CmdDescArg (..)
   , arg
   , arg_fmt
   , build_args
+  , command
   , flag
   , from_text
+  , resolve_command
   , run
   , spawn
   , to_text
@@ -18,9 +22,29 @@ import           System.Posix
 import           System.Process
 import           Turtle hiding (arg, proc)
 
+data CmdDescArg = ArgText Text | ArgPath
+                deriving Show
+
+instance IsString CmdDescArg where
+  fromString = ArgText . T.pack
+
+data CmdDesc = CmdDesc
+  { cmd_desc_command :: Text
+  , cmd_desc_args :: [CmdDescArg]
+  , cmd_desc_description :: Text
+  } deriving Show
+
 data Command = Command { cmd_command :: Text
                        , cmd_args :: [Text]
                        } deriving Show
+
+command :: Text -> [CmdDescArg] -> Text -> CmdDesc
+command = CmdDesc
+
+resolve_command :: FilePath -> CmdDesc -> Command
+resolve_command path (CmdDesc c a _) = Command c (map expand_arg a)
+  where expand_arg (ArgText t) = t
+        expand_arg ArgPath = format fp path
 
 from_text :: Text -> Command
 from_text cmd = Command (head parts) (tail parts)
