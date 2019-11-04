@@ -138,6 +138,7 @@ fzf_project_command query path = do
     _ -> return Nothing
 
 -- | Use readline to manipulate/change a fzf selection
+-- TODO: Add readline history
 fzf_edit_selection :: Text -> IO (Maybe Command)
 fzf_edit_selection selection = bracket setup teardown read_input
   where setup = setPreInputHook (Just fill_input)
