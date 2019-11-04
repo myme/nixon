@@ -22,6 +22,7 @@ import           Turtle
 -- which action to run. This can obsolete `--no-nix` with `--type plain`.
 -- TODO: Add support for local overrides with an .envix project file
 -- TODO: Record commands made within a project and add to list
+-- TODO: List descriptions
 project_types :: [ProjectType]
 project_types =
   [proj ["cabal.project"] "Cabal new-style project"
@@ -45,8 +46,10 @@ project_types =
    ,Cmd "direnv" ["reload"] "direnv reload"
    ]
   ,proj [".git"] "Git repository"
-   [Cmd "git" ["fetch"] "fetch"
-   ,Cmd "git" ["log"] "log"
+   [Cmd "git" ["fetch"] "Git fetch"
+   ,Cmd "git" ["log"] "Git log"
+   ,Cmd "git" ["rebase"] "Git rebase"
+   ,Cmd "git" ["status"] "Git status"
    ]
   ,proj [".hg"] "Mercurial project" []
   ,proj [".project"] "Ad-hoc project" []
