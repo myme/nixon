@@ -9,12 +9,12 @@ import           Envix.Commands
 import           Prelude hiding (FilePath)
 import           Turtle
 
-data ProjectType = ProjectType { project_marker :: ProjectMarker
+data ProjectType = ProjectType { project_markers :: [ProjectMarker]
                                , project_description :: Text
                                , project_commands :: [Cmd]
                                }
 
-proj :: ProjectMarker -> Text -> [Cmd] -> ProjectType
+proj :: [ProjectMarker] -> Text -> [Cmd] -> ProjectType
 proj = ProjectType
 
 data ProjectMarker = ProjectPath FilePath

@@ -18,7 +18,7 @@ import           Data.Text (isInfixOf)
 import           Envix.Commands
 import           Envix.Nix
 import           Envix.Process
-import           Envix.Projects.Types (ProjectMarker(..), ProjectType, proj, project_marker)
+import           Envix.Projects.Types (ProjectMarker(..), ProjectType, proj, project_markers)
 import qualified Envix.Projects.Types as P
 import           Prelude hiding (FilePath)
 import           System.Wordexp
@@ -33,36 +33,40 @@ import           Turtle hiding (find, sort, sortBy, toText)
 -- which action to run. This can obsolete `--no-nix` with `--type plain`.
 project_types :: [ProjectType]
 project_types =
-  [proj "cabal.project" "Cabal new-style project"
+  [proj ["cabal.project"] "Cabal new-style project"
    [Cmd "cabal" ["new-build"] "build"
    ,Cmd "cabal" ["new-repl"] "repl"
    ,Cmd "cabal" ["new-run"] "run"
    ,Cmd "cabal" ["new-test"] "test"
    ]
-  ,proj "package.json" "NPM project"
+  ,proj ["package.json"] "NPM project"
    [Cmd "npm" ["install"] "install"
    ,Cmd "npm" ["start"] "run"
    ,Cmd "npm" ["test"] "test"
    ]
-  ,proj ".envrc" "Direnv project"
+  ,proj (map ProjectPath nix_files) "Nix project"
+   [Cmd "nix-build" [] "build"
+   ,Cmd "nix-shell" [] "shell"
+   ]
+  ,proj [".envrc"] "Direnv project"
    [Cmd "direnv" ["allow"] "direnv allow"
    ,Cmd "direnv" ["deny"] "direnv deny"
    ,Cmd "direnv" ["reload"] "direnv reload"
    ]
-  ,proj ".git" "Git repository"
+  ,proj [".git"] "Git repository"
    [Cmd "git" ["fetch"] "fetch"
    ,Cmd "git" ["log"] "log"
    ]
-  ,proj ".hg" "Mercurial project" []
-  ,proj ".project" "Ad-hoc project" []
-  ,proj (ProjectFunc . const $ pure True) "Generic project"
+  ,proj [".hg"] "Mercurial project" []
+  ,proj [".project"] "Ad-hoc project" []
+  ,proj [ProjectFunc . const $ pure True] "Generic project"
    [Cmd "x-terminal-emulator" [] "Terminal"
    ,Cmd "emacs" [] "Emacs"
    ,Cmd "vim" [] "Vim"
    ,Cmd "dolphin" [ArgPath] "Files"
    ,Cmd "rofi" ["-show", "run"] "Run"
    ]
-  ] -- ++ map () nix_files
+  ]
 
 test_marker :: ProjectMarker -> FilePath -> IO Bool
 test_marker (ProjectPath marker) path = testpath (path </> marker)
@@ -75,8 +79,8 @@ find_markers path = do
   is_dir <- isDirectory <$> stat path
   if not is_dir
     then return []
-    else concatMap P.project_commands <$> filterM has_marker project_types
-  where has_marker = (`test_marker` path) . project_marker
+    else concatMap P.project_commands <$> filterM has_markers project_types
+  where has_markers = fmap and . traverse (`test_marker` path) . project_markers
 
 mkproject :: FilePath -> Project
 mkproject path = Project (filename path) (parent path) []
