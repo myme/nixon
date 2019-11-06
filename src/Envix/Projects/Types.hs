@@ -23,7 +23,6 @@ import           Turtle
 -- TODO: Add support for local overrides with an .envix project file
 -- TODO: Record commands made within a project and add to list
 -- TODO: List descriptions
--- TODO: Add command type: data CmdType = Terminal | GUI
 project_types :: [ProjectType]
 project_types =
   [proj ["cabal.project"] "Cabal new-style project"
