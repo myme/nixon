@@ -24,6 +24,7 @@ import           Envix.Process
 import           Envix.Projects
 import           Prelude hiding (FilePath, filter)
 import           System.Console.Haskeline
+import           System.Console.Haskeline.History (historyLines, readHistory)
 import           Turtle hiding (arg, header, readline, sort, shell)
 
 data FzfOpts = FzfOpts
@@ -125,22 +126,30 @@ fzf_projects query projects = do
     FzfEmpty -> return Nothing
     FzfSelection _ out -> return (Map.lookup out candidates)
 
+project_history_file :: FilePath -> FilePath
+project_history_file = (</> ".envix_history")
+
 -- | Find commands applicable to a project
 fzf_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
 fzf_project_command query path = do
-  commands <- find_project_commands path
+  let history_file = T.unpack $ format fp $ project_history_file path
+  history <- map (from_text . T.pack) . historyLines <$> readHistory history_file
+  commands <- sort . (history ++) <$> find_project_commands path
   let opts = fzf_header "Select command"
         <> maybe mempty fzf_query query
   fzf opts (to_text <$> commands) >>= \case
     FzfSelection FzfDefault cmd -> return $ Just (from_text cmd)
-    FzfSelection FzfAlternate cmd -> fzf_edit_selection cmd
+    FzfSelection FzfAlternate cmd -> fzf_edit_selection path cmd
     _ -> return Nothing
 
 -- | Use readline to manipulate/change a fzf selection
--- TODO: Add readline history
-fzf_edit_selection :: Text -> IO (Maybe Command)
-fzf_edit_selection selection = runInputT defaultSettings $ do
+fzf_edit_selection :: FilePath -> Text -> IO (Maybe Command)
+fzf_edit_selection path selection = runInputT settings $ do
   line <- getInputLineWithInitial "> " (T.unpack selection , "")
   case line of
     Just "" -> return Nothing
     line'   -> return $ fmap (from_text . T.pack) line'
+  where
+    settings :: Settings IO
+    settings = defaultSettings { historyFile = Just historyFile }
+    historyFile = T.unpack $ format fp $ project_history_file path

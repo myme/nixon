@@ -16,6 +16,7 @@ module Envix.Process
   , to_text
   ) where
 
+import           Data.Function (on)
 import           Data.Maybe (catMaybes)
 import qualified Data.Text as T
 import           Prelude hiding (FilePath)
@@ -45,7 +46,14 @@ data CmdDesc = CmdDesc
 -- | "Real" command.
 data Command = Command { cmd_command :: Text
                        , cmd_args :: [Text]
-                       } deriving Show
+                       } deriving (Eq, Show)
+
+instance Ord Command where
+  a `compare` b = case a `cmp_command` b of
+    EQ  -> a `cmp_args` b
+    res -> res
+    where cmp_command = compare `on` cmd_command
+          cmp_args = compare `on` cmd_args
 
 term :: Text -> [CmdDescArg] -> Text -> CmdDesc
 term = CmdDesc Terminal
