@@ -13,8 +13,8 @@ haskellPackages.mkDerivation {
     containers
     directory
     foldl
+    haskeline
     process
-    readline
     text
     turtle
     unix

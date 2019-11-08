@@ -42,8 +42,8 @@ executable envix
                      , containers
                      , directory
                      , foldl
+                     , haskeline
                      , process
-                     , readline
                      , text
                      , turtle
                      , unix

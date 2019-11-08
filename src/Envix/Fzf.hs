@@ -14,7 +14,6 @@ module Envix.Fzf
   ) where
 
 import           Control.Arrow (second)
-import           Control.Exception (bracket)
 import           Data.List (sort)
 import           Data.List.NonEmpty (toList)
 import qualified Data.Map as Map
@@ -24,7 +23,7 @@ import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
 import           Prelude hiding (FilePath, filter)
-import           System.Console.Readline
+import           System.Console.Haskeline
 import           Turtle hiding (arg, header, readline, sort, shell)
 
 data FzfOpts = FzfOpts
@@ -140,10 +139,8 @@ fzf_project_command query path = do
 -- | Use readline to manipulate/change a fzf selection
 -- TODO: Add readline history
 fzf_edit_selection :: Text -> IO (Maybe Command)
-fzf_edit_selection selection = bracket setup teardown read_input
-  where setup = setPreInputHook (Just fill_input)
-        teardown _ = setPreInputHook Nothing
-        fill_input = insertText (T.unpack selection) >> redisplay
-        read_input _ = readline "> " >>= \case
-          Just "" -> return Nothing
-          line    -> return $ fmap (from_text . T.pack) line
+fzf_edit_selection selection = runInputT defaultSettings $ do
+  line <- getInputLineWithInitial "> " (T.unpack selection , "")
+  case line of
+    Just "" -> return Nothing
+    line'   -> return $ fmap (from_text . T.pack) line'
