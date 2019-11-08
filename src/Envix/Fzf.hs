@@ -166,6 +166,5 @@ fzf_edit_selection path selection = runInputT settings $ do
     Just "" -> return Nothing
     line'   -> return (T.pack <$> line')
   where
-    settings :: Settings IO
     settings = defaultSettings { historyFile = Just historyFile }
     historyFile = T.unpack $ format fp $ project_history_file path
