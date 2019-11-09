@@ -18,7 +18,7 @@ import           Control.Arrow (second)
 import           Data.List (sort)
 import           Data.List.NonEmpty (toList)
 import qualified Data.Map as Map
-import           Data.Maybe (fromMaybe, listToMaybe)
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Process
@@ -155,22 +155,24 @@ fzf_projects query projects = do
 project_history_file :: FilePath -> FilePath
 project_history_file = (</> ".envix_history")
 
-add_line_numbers :: [Text] -> [Text]
-add_line_numbers = zipWith (format (d%": "%s)) ([0..] :: [Integer])
+text_numbers :: [Text]
+text_numbers = format d <$> ([0..] :: [Integer])
 
 -- | Find commands applicable to a project
 fzf_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
 fzf_project_command query path = do
   let history_file = T.unpack $ format fp $ project_history_file path
   history <- map (from_text . T.pack) . historyLines <$> readHistory history_file
-  commands <- sort . (history ++) <$> find_project_commands path
+  commands <- zip text_numbers . sort . (history ++) <$> find_project_commands path
   let opts = fzf_header "Select command"
         <> maybe mempty fzf_query query
         <> fzf_with_nth (FieldFrom 2)
-  let lookup_command = (commands !!) . fromMaybe 0 . listToMaybe . match decimal . T.takeWhile (/= ':')
-  fmap lookup_command <$> fzf opts (add_line_numbers (to_text <$> commands)) >>= \case
-    FzfSelection FzfDefault cmd -> return $ Just cmd
-    FzfSelection FzfAlternate cmd -> fmap from_text <$> fzf_edit_selection path (to_text cmd)
+  let lookup_command = (`lookup` commands) . T.takeWhile (/= ':')
+      format_line (num, cmd) = format (s%": "%s) num cmd
+      text_commands = format_line . second to_text <$> commands
+  fmap lookup_command <$> fzf opts text_commands >>= \case
+    FzfSelection FzfDefault cmd -> return cmd
+    FzfSelection FzfAlternate cmd -> fmap from_text <$> fzf_edit_selection path (maybe "" to_text cmd)
     _ -> return Nothing
 
 -- | Use readline to manipulate/change a fzf selection
