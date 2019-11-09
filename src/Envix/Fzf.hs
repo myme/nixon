@@ -10,6 +10,7 @@ module Envix.Fzf
   , fzf_filter
   , fzf_preview
   , fzf_project_command
+  , fzf_with_nth
   , FzfResult(..)
   ) where
 
@@ -17,7 +18,7 @@ import           Control.Arrow (second)
 import           Data.List (sort)
 import           Data.List.NonEmpty (toList)
 import qualified Data.Map as Map
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Process
@@ -25,7 +26,7 @@ import           Envix.Projects
 import           Prelude hiding (FilePath, filter)
 import           System.Console.Haskeline
 import           System.Console.Haskeline.History (historyLines, readHistory)
-import           Turtle hiding (arg, header, readline, sort, shell)
+import           Turtle hiding (arg, header, readline, sort, shell, f, x)
 
 data FzfOpts = FzfOpts
   { _border :: Bool
@@ -34,7 +35,14 @@ data FzfOpts = FzfOpts
   , _query :: Maybe Text
   , _filter :: Maybe Text
   , _preview :: Maybe Text
+  , _with_nth :: Maybe FieldIndex
   }
+
+data FieldIndex = FieldIndex Integer
+                | FieldTo Integer
+                | FieldFrom Integer
+                | FieldRange Integer Integer
+                | AllFields
 
 instance Semigroup FzfOpts where
   left <> right = FzfOpts { _border = _border right || _border left
@@ -43,6 +51,7 @@ instance Semigroup FzfOpts where
                           , _query = _query right <|> _query left
                           , _filter = _filter right <|> _filter left
                           , _preview = _preview right <|> _preview left
+                          , _with_nth = _with_nth right <|> _with_nth left
                           }
 
 instance Monoid FzfOpts where
@@ -52,6 +61,7 @@ instance Monoid FzfOpts where
                    , _query = Nothing
                    , _filter = Nothing
                    , _preview = Nothing
+                   , _with_nth = Nothing
                    }
 
 fzf_border :: FzfOpts
@@ -72,12 +82,27 @@ fzf_filter filter = mempty { _filter = Just filter }
 fzf_preview :: Text -> FzfOpts
 fzf_preview cmd = mempty { _preview = Just cmd }
 
-data FzfSelectionType = FzfDefault | FzfAlternate
-data FzfResult = FzfCancel
-               | FzfEmpty
-               | FzfSelection FzfSelectionType Text
+fzf_with_nth :: FieldIndex -> FzfOpts
+fzf_with_nth with_nth = mempty { _with_nth = Just with_nth }
 
-fzf :: FzfOpts -> [Text] -> IO FzfResult
+format_field_index :: FieldIndex -> Text
+format_field_index (FieldIndex idx) = format d idx
+format_field_index (FieldTo idx) = format (".."%d) idx
+format_field_index (FieldFrom idx) = format (d%"..") idx
+format_field_index (FieldRange start stop) = format (d%".."%d) start stop
+format_field_index AllFields = ".."
+
+data FzfSelectionType = FzfDefault | FzfAlternate
+data FzfResult a = FzfCancel
+                 | FzfEmpty
+                 | FzfSelection FzfSelectionType a
+
+instance Functor FzfResult where
+  fmap f (FzfSelection t x) = FzfSelection t (f x)
+  fmap _ FzfCancel          = FzfCancel
+  fmap _ FzfEmpty           = FzfEmpty
+
+fzf :: FzfOpts -> [Text] -> IO (FzfResult Text)
 fzf opts candidates = do
   let input' = concatMap (toList . textToLines) candidates
       args = case _filter opts of
@@ -88,6 +113,7 @@ fzf opts candidates = do
           , arg "--height" =<< format (d%"%") <$> _height opts
           , arg "--query" =<< _query opts
           , arg "--preview" =<< _preview opts
+          , arg "--with-nth" =<< format_field_index <$> _with_nth opts
           ]
   (code, out) <- second T.lines <$> procStrict "fzf" args (select input')
   pure $ case code of
@@ -129,6 +155,9 @@ fzf_projects query projects = do
 project_history_file :: FilePath -> FilePath
 project_history_file = (</> ".envix_history")
 
+add_line_numbers :: [Text] -> [Text]
+add_line_numbers = zipWith (format (d%": "%s)) ([0..] :: [Integer])
+
 -- | Find commands applicable to a project
 fzf_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
 fzf_project_command query path = do
@@ -137,18 +166,20 @@ fzf_project_command query path = do
   commands <- sort . (history ++) <$> find_project_commands path
   let opts = fzf_header "Select command"
         <> maybe mempty fzf_query query
-  fzf opts (to_text <$> commands) >>= \case
-    FzfSelection FzfDefault cmd -> return $ Just (from_text cmd)
-    FzfSelection FzfAlternate cmd -> fzf_edit_selection path cmd
+        <> fzf_with_nth (FieldFrom 2)
+  let lookup_command = (commands !!) . fromMaybe 0 . listToMaybe . match decimal . T.takeWhile (/= ':')
+  fmap lookup_command <$> fzf opts (add_line_numbers (to_text <$> commands)) >>= \case
+    FzfSelection FzfDefault cmd -> return $ Just cmd
+    FzfSelection FzfAlternate cmd -> fmap from_text <$> fzf_edit_selection path (to_text cmd)
     _ -> return Nothing
 
 -- | Use readline to manipulate/change a fzf selection
-fzf_edit_selection :: FilePath -> Text -> IO (Maybe Command)
+fzf_edit_selection :: FilePath -> Text -> IO (Maybe Text)
 fzf_edit_selection path selection = runInputT settings $ do
   line <- getInputLineWithInitial "> " (T.unpack selection , "")
   case line of
     Just "" -> return Nothing
-    line'   -> return $ fmap (from_text . T.pack) line'
+    line'   -> return (T.pack <$> line')
   where
     settings :: Settings IO
     settings = defaultSettings { historyFile = Just historyFile }
