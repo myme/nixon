@@ -158,13 +158,13 @@ rofi_projects query projects = do
     RofiDefault idx -> return $ Just (project idx)
     RofiAlternate _ idx -> return $ Just (project idx)
 
-rofi_exec :: Maybe Command -> Bool -> Project -> IO ()
+rofi_exec :: Maybe Text -> Bool -> Project -> IO ()
 rofi_exec cmd = project_exec plain with_nix
   where plain project = do
           shell <- fromMaybe "bash" <$> need "SHELL"
-          spawn (Command shell bash_args) (Just $ project_path project)
+          spawn (shell : bash_args) (Just $ project_path project)
         with_nix nix_file = nix_shell_spawn nix_file cmd
-        bash_args = build_args [arg "-c" =<< to_text <$> cmd]
+        bash_args = build_args [arg "-c" =<< cmd]
 
 rofi_project_command :: Maybe Text -> Project -> IO (Maybe Text)
 rofi_project_command query project = do

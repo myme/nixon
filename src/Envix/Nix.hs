@@ -23,18 +23,18 @@ find_nix_file dir = listToMaybe <$> filter_path nix_files
   where filter_path = filterM (testpath . (dir </>))
 
 -- | Evaluate a command in a nix-shell
-nix_shell :: FilePath -> Maybe Command -> IO ()
+nix_shell :: FilePath -> Maybe Text -> IO ()
 nix_shell = nix_run run
 
 -- | Fork and evaluate a command in a nix-shell
-nix_shell_spawn :: FilePath -> Maybe Command -> IO ()
+nix_shell_spawn :: FilePath -> Maybe Text -> IO ()
 nix_shell_spawn = nix_run spawn
 
-type Runner = Command -> Maybe FilePath -> IO ()
+type Runner = [Text] -> Maybe FilePath -> IO ()
 
-nix_run :: Runner -> FilePath -> Maybe Command -> IO ()
+nix_run :: Runner -> FilePath -> Maybe Text -> IO ()
 nix_run run' nix_file cmd = do
   let nix_file' = format fp nix_file
       args = build_args [pure [nix_file']
-                        , arg "--run" =<< to_text <$> cmd]
-  run' (Command "nix-shell" args) (Just $ parent nix_file)
+                        , arg "--run" =<< cmd]
+  run' ("nix-shell" : args) (Just $ parent nix_file)

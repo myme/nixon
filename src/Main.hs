@@ -8,7 +8,6 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Envix.Config as Opts
 import           Envix.Fzf
-import           Envix.Process
 import           Envix.Projects
 import           Envix.Rofi hiding (d, s)
 import           Prelude hiding (FilePath)
@@ -62,7 +61,7 @@ projectAction projects opts = do
             Nothing -> do
               printErr "No command selected."
               exit (ExitFailure 1)
-            cmd' -> exec (from_text <$> cmd') (Opts.use_nix opts) project'
+            cmd' -> exec cmd' (Opts.use_nix opts) project'
 
 -- TODO: Integrate with `direnv`
 -- TODO: Launch terminal with nix-shell output if taking a long time.

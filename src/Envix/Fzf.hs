@@ -125,12 +125,12 @@ fzf opts candidates = do
       ["alt-enter", selection] -> FzfSelection FzfAlternate selection
       _ -> undefined
 
-fzf_exec :: Maybe Command -> Bool -> Project -> IO ()
+fzf_exec :: Maybe Text -> Bool -> Project -> IO ()
 fzf_exec cmd = project_exec plain with_nix
   where plain project = do
-          shell <- from_text . fromMaybe "bash" <$> need "SHELL"
+          shell <- fromMaybe "bash" <$> need "SHELL"
           let cmd' = fromMaybe shell cmd
-          run cmd' (Just $ project_path project)
+          run [cmd'] (Just $ project_path project)
         with_nix nix_file = nix_shell nix_file cmd
 
 fzf_format_project_name :: Project -> IO (Text, Project)
