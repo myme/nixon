@@ -1,16 +1,11 @@
 module Envix.Process
   ( Command (..)
   , Commands
-  , CmdDesc (..)
-  , CmdDescArg (..)
   , arg
   , arg_fmt
   , build_args
-  , term
-  , gui
   , flag
   , from_text
-  , resolve_command
   , run
   , spawn
   , to_text
@@ -24,25 +19,6 @@ import           System.Posix
 import           System.Process
 import           Turtle hiding (arg, proc)
 
--- | Arguments to command descriptions.
--- | Can support interpolation of e.g. project path.
-data CmdDescArg = ArgText Text | ArgPath
-                deriving Show
-
-instance IsString CmdDescArg where
-  fromString = ArgText . T.pack
-
--- | Command type, either graphical or terminal.
-data CmdType = Terminal | GUI deriving Show
-
--- | Command description.
-data CmdDesc = CmdDesc
-  { cmd_desc_type :: CmdType
-  , cmd_desc_command :: Text
-  , cmd_desc_args :: [CmdDescArg]
-  , cmd_desc_description :: Text
-  } deriving Show
-
 -- | "Real" command.
 data Command = Command { cmd_command :: Text
                        , cmd_args :: [Text]
@@ -54,17 +30,6 @@ instance Ord Command where
     res -> res
     where cmp_command = compare `on` cmd_command
           cmp_args = compare `on` cmd_args
-
-term :: Text -> [CmdDescArg] -> Text -> CmdDesc
-term = CmdDesc Terminal
-
-gui :: Text -> [CmdDescArg] -> Text -> CmdDesc
-gui = CmdDesc GUI
-
-resolve_command :: FilePath -> CmdDesc -> Command
-resolve_command path (CmdDesc _ c a _) = Command c (map expand_arg a)
-  where expand_arg (ArgText t) = t
-        expand_arg ArgPath = format fp path
 
 from_text :: Text -> Command
 from_text cmd = Command (head parts) (tail parts)

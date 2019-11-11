@@ -1,7 +1,7 @@
 module Envix.Projects.Defaults (project_types) where
 
 import Envix.Nix
-import Envix.Process
+import Envix.Projects.Commands
 import Envix.Projects.Types
 
 

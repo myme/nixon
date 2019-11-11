@@ -8,7 +8,7 @@ module Envix.Projects.Types
 
 import           Control.Monad (filterM)
 import qualified Data.Text as T
-import           Envix.Process
+import           Envix.Projects.Commands
 import           Prelude hiding (FilePath)
 import           Turtle
 

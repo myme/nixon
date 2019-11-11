@@ -16,6 +16,7 @@ import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
 import           Envix.Nix
 import           Envix.Process
+import           Envix.Projects.Commands (CmdDesc, resolve_command)
 import           Envix.Projects.Defaults (project_types)
 import           Envix.Projects.Types (find_markers)
 import           Prelude hiding (FilePath)
