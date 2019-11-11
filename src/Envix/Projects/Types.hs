@@ -4,6 +4,7 @@ module Envix.Projects.Types
   , ProjectType (..)
   , ProjectMarker (..)
   , desc
+  , from_path
   , path
   , proj
   , project_path
@@ -18,6 +19,12 @@ data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
                        , project_types :: [ProjectType]
                        } deriving Show
+
+from_path :: FilePath -> Project
+from_path path' = Project { project_name = filename path'
+                          , project_dir = parent path'
+                          , project_types = []
+                          }
 
 -- | Full path to a project
 project_path :: Project -> FilePath
@@ -72,6 +79,6 @@ instance Semigroup Command where
   (Command a d) <> (Command b d') = Command (a <> b) (d <> d')
 
 resolve_command :: Project -> Command -> Text
-resolve_command project (Command parts _) = foldMap interpolate parts
+resolve_command project (Command parts _) = T.intercalate " " (map interpolate parts)
   where interpolate (TextPart t) = t
         interpolate (Interpolation f) = f project

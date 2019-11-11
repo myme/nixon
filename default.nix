@@ -6,7 +6,7 @@ haskellPackages.mkDerivation {
   pname = "envix";
   version = "0.1.0.0";
   src = ./.;
-  isLibrary = false;
+  isLibrary = true;
   isExecutable = true;
   executableHaskellDepends = with haskellPackages; [
     base
@@ -22,6 +22,9 @@ haskellPackages.mkDerivation {
   executableSystemDepends = with pkgs; [
     fzf
     rofi
+  ];
+  testDepends = with haskellPackages; [
+    hspec
   ];
   license = pkgs.stdenv.lib.licenses.mit;
 }

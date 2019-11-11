@@ -29,7 +29,7 @@ build_args = concat . catMaybes
 run :: [Text] -> Maybe FilePath -> IO ()
 run cmd cwd' = sh $ do
   maybe (pure ()) pushd cwd'
-  void $ shell (T.concat cmd) mempty
+  void $ shell (T.intercalate " " cmd) mempty
 
 -- | Spawn/fork off a command in the background
 spawn :: [Text] -> Maybe FilePath -> IO ()

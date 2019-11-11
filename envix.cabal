@@ -28,9 +28,9 @@ build-type:          Simple
 
 extra-source-files:  CHANGELOG.md
 
-executable envix
-  main-is:             Main.hs
-  other-modules:       Envix.Config
+library
+  hs-source-dirs:      src
+  exposed-modules:     Envix.Config
                      , Envix.Fzf
                      , Envix.Nix
                      , Envix.Process
@@ -48,10 +48,36 @@ executable envix
                      , turtle
                      , unix
                      , wordexp
-  hs-source-dirs:      src
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings
                      , LambdaCase
                      , NamedFieldPuns
                      , TupleSections
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+
+executable envix
+  main-is:             Main.hs
+  hs-source-dirs:      src
+  build-depends:       base >=4.12 && <4.13
+                     , turtle
+  default-language:    Haskell2010
+  default-extensions:  OverloadedStrings
+                     , LambdaCase
+                     , NamedFieldPuns
+                     , TupleSections
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+
+
+test-suite envix-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , hspec
+    , envix
+    , text
+  default-language: Haskell2010
+  default-extensions:  OverloadedStrings
