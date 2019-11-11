@@ -16,6 +16,7 @@ import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
 import           Envix.Nix
 import           Envix.Process
+import           Envix.Projects.Defaults (project_types)
 import           Envix.Projects.Types (find_markers)
 import           Prelude hiding (FilePath)
 import           System.Wordexp
@@ -47,7 +48,7 @@ find_projects :: [FilePath] -> IO [Project]
 find_projects source_dirs = reduce Fold.list $ do
   expanded <- liftIO $ traverse expand_path source_dirs
   candidate <- cat $ map ls (concat expanded)
-  commands <- liftIO (find_markers candidate)
+  commands <- liftIO (find_markers candidate project_types)
   if null commands
     then mzero
     else return Project { project_name = filename candidate
@@ -56,7 +57,7 @@ find_projects source_dirs = reduce Fold.list $ do
                         }
 
 find_project_commands :: FilePath -> IO [Command]
-find_project_commands path = map (resolve_command path) <$> find_markers path
+find_project_commands path = map (resolve_command path) <$> find_markers path project_types
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path = do
