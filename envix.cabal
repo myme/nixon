@@ -35,7 +35,6 @@ executable envix
                      , Envix.Nix
                      , Envix.Process
                      , Envix.Projects
-                     , Envix.Projects.Commands
                      , Envix.Projects.Defaults
                      , Envix.Projects.Types
                      , Envix.Rofi

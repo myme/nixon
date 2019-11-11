@@ -159,20 +159,21 @@ text_numbers :: [Text]
 text_numbers = format d <$> ([0..] :: [Integer])
 
 -- | Find commands applicable to a project
-fzf_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
-fzf_project_command query path = do
-  let history_file = T.unpack $ format fp $ project_history_file path
-  history <- map (from_text . T.pack) . historyLines <$> readHistory history_file
-  commands <- zip text_numbers . sort . (history ++) <$> find_project_commands path
+fzf_project_command :: Maybe Text -> Project -> IO (Maybe Text)
+fzf_project_command query project = do
+  let path = project_path project
+      history_file = T.unpack $ format fp $ project_history_file path
+  history <- map T.pack . historyLines <$> readHistory history_file
+  let commands = zip text_numbers . sort . (history ++) $ find_project_commands project
   let opts = fzf_header "Select command"
         <> maybe mempty fzf_query query
         <> fzf_with_nth (FieldFrom 2)
   let lookup_command = (`lookup` commands) . T.takeWhile (/= ':')
       format_line (num, cmd) = format (s%": "%s) num cmd
-      text_commands = format_line . second to_text <$> commands
+      text_commands = format_line <$> commands
   fmap lookup_command <$> fzf opts text_commands >>= \case
     FzfSelection FzfDefault cmd -> return cmd
-    FzfSelection FzfAlternate cmd -> fmap from_text <$> fzf_edit_selection path (maybe "" to_text cmd)
+    FzfSelection FzfAlternate cmd -> fzf_edit_selection path (fromMaybe "" cmd)
     _ -> return Nothing
 
 -- | Use readline to manipulate/change a fzf selection

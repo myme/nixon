@@ -1,6 +1,5 @@
 module Envix.Process
   ( Command (..)
-  , Commands
   , arg
   , arg_fmt
   , build_args
@@ -37,8 +36,6 @@ from_text cmd = Command (head parts) (tail parts)
 
 to_text :: Command -> Text
 to_text cmd = T.unwords $ cmd_command cmd : cmd_args cmd
-
-type Commands = [(Text, Text)]
 
 flag :: a -> Bool -> Maybe [a]
 flag key value = if value then Just [key] else Nothing

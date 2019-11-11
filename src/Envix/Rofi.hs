@@ -166,11 +166,11 @@ rofi_exec cmd = project_exec plain with_nix
         with_nix nix_file = nix_shell_spawn nix_file cmd
         bash_args = build_args [arg "-c" =<< to_text <$> cmd]
 
-rofi_project_command :: Maybe Text -> FilePath -> IO (Maybe Command)
-rofi_project_command query path = do
-  commands <- find_project_commands path
-  let opts = rofi_prompt "Select command"
+rofi_project_command :: Maybe Text -> Project -> IO (Maybe Text)
+rofi_project_command query project = do
+  let commands = find_project_commands project
+      opts = rofi_prompt "Select command"
         <> maybe mempty rofi_query query
-  rofi opts (to_text <$> commands) >>= \case
-    RofiDefault cmd -> return $ Just (from_text cmd)
+  rofi opts commands >>= \case
+    RofiDefault cmd -> return $ Just cmd
     _ -> return Nothing

@@ -1,23 +1,35 @@
 module Envix.Projects.Types
-  ( ProjectType (..)
+  ( Part (..)
+  , Project (..)
+  , ProjectType (..)
   , ProjectMarker (..)
-  , find_markers
+  , desc
+  , path
   , proj
-  , test_marker
+  , project_path
+  , resolve_command
   ) where
 
-import           Control.Monad (filterM)
 import qualified Data.Text as T
-import           Envix.Projects.Commands
 import           Prelude hiding (FilePath)
-import           Turtle
+import           Turtle hiding (d, f)
+
+data Project = Project { project_name :: FilePath
+                       , project_dir :: FilePath
+                       , project_types :: [ProjectType]
+                       } deriving Show
+
+-- | Full path to a project
+project_path :: Project -> FilePath
+project_path project = project_dir project </> project_name project
 
 data ProjectType = ProjectType { project_markers :: [ProjectMarker]
                                , project_description :: Text
-                               , project_commands :: [CmdDesc]
-                               }
+                               , project_commands :: [Command]
+                               } deriving Show
 
-proj :: [ProjectMarker] -> Text -> [CmdDesc] -> ProjectType
+-- | Construct a project description
+proj :: [ProjectMarker] -> Text -> [Command] -> ProjectType
 proj = ProjectType
 
 data ProjectMarker = ProjectPath FilePath
@@ -30,22 +42,36 @@ instance IsString ProjectMarker where
 
 instance Show ProjectMarker where
   show (ProjectFunc _) = "ProjectFunc (..)"
-  show (ProjectPath path) = "ProjectPath" ++ show path
-  show (ProjectFile path) = "ProjectFile" ++ show path
-  show (ProjectDir path)  = "ProjectDir"  ++ show path
+  show (ProjectPath p) = "ProjectP" ++ show p
+  show (ProjectFile p) = "ProjectFile" ++ show p
+  show (ProjectDir p)  = "ProjectDir"  ++ show p
 
--- | Test that a marker is valid for a path
-test_marker :: ProjectMarker -> FilePath -> IO Bool
-test_marker (ProjectPath marker) path = testpath (path </> marker)
-test_marker (ProjectFile marker) path = testfile (path </> marker)
-test_marker (ProjectDir  marker) path = testdir (path </> marker)
-test_marker (ProjectFunc marker) path = marker path
+data Part = TextPart Text
+          | Interpolation (Project -> Text)
 
--- | Given a path, find markers and associated commands.
-find_markers :: FilePath -> [ProjectType] -> IO [CmdDesc]
-find_markers path project_types = do
-  is_dir <- isDirectory <$> stat path
-  if not is_dir
-    then return []
-    else concatMap project_commands <$> filterM has_markers project_types
-  where has_markers = fmap and . traverse (`test_marker` path) . project_markers
+-- | Placeholder for project path
+path :: Command
+path = Command [Interpolation (format fp . project_path)] ""
+
+instance Show Part where
+  show (TextPart t) = T.unpack t
+  show (Interpolation _) = "<...>"
+
+data Command = Command { command_parts :: [Part]
+                       , command_desc :: Text
+                       } deriving Show
+
+-- | Add command description
+desc :: Text -> Command
+desc = Command []
+
+instance IsString Command where
+  fromString ss = Command (map TextPart $ T.words $ T.pack ss) ""
+
+instance Semigroup Command where
+  (Command a d) <> (Command b d') = Command (a <> b) (d <> d')
+
+resolve_command :: Project -> Command -> Text
+resolve_command project (Command parts _) = foldMap interpolate parts
+  where interpolate (TextPart t) = t
+        interpolate (Interpolation f) = f project

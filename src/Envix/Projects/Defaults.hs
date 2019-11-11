@@ -1,8 +1,10 @@
-module Envix.Projects.Defaults (project_types) where
+module Envix.Projects.Defaults
+  ( default_projects
+  ) where
 
-import Envix.Nix
-import Envix.Projects.Commands
 import Envix.Projects.Types
+import Envix.Nix
+import Prelude hiding (FilePath)
 
 
 -- TODO: Parse e.g. package.json for npm scripts?
@@ -15,42 +17,42 @@ import Envix.Projects.Types
 -- TODO: Add support for local overrides with an .envix project file
 -- TODO: Record commands made within a project and add to list
 -- TODO: List descriptions
-project_types :: [ProjectType]
-project_types =
+default_projects :: [ProjectType]
+default_projects =
   [proj ["cabal.project"] "Cabal new-style project"
-   [term "cabal" ["new-build"] "build"
-   ,term "cabal" ["new-repl"] "repl"
-   ,term "cabal" ["new-run"] "run"
-   ,term "cabal" ["new-test"] "test"
+   ["cabal new-build" <> desc "Cabal build"
+   ,"cabal new-repl" <> desc "repl"
+   ,"cabal new-run" <> desc "run"
+   ,"cabal new-test" <> desc "test"
    ]
   ,proj ["package.json"] "NPM project"
-   [term "npm" ["install"] "install"
-   ,term "npm" ["start"] "run"
-   ,term "npm" ["test"] "test"
+   ["npm install" <> desc "install"
+   ,"npm start" <> desc "run"
+   ,"npm test" <> desc "test"
    ]
   ,proj (map ProjectPath nix_files) "Nix project"
-   [term "nix-build" [] "build"
-   ,term "nix-shell" [] "shell"
+   ["nix-build" <> desc "build"
+   ,"nix-shell" <> desc "shell"
    ]
   ,proj [".envrc"] "Direnv project"
-   [term "direnv" ["allow"] "direnv allow"
-   ,term "direnv" ["deny"] "direnv deny"
-   ,term "direnv" ["reload"] "direnv reload"
+   ["direnv allow" <> desc "direnv allow"
+   ,"direnv deny" <> desc "direnv deny"
+   ,"direnv reload" <> desc "direnv reload"
    ]
   ,proj [".git"] "Git repository"
-   [term "git" ["fetch"] "Git fetch"
-   ,term "git" ["log"] "Git log"
-   ,term "git" ["rebase"] "Git rebase"
-   ,term "git" ["status"] "Git status"
+   ["git fetch" <> desc "Git fetch"
+   ,"git log" <> desc "Git log"
+   ,"git rebase" <> desc "Git rebase"
+   ,"git status" <> desc "Git status"
    -- git log --color --pretty=format:"%C(green)%h %C(blue)%cr %Creset%s%C(yellow)%d %Creset%C(cyan)<%ae>%Creset" | fzf +s --ansi --preview='git show --color {1}'
    ]
   ,proj [".hg"] "Mercurial project" []
   ,proj [".project"] "Ad-hoc project" []
   ,proj [ProjectFunc (const (pure True))] "Generic project"
-   [gui "x-terminal-emulator" [] "Terminal"
-   ,gui "emacs" [] "Emacs"
-   ,gui "vim" [] "Vim"
-   ,gui "dolphin" [ArgPath] "Files"
-   ,gui "rofi" ["-show", "run"] "Run"
+   ["x-terminal-emulator" <> desc "Terminal"
+   ,"emacs" <> desc "Emacs"
+   ,"vim" <> desc "Vim"
+   ,("dolphin" <> path) <> desc "Files"
+   ,"rofi -show run" <> desc "Run"
    ]
   ]
