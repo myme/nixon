@@ -20,39 +20,39 @@ import Prelude hiding (FilePath)
 default_projects :: [ProjectType]
 default_projects =
   [proj ["cabal.project"] "Cabal new-style project"
-   ["cabal new-build" <> desc "Cabal build"
-   ,"cabal new-repl" <> desc "repl"
-   ,"cabal new-run" <> desc "run"
-   ,"cabal new-test" <> desc "test"
+   ["cabal new-build" ! desc "Cabal build"
+   ,"cabal new-repl" ! desc "repl"
+   ,"cabal new-run" ! desc "run"
+   ,"cabal new-test" ! desc "test"
    ]
   ,proj ["package.json"] "NPM project"
-   ["npm install" <> desc "install"
-   ,"npm start" <> desc "run"
-   ,"npm test" <> desc "test"
+   ["npm install" ! desc "install"
+   ,"npm start" ! desc "run"
+   ,"npm test" ! desc "test"
    ]
   ,proj (map ProjectPath nix_files) "Nix project"
-   ["nix-build" <> desc "build"
-   ,"nix-shell" <> desc "shell"
+   ["nix-build" ! desc "build"
+   ,"nix-shell" ! desc "shell"
    ]
   ,proj [".envrc"] "Direnv project"
-   ["direnv allow" <> desc "direnv allow"
-   ,"direnv deny" <> desc "direnv deny"
-   ,"direnv reload" <> desc "direnv reload"
+   ["direnv allow" ! desc "direnv allow"
+   ,"direnv deny" ! desc "direnv deny"
+   ,"direnv reload" ! desc "direnv reload"
    ]
   ,proj [".git"] "Git repository"
-   ["git fetch" <> desc "Git fetch"
-   ,"git log" <> desc "Git log"
-   ,"git rebase" <> desc "Git rebase"
-   ,"git status" <> desc "Git status"
+   ["git fetch" ! desc "Git fetch"
+   ,"git log" ! desc "Git log"
+   ,"git rebase" ! desc "Git rebase"
+   ,"git status" ! desc "Git status"
    -- git log --color --pretty=format:"%C(green)%h %C(blue)%cr %Creset%s%C(yellow)%d %Creset%C(cyan)<%ae>%Creset" | fzf +s --ansi --preview='git show --color {1}'
    ]
   ,proj [".hg"] "Mercurial project" []
   ,proj [".project"] "Ad-hoc project" []
   ,proj [ProjectFunc (const (pure True))] "Generic project"
-   ["x-terminal-emulator" <> desc "Terminal"
-   ,"emacs" <> desc "Emacs"
-   ,"vim" <> desc "Vim"
-   ,("dolphin" <> path) <> desc "Files"
-   ,"rofi -show run" <> desc "Run"
+   ["x-terminal-emulator" ! desc "Terminal" <> gui
+   ,"emacs" ! desc "Emacs" <> gui
+   ,"vim" ! desc "Vim"
+   ,"dolphin" <> path ! desc "Files" <> gui
+   ,"rofi -show run" ! desc "Run" <> gui
    ]
   ]
