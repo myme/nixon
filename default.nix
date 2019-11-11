@@ -14,6 +14,7 @@ haskellPackages.mkDerivation {
     directory
     foldl
     haskeline
+    process
     text
     turtle
     unix

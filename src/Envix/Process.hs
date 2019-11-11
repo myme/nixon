@@ -11,7 +11,8 @@ import           Data.Maybe (catMaybes)
 import qualified Data.Text as T
 import           Prelude hiding (FilePath)
 import           System.Posix
-import           Turtle hiding (arg, proc)
+import           System.Process hiding (system)
+import           Turtle hiding (arg, shell)
 
 flag :: a -> Bool -> Maybe [a]
 flag key value = if value then Just [key] else Nothing
@@ -28,8 +29,9 @@ build_args = concat . catMaybes
 -- | Run a command and wait for it to finish
 run :: [Text] -> Maybe FilePath -> IO ()
 run cmd cwd' = sh $ do
+  let cp' = shell (T.unpack $ T.intercalate " " cmd)
   maybe (pure ()) pushd cwd'
-  void $ shell (T.intercalate " " cmd) mempty
+  system cp' mempty
 
 -- | Spawn/fork off a command in the background
 spawn :: [Text] -> Maybe FilePath -> IO ()

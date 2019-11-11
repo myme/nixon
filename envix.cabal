@@ -44,6 +44,7 @@ library
                      , directory
                      , foldl
                      , haskeline
+                     , process
                      , text
                      , turtle
                      , unix
@@ -70,6 +71,7 @@ executable envix
                      , containers
                      , foldl
                      , haskeline
+                     , process
                      , text
                      , turtle
                      , unix
