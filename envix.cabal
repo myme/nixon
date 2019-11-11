@@ -57,9 +57,23 @@ library
 
 executable envix
   main-is:             Main.hs
+  other-modules:       Envix.Config
+                     , Envix.Fzf
+                     , Envix.Nix
+                     , Envix.Process
+                     , Envix.Projects
+                     , Envix.Projects.Defaults
+                     , Envix.Projects.Types
+                     , Envix.Rofi
   hs-source-dirs:      src
   build-depends:       base >=4.12 && <4.13
+                     , containers
+                     , foldl
+                     , haskeline
+                     , text
                      , turtle
+                     , unix
+                     , wordexp
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings
                      , LambdaCase
