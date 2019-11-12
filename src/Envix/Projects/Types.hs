@@ -3,6 +3,7 @@ module Envix.Projects.Types
   , Project (..)
   , ProjectType (..)
   , ProjectMarker (..)
+  , Command (..)
   , (!)
   , desc
   , from_path
@@ -10,7 +11,7 @@ module Envix.Projects.Types
   , path
   , proj
   , project_path
-  , resolve_command
+  , show_command
   ) where
 
 import qualified Data.Text as T
@@ -55,17 +56,17 @@ instance Show ProjectMarker where
   show (ProjectFile p) = "ProjectFile" ++ show p
   show (ProjectDir p)  = "ProjectDir"  ++ show p
 
-data Part = TextPart Text
-          | Interpolation (Project -> Text)
-
-instance Show Part where
-  show (TextPart t) = T.unpack t
-  show (Interpolation _) = "<...>"
+data Part = TextPart Text | PathPart deriving Show
 
 data Command = Command
              { command_parts :: [Part]
              , command_options :: CommandOptions
              } deriving Show
+
+show_command :: Command -> Text
+show_command (Command parts _) = T.unwords $ map fmt parts
+  where fmt (TextPart t) = t
+        fmt PathPart = "<project>"
 
 instance IsString Command where
   fromString ss = Command (map TextPart $ T.words $ T.pack ss) mempty
@@ -75,7 +76,7 @@ instance Semigroup Command where
 
 -- | Placeholder for project path
 path :: Command
-path = Command [Interpolation (format fp . project_path)] mempty
+path = Command [PathPart] mempty
 
 data CommandOptions = CommandOptions
                     { command_desc :: Text
@@ -100,9 +101,3 @@ gui = CommandOptions "" True
 (!) :: Command -> CommandOptions -> Command
 (!) (Command parts opts) opts' = Command parts (opts <> opts')
 infixr 4 !
-
--- | Interpolate all command parts into a single text value.
-resolve_command :: Project -> Command -> Text
-resolve_command project (Command parts _) = T.intercalate " " (map interpolate parts)
-  where interpolate (TextPart t) = t
-        interpolate (Interpolation f) = f project

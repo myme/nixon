@@ -9,7 +9,7 @@ import qualified Data.Text.IO as T
 import qualified Envix.Config as Opts
 import           Envix.Fzf
 import           Envix.Projects
-import           Envix.Rofi hiding (d, s)
+import           Envix.Rofi
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           Turtle hiding (decimal, find, sort, shell, sortBy)

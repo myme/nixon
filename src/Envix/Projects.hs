@@ -1,5 +1,6 @@
 module Envix.Projects
   ( Project (..)
+  , Command
   , find_projects
   , find_projects_by_name
   , find_project_commands
@@ -7,6 +8,7 @@ module Envix.Projects
   , mkproject
   , project_exec
   , project_path
+  , resolve_command
   , sort_projects
   ) where
 
@@ -15,6 +17,7 @@ import           Control.Monad (filterM)
 import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
+import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Projects.Defaults (default_projects)
 import           Envix.Projects.Types
@@ -51,8 +54,8 @@ find_projects source_dirs = reduce Fold.list $ do
                         , project_types = types
                         }
 
-find_project_commands :: Project -> [Text]
-find_project_commands project = resolve_command project <$> (concatMap project_commands $ project_types project)
+find_project_commands :: Project -> [Command]
+find_project_commands project = concatMap project_commands (project_types project)
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path' = do
@@ -89,3 +92,9 @@ test_marker (ProjectPath marker) p = testpath (p </> marker)
 test_marker (ProjectFile marker) p = testfile (p </> marker)
 test_marker (ProjectDir  marker) p = testdir (p </> marker)
 test_marker (ProjectFunc marker) p = marker p
+
+-- | Interpolate all command parts into a single text value.
+resolve_command :: Project -> Command -> IO Text
+resolve_command project (Command parts _) = T.intercalate " " <$> mapM interpolate parts
+  where interpolate (TextPart t) = pure t
+        interpolate PathPart = pure $ format fp $ project_path project

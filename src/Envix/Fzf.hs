@@ -23,6 +23,7 @@ import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
+import           Envix.Projects.Types hiding (path)
 import           Prelude hiding (FilePath, filter)
 import           System.Console.Haskeline
 import           System.Console.Haskeline.History (historyLines, readHistory)
@@ -163,17 +164,19 @@ fzf_project_command :: Maybe Text -> Project -> IO (Maybe Text)
 fzf_project_command query project = do
   let path = project_path project
       history_file = T.unpack $ format fp $ project_history_file path
-  history <- map T.pack . historyLines <$> readHistory history_file
-  let commands = zip text_numbers . sort . (history ++) $ find_project_commands project
+  history <- map fromString . historyLines <$> readHistory history_file
+  let commands = zip text_numbers . (history ++) $ find_project_commands project
   let opts = fzf_header "Select command"
         <> maybe mempty fzf_query query
         <> fzf_with_nth (FieldFrom 2)
   let lookup_command = (`lookup` commands) . T.takeWhile (/= ':')
-      format_line (num, cmd) = format (s%": "%s) num cmd
+      format_line (num, cmd) = format (s%": "%s) num (show_command cmd)
       text_commands = format_line <$> commands
   fmap lookup_command <$> fzf opts text_commands >>= \case
-    FzfSelection FzfDefault cmd -> return cmd
-    FzfSelection FzfAlternate cmd -> fzf_edit_selection path (fromMaybe "" cmd)
+    FzfSelection FzfDefault cmd -> sequence $ resolve_command project <$> cmd
+    FzfSelection FzfAlternate cmd -> do
+      cmd' <- sequence $ resolve_command project <$> cmd
+      fzf_edit_selection path (maybe "" repr cmd')
     _ -> return Nothing
 
 -- | Use readline to manipulate/change a fzf selection
