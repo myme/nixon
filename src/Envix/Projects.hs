@@ -24,7 +24,7 @@ import           Envix.Projects.Types
 import           Envix.Select
 import           Prelude hiding (FilePath)
 import           System.Wordexp
-import           Turtle hiding (find, sort, sortBy, toText)
+import           Turtle hiding (find, select, sort, sortBy, toText)
 
 mkproject :: FilePath -> Project
 mkproject path' = Project (filename path') (parent path') []
@@ -99,3 +99,8 @@ resolve_command :: Project -> Command -> Select Text
 resolve_command project (Command parts _) = T.intercalate " " <$> mapM interpolate parts
   where interpolate (TextPart t) = pure t
         interpolate PathPart = pure $ format fp $ project_path project
+        interpolate FilePart = do
+          selection <- select (pushd (project_path project) >> inshell "git ls-files" mempty)
+          case selection of
+            Selection _ t -> pure t
+            _ -> pure ""

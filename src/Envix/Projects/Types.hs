@@ -6,6 +6,7 @@ module Envix.Projects.Types
   , Command (..)
   , (!)
   , desc
+  , file
   , from_path
   , gui
   , path
@@ -56,7 +57,7 @@ instance Show ProjectMarker where
   show (ProjectFile p) = "ProjectFile" ++ show p
   show (ProjectDir p)  = "ProjectDir"  ++ show p
 
-data Part = TextPart Text | PathPart deriving Show
+data Part = TextPart Text | PathPart | FilePart deriving Show
 
 data Command = Command
              { command_parts :: [Part]
@@ -67,6 +68,7 @@ show_command :: Command -> Text
 show_command (Command parts _) = T.unwords $ map fmt parts
   where fmt (TextPart t) = t
         fmt PathPart = "<project>"
+        fmt FilePart = "<filename>"
 
 instance IsString Command where
   fromString ss = Command (map TextPart $ T.words $ T.pack ss) mempty
@@ -77,6 +79,10 @@ instance Semigroup Command where
 -- | Placeholder for project path
 path :: Command
 path = Command [PathPart] mempty
+
+-- | Placeholder for project file
+file :: Command
+file = Command [FilePart] mempty
 
 data CommandOptions = CommandOptions
                     { command_desc :: Text

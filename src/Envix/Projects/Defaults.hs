@@ -44,6 +44,9 @@ default_projects =
    ,"git log" ! desc "Git log"
    ,"git rebase" ! desc "Git rebase"
    ,"git status" ! desc "Git status"
+   -- Uses "git ls-files"
+   ,"vim" <> file ! desc "Vim"
+   ,"bat" <> file ! desc "Preview file"
    -- git log --color --pretty=format:"%C(green)%h %C(blue)%cr %Creset%s%C(yellow)%d %Creset%C(cyan)<%ae>%Creset" | fzf +s --ansi --preview='git show --color {1}'
    ]
   ,proj [".hg"] "Mercurial project" []
@@ -51,7 +54,6 @@ default_projects =
   ,proj [ProjectFunc (const (pure True))] "Generic project"
    ["x-terminal-emulator" ! desc "Terminal" <> gui
    ,"emacs" ! desc "Emacs" <> gui
-   ,"vim" ! desc "Vim"
    ,"dolphin" <> path ! desc "Files" <> gui
    ,"rofi -show run" ! desc "Run" <> gui
    ]
