@@ -11,12 +11,10 @@ module Envix.Fzf
   , fzf_preview
   , fzf_project_command
   , fzf_with_nth
-  , FzfResult(..)
   ) where
 
 import           Control.Arrow (second)
 import           Data.List (sort)
-import           Data.List.NonEmpty (toList)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
@@ -24,6 +22,7 @@ import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
 import           Envix.Projects.Types hiding (path)
+import           Envix.Select hiding (select)
 import           Prelude hiding (FilePath, filter)
 import           System.Console.Haskeline
 import           System.Console.Haskeline.History (historyLines, readHistory)
@@ -93,20 +92,9 @@ format_field_index (FieldFrom idx) = format (d%"..") idx
 format_field_index (FieldRange start stop) = format (d%".."%d) start stop
 format_field_index AllFields = ".."
 
-data FzfSelectionType = FzfDefault | FzfAlternate
-data FzfResult a = FzfCancel
-                 | FzfEmpty
-                 | FzfSelection FzfSelectionType a
-
-instance Functor FzfResult where
-  fmap f (FzfSelection t x) = FzfSelection t (f x)
-  fmap _ FzfCancel          = FzfCancel
-  fmap _ FzfEmpty           = FzfEmpty
-
-fzf :: FzfOpts -> [Text] -> IO (FzfResult Text)
+fzf :: FzfOpts -> Shell Line -> IO Selection
 fzf opts candidates = do
-  let input' = concatMap (toList . textToLines) candidates
-      args = case _filter opts of
+  let args = case _filter opts of
         Just filter -> ["--filter", filter]
         Nothing -> "-1" : "--expect=alt-enter" : build_args
           [ flag "--border" (_border opts)
@@ -116,14 +104,14 @@ fzf opts candidates = do
           , arg "--preview" =<< _preview opts
           , arg "--with-nth" =<< format_field_index <$> _with_nth opts
           ]
-  (code, out) <- second T.lines <$> procStrict "fzf" args (select input')
+  (code, out) <- second T.lines <$> procStrict "fzf" args candidates
   pure $ case code of
-    ExitFailure 1 -> FzfEmpty
-    ExitFailure 130 -> FzfCancel
+    ExitFailure 1 -> EmptySelection
+    ExitFailure 130 -> CanceledSelection
     ExitFailure _ -> undefined
     ExitSuccess -> case out of
-      ["", selection] -> FzfSelection FzfDefault selection
-      ["alt-enter", selection] -> FzfSelection FzfAlternate selection
+      ["", selection] -> Selection Default selection
+      ["alt-enter", selection] -> Selection (Alternate 0) selection
       _ -> undefined
 
 fzf_exec :: Maybe Text -> Bool -> Project -> IO ()
@@ -148,16 +136,12 @@ fzf_projects query projects = do
         -- <> fzf_height 40
         <> maybe mempty fzf_query query
         -- <> fzf_preview "ls $(eval echo {})"
-  fzf opts (sort $ Map.keys candidates) >>= \case
-    FzfCancel -> return Nothing
-    FzfEmpty -> return Nothing
-    FzfSelection _ out -> return (Map.lookup out candidates)
+  fzf opts (select . map text_to_line . sort $ Map.keys candidates) >>= \case
+    Selection _ out -> pure (Map.lookup out candidates)
+    _ -> pure Nothing
 
 project_history_file :: FilePath -> FilePath
 project_history_file = (</> ".envix_history")
-
-text_numbers :: [Text]
-text_numbers = format d <$> ([0..] :: [Integer])
 
 -- | Find commands applicable to a project
 fzf_project_command :: Maybe Text -> Project -> IO (Maybe Text)
@@ -165,17 +149,12 @@ fzf_project_command query project = do
   let path = project_path project
       history_file = T.unpack $ format fp $ project_history_file path
   history <- map fromString . historyLines <$> readHistory history_file
-  let commands = zip text_numbers . (history ++) $ find_project_commands project
-  let opts = fzf_header "Select command"
-        <> maybe mempty fzf_query query
-        <> fzf_with_nth (FieldFrom 2)
-  let lookup_command = (`lookup` commands) . T.takeWhile (/= ':')
-      format_line (num, cmd) = format (s%": "%s) num (show_command cmd)
-      text_commands = format_line <$> commands
-  fmap lookup_command <$> fzf opts text_commands >>= \case
-    FzfSelection FzfDefault cmd -> sequence $ resolve_command project <$> cmd
-    FzfSelection FzfAlternate cmd -> do
-      cmd' <- sequence $ resolve_command project <$> cmd
+  let commands = build_map show_command $ (history ++) $ find_project_commands project
+  let opts = fzf_header "Select command" <> maybe mempty fzf_query query
+  fzf opts (select $ text_to_line <$> Map.keys commands) >>= \case
+    Selection Default cmd -> runSelect (fzf mempty) . sequence $ resolve_command project <$> Map.lookup cmd commands
+    Selection (Alternate _) cmd -> do
+      cmd' <- runSelect (fzf mempty) . sequence $ resolve_command project <$> Map.lookup cmd commands
       fzf_edit_selection path (maybe "" repr cmd')
     _ -> return Nothing
 

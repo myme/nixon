@@ -10,6 +10,7 @@ import qualified Envix.Config as Opts
 import           Envix.Fzf
 import           Envix.Projects
 import           Envix.Rofi
+import           Envix.Select hiding (select)
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           Turtle hiding (decimal, find, sort, shell, sortBy)
@@ -21,10 +22,11 @@ printErr = T.hPutStrLn IO.stderr
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Opts.Options -> IO ()
 list projects opts = do
-  paths <- fmap (format fp) <$> traverse (implode_home . project_path) projects
+  let fmt_line = fmap (text_to_line . format fp)
+  paths <- fmt_line <$> traverse (implode_home . project_path) projects
   let fzf_opts = fzf_filter $ fromMaybe "" (Opts.project opts)
-  fzf fzf_opts paths >>= \case
-    FzfSelection _ matching -> T.putStr matching
+  fzf fzf_opts (select paths) >>= \case
+    Selection _ matching -> T.putStr matching
     _ -> printErr "No projects."
 
 -- | Find/filter out a project in which path is a subdirectory.

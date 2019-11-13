@@ -11,13 +11,14 @@ module Envix.Rofi
   ) where
 
 import           Control.Arrow (second)
+import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import           Data.Text.Read (decimal)
 import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
 import           Envix.Projects.Types (show_command)
+import           Envix.Select hiding (select)
 import           Prelude hiding (FilePath)
 import qualified Turtle as Tu
 import           Turtle hiding (arg, decimal, s, d, f, x, shell)
@@ -64,27 +65,24 @@ data RofiResult = RofiCancel
                 deriving (Eq, Show)
 
 -- | Launch rofi with the given options and candidates
-rofi :: RofiOpts -> [Line] -> IO RofiResult
+rofi :: RofiOpts -> Shell Line -> IO Selection
 rofi opts candidates = do
-  let args = "-dmenu" : "-matching" : "fuzzy" : "-format" : "i" : build_args
+  let args = "-dmenu" : "-matching" : "fuzzy" : build_args
         [ flag "-markup-rows" (_markup opts)
         , arg "-mesg" =<< _msg opts
         , arg "-p" =<< _prompt opts
         , arg "-filter" =<< _query opts
         ]
 
-  (code, out) <- second (fmap fst . decimal) <$> procStrict "rofi" args (select candidates)
+  (code, out) <- second T.strip <$> procStrict "rofi" args candidates
   pure $ case code of
-    ExitSuccess -> either (const RofiCancel) RofiDefault out
-    ExitFailure 1 -> RofiCancel
-    ExitFailure c | c >= 10 && c < 20 -> either (const RofiCancel) (RofiAlternate (c - 10)) out
+    ExitSuccess -> Selection Default out
+    ExitFailure 1 -> CanceledSelection
+    ExitFailure c | c >= 10 && c < 20 -> Selection (Alternate (c - 10)) out
     _ -> undefined
 
-text_to_line :: Text -> Line
-text_to_line = fromMaybe "" . textToLine
-
 -- | Format project names suited to rofi selection list
-rofi_format_project_name :: Project -> IO Line
+rofi_format_project_name :: Project -> IO Text
 rofi_format_project_name project = do
   path <- implode_home (project_dir project)
   let
@@ -93,7 +91,7 @@ rofi_format_project_name project = do
     name_padded = name <> T.replicate (pad_width - T.length name) " "
     dir = directory path
     fmt = format (Tu.s % " <i>" % fp % "</i>")
-  return $ text_to_line $ fmt name_padded dir
+  return $ fmt name_padded dir
 
 -- | Launch rofi with a list of projects as candidates
 rofi_projects :: Maybe Text -> [Project] -> IO (Maybe Project)
@@ -103,10 +101,10 @@ rofi_projects query projects = do
         rofi_markup <>
         maybe mempty rofi_query query
   candidates <- traverse rofi_format_project_name projects
-  rofi opts candidates >>= \case
-    RofiCancel -> return Nothing
-    RofiDefault idx -> return $ Just (projects !! idx)
-    RofiAlternate _ idx -> return $ Just (projects !! idx)
+  let map' = Map.fromList (zip candidates projects)
+  rofi opts (select $ text_to_line <$> candidates) >>= \case
+    Selection _ key -> pure $ Map.lookup key map'
+    _ -> return Nothing
 
 rofi_exec :: Maybe Text -> Bool -> Project -> IO ()
 rofi_exec cmd = project_exec plain with_nix
@@ -118,9 +116,9 @@ rofi_exec cmd = project_exec plain with_nix
 
 rofi_project_command :: Maybe Text -> Project -> IO (Maybe Text)
 rofi_project_command query project = do
-  let commands = find_project_commands project
+  let commands = build_map show_command $ find_project_commands project
       opts = rofi_prompt "Select command"
         <> maybe mempty rofi_query query
-  rofi opts (text_to_line . show_command <$> commands) >>= \case
-    RofiDefault idx -> Just <$> resolve_command project (commands !! idx)
+  rofi opts (select $ text_to_line <$> Map.keys commands) >>= \case
+    Selection _ txt -> runSelect (rofi mempty) . sequence $ resolve_command project <$> Map.lookup txt commands
     _ -> return Nothing

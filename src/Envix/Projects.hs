@@ -21,6 +21,7 @@ import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Projects.Defaults (default_projects)
 import           Envix.Projects.Types
+import           Envix.Select
 import           Prelude hiding (FilePath)
 import           System.Wordexp
 import           Turtle hiding (find, sort, sortBy, toText)
@@ -94,7 +95,7 @@ test_marker (ProjectDir  marker) p = testdir (p </> marker)
 test_marker (ProjectFunc marker) p = marker p
 
 -- | Interpolate all command parts into a single text value.
-resolve_command :: Project -> Command -> IO Text
+resolve_command :: Project -> Command -> Select Text
 resolve_command project (Command parts _) = T.intercalate " " <$> mapM interpolate parts
   where interpolate (TextPart t) = pure t
         interpolate PathPart = pure $ format fp $ project_path project
