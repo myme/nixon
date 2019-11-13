@@ -14,11 +14,10 @@ module Envix.Fzf
   ) where
 
 import           Control.Arrow (second)
+import           Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import           Data.List (sort)
 import qualified Data.Map as Map
-import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
 import           Envix.Projects.Types hiding (path)
@@ -92,7 +91,7 @@ format_field_index (FieldFrom idx) = format (d%"..") idx
 format_field_index (FieldRange start stop) = format (d%".."%d) start stop
 format_field_index AllFields = ".."
 
-fzf :: FzfOpts -> Shell Line -> IO Selection
+fzf :: FzfOpts -> Shell Line -> IO (Selection Text)
 fzf opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
@@ -114,13 +113,10 @@ fzf opts candidates = do
       ["alt-enter", selection] -> Selection (Alternate 0) selection
       _ -> undefined
 
-fzf_exec :: Maybe Text -> Bool -> Project -> IO ()
-fzf_exec cmd = project_exec plain with_nix
-  where plain project = do
-          shell <- fromMaybe "bash" <$> need "SHELL"
-          let cmd' = fromMaybe shell cmd
-          run [cmd'] (Just $ project_path project)
-        with_nix nix_file = nix_shell nix_file cmd
+fzf_exec :: Command -> Project -> IO ()
+fzf_exec cmd project = do
+  cmd' <- runSelect (fzf mempty) $ resolve_command project cmd
+  run [cmd'] (Just $ project_path project)
 
 fzf_format_project_name :: Project -> IO (Text, Project)
 fzf_format_project_name project = do
@@ -143,19 +139,23 @@ fzf_projects query projects = do
 project_history_file :: FilePath -> FilePath
 project_history_file = (</> ".envix_history")
 
+-- TODO: Add "delete from history" (alt-delete)
 -- | Find commands applicable to a project
-fzf_project_command :: Maybe Text -> Project -> IO (Maybe Text)
+fzf_project_command :: Maybe Text -> Project -> IO (Maybe Command)
 fzf_project_command query project = do
   let path = project_path project
       history_file = T.unpack $ format fp $ project_history_file path
   history <- map fromString . historyLines <$> readHistory history_file
   let commands = build_map show_command $ (history ++) $ find_project_commands project
-  let opts = fzf_header "Select command" <> maybe mempty fzf_query query
-  fzf opts (select $ text_to_line <$> Map.keys commands) >>= \case
-    Selection Default cmd -> runSelect (fzf mempty) . sequence $ resolve_command project <$> Map.lookup cmd commands
-    Selection (Alternate _) cmd -> do
-      cmd' <- runSelect (fzf mempty) . sequence $ resolve_command project <$> Map.lookup cmd commands
-      fzf_edit_selection path (maybe "" repr cmd')
+      opts = fzf_header "Select command" <> maybe mempty fzf_query query
+      input' = select $ text_to_line <$> Map.keys commands
+  fmap (`Map.lookup` commands) <$> fzf opts input' >>= \case
+    Selection Default cmd -> pure cmd
+    Selection (Alternate _) cmd -> runMaybeT $ do
+      cmd' <- MaybeT (pure cmd)
+      resolved <- liftIO $ runSelect (fzf mempty) (resolve_command project cmd')
+      edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection path resolved)
+      pure $ edited { command_options = command_options cmd' }
     _ -> return Nothing
 
 -- | Use readline to manipulate/change a fzf selection

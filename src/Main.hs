@@ -63,9 +63,9 @@ projectAction projects opts = do
             Nothing -> do
               printErr "No command selected."
               exit (ExitFailure 1)
-            cmd' -> exec cmd' (Opts.use_nix opts) project'
+            Just cmd' -> exec cmd' project'
 
--- TODO: Integrate with `direnv`
+-- TODO: Integrate with `direnv`: direnv exec CMD [ARGS...]
 -- TODO: Launch terminal with nix-shell output if taking a long time.
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.

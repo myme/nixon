@@ -14,7 +14,6 @@ import           Control.Arrow (second)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import           Envix.Nix
 import           Envix.Process
 import           Envix.Projects
 import           Envix.Projects.Types (show_command)
@@ -65,7 +64,7 @@ data RofiResult = RofiCancel
                 deriving (Eq, Show)
 
 -- | Launch rofi with the given options and candidates
-rofi :: RofiOpts -> Shell Line -> IO Selection
+rofi :: RofiOpts -> Shell Line -> IO (Selection Text)
 rofi opts candidates = do
   let args = "-dmenu" : "-matching" : "fuzzy" : build_args
         [ flag "-markup-rows" (_markup opts)
@@ -106,19 +105,16 @@ rofi_projects query projects = do
     Selection _ key -> pure $ Map.lookup key map'
     _ -> return Nothing
 
-rofi_exec :: Maybe Text -> Bool -> Project -> IO ()
-rofi_exec cmd = project_exec plain with_nix
-  where plain project = do
-          shell <- fromMaybe "bash" <$> need "SHELL"
-          spawn (shell : bash_args) (Just $ project_path project)
-        with_nix nix_file = nix_shell_spawn nix_file cmd
-        bash_args = build_args [arg "-c" =<< cmd]
+rofi_exec :: Command -> Project -> IO ()
+rofi_exec cmd project = do
+  cmd' <- runSelect (rofi mempty) $ resolve_command project cmd
+  shell <- fromMaybe "bash" <$> need "SHELL"
+  spawn (shell : ["-c", cmd']) (Just $ project_path project)
 
-rofi_project_command :: Maybe Text -> Project -> IO (Maybe Text)
+rofi_project_command :: Maybe Text -> Project -> IO (Maybe Command)
 rofi_project_command query project = do
   let commands = build_map show_command $ find_project_commands project
-      opts = rofi_prompt "Select command"
-        <> maybe mempty rofi_query query
+      opts = rofi_prompt "Select command" <> maybe mempty rofi_query query
   rofi opts (select $ text_to_line <$> Map.keys commands) >>= \case
-    Selection _ txt -> runSelect (rofi mempty) . sequence $ resolve_command project <$> Map.lookup txt commands
+    Selection _ txt -> pure $ Map.lookup txt commands
     _ -> return Nothing
