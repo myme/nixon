@@ -16,6 +16,7 @@ haskellPackages.mkDerivation {
     haskeline
     process
     text
+    transformers
     turtle
     unix
     wordexp

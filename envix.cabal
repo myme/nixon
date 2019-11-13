@@ -38,7 +38,7 @@ library
                      , Envix.Projects.Defaults
                      , Envix.Projects.Types
                      , Envix.Rofi
-  -- other-extensions:
+                     , Envix.Select
   build-depends:       base >=4.12 && <4.13
                      , containers
                      , directory
@@ -46,6 +46,7 @@ library
                      , haskeline
                      , process
                      , text
+                     , transformers
                      , turtle
                      , unix
                      , wordexp
@@ -54,7 +55,7 @@ library
                      , LambdaCase
                      , NamedFieldPuns
                      , TupleSections
-  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall
 
 executable envix
   main-is:             Main.hs
@@ -66,6 +67,7 @@ executable envix
                      , Envix.Projects.Defaults
                      , Envix.Projects.Types
                      , Envix.Rofi
+                     , Envix.Select
   hs-source-dirs:      src
   build-depends:       base >=4.12 && <4.13
                      , containers
@@ -73,6 +75,7 @@ executable envix
                      , haskeline
                      , process
                      , text
+                     , transformers
                      , turtle
                      , unix
                      , wordexp
