@@ -156,17 +156,17 @@ fzf_project_command query project = do
     Selection (Alternate _) cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
       resolved <- liftIO $ runSelect (fzf mempty) (resolve_command project cmd')
-      edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection path resolved)
+      edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection (Just path) resolved)
       pure $ edited { command_options = command_options cmd' }
     _ -> pure Nothing
 
 -- | Use readline to manipulate/change a fzf selection
-fzf_edit_selection :: FilePath -> Text -> IO (Maybe Text)
+fzf_edit_selection :: Maybe FilePath -> Text -> IO (Maybe Text)
 fzf_edit_selection path selection = runInputT settings $ do
   line <- getInputLineWithInitial "> " (T.unpack selection , "")
   pure $ case line of
     Just "" -> Nothing
     line'   -> T.pack <$> line'
   where
-    settings = defaultSettings { historyFile = Just historyFile }
-    historyFile = T.unpack $ format fp $ project_history_file path
+    settings = defaultSettings { historyFile = historyFile }
+    historyFile = T.unpack . format fp . project_history_file <$> path
