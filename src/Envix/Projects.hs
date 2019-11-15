@@ -33,7 +33,7 @@ mkproject path' = Project (filename path') (parent path') []
 implode_home :: FilePath -> IO FilePath
 implode_home path' = do
   home' <- home
-  return $ case stripPrefix (home' </> "") path' of
+  pure $ case stripPrefix (home' </> "") path' of
     Nothing -> path'
     Just rest -> "~" </> rest
 
@@ -50,7 +50,7 @@ find_projects source_dirs = reduce Fold.list $ do
   types <- liftIO (find_project_types candidate default_projects)
   if null types
     then mzero
-    else return Project { project_name = filename candidate
+    else pure Project { project_name = filename candidate
                         , project_dir = parent candidate
                         , project_types = types
                         }
@@ -61,7 +61,7 @@ find_project_commands project = concatMap project_commands (project_types projec
 expand_path :: FilePath -> IO [FilePath]
 expand_path path' = do
   expanded <- wordexp nosubst (encodeString path')
-  return $ either (const []) (map fromString) expanded
+  pure $ either (const []) (map fromString) expanded
 
 sort_projects :: [Project] -> [Project]
 sort_projects = sortBy (compare `on` project_name)
@@ -83,7 +83,7 @@ find_project_types :: FilePath -> [ProjectType] -> IO [ProjectType]
 find_project_types path' project_types = do
   is_dir <- isDirectory <$> stat path'
   if not is_dir
-    then return []
+    then pure []
     else filterM has_markers project_types
   where has_markers = fmap and . traverse (`test_marker` path') . project_markers
 

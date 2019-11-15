@@ -90,7 +90,7 @@ rofi_format_project_name project = do
     name_padded = name <> T.replicate (pad_width - T.length name) " "
     dir = directory path
     fmt = format (Tu.s % " <i>" % fp % "</i>")
-  return $ fmt name_padded dir
+  pure $ fmt name_padded dir
 
 -- | Launch rofi with a list of projects as candidates
 rofi_projects :: Maybe Text -> [Project] -> IO (Maybe Project)
@@ -101,9 +101,9 @@ rofi_projects query projects = do
         maybe mempty rofi_query query
   candidates <- traverse rofi_format_project_name projects
   let map' = Map.fromList (zip candidates projects)
-  rofi opts (select $ text_to_line <$> candidates) >>= \case
-    Selection _ key -> pure $ Map.lookup key map'
-    _ -> return Nothing
+  rofi opts (select $ text_to_line <$> candidates) >>= pure . \case
+    Selection _ key -> Map.lookup key map'
+    _ -> Nothing
 
 rofi_exec :: Command -> Project -> IO ()
 rofi_exec cmd project = do
@@ -115,6 +115,6 @@ rofi_project_command :: Maybe Text -> Project -> IO (Maybe Command)
 rofi_project_command query project = do
   let commands = build_map show_command $ find_project_commands project
       opts = rofi_prompt "Select command" <> maybe mempty rofi_query query
-  rofi opts (select $ text_to_line <$> Map.keys commands) >>= \case
-    Selection _ txt -> pure $ Map.lookup txt commands
-    _ -> return Nothing
+  rofi opts (select $ text_to_line <$> Map.keys commands) >>= pure . \case
+    Selection _ txt -> Map.lookup txt commands
+    _ -> Nothing

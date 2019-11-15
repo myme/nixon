@@ -48,7 +48,7 @@ projectAction projects opts = do
       find_project' query
         | query == Just "." = find_in_project projects <$> pwd >>= \case
             Nothing  -> find_project Nothing projects
-            project' -> return project'
+            project' -> pure project'
         | otherwise = find_project query projects
 
   find_project' (Opts.project opts) >>= \case
