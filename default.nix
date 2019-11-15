@@ -1,5 +1,5 @@
 {
-  pkgs ? import <nixpkgs> {},
+  pkgs ? import ./nixpkgs.nix {},
   haskellPackages ? pkgs.haskellPackages,
 }:
 haskellPackages.mkDerivation {
