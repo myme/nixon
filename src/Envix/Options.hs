@@ -83,8 +83,8 @@ parser = Options
 
 build_parser :: Parser BuildOpts
 build_parser = BuildOpts
-  <$> argPath "infile" "Input file"
-  <*> argPath "outfile" "Output file"
+  <$> (fromMaybe "envix.hs" <$> optional (argPath "infile" "Input file (default: envix.hs)"))
+  <*> (fromMaybe "envix"    <$> optional (argPath "outfile" "Output file (default: envix)"))
 
 project_parser :: Parser ProjectOpts
 project_parser = ProjectOpts
