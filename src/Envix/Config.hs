@@ -13,6 +13,6 @@ data Config = Config { options :: Options
                      }
 
 default_config :: Config
-default_config = Config { Envix.Config.options = default_options
+default_config = Config { options = default_options
                         , project_types = default_projects
                         }

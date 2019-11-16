@@ -1,6 +1,6 @@
 module Envix
   ( envix
-  , envixWithConfig
+  , envix_with_config
   ) where
 
 import           Data.Bool (bool)
@@ -21,20 +21,31 @@ printErr :: Text -> IO ()
 printErr = T.hPutStrLn IO.stderr
 
 -- | List projects, filtering if a filter is specified.
-list :: [Project] -> Options -> IO ()
-list projects opts = do
+list :: [Project] -> Maybe Text -> IO ()
+list projects query = do
   let fmt_line = fmap (text_to_line . format fp)
   paths <- fmt_line <$> traverse (implode_home . project_path) projects
-  let fzf_opts = fzf_filter $ fromMaybe "" (project opts)
+  let fzf_opts = fzf_filter $ fromMaybe "" query
   fzf fzf_opts (Turtle.select paths) >>= \case
     Selection _ matching -> T.putStr matching
     _ -> printErr "No projects."
 
+-- | Wrap GHC to build envix with a custom config.
+build_action :: BuildOpts -> IO ()
+build_action opts = do
+  let infile = format fp (Options.infile opts)
+      outfile = format fp (Options.outfile opts)
+      args = ["-Wall", "-threaded", "-rtsopts", "-with-rtsopts=-N", "-o", outfile, infile]
+  code <- proc "ghc" args mempty
+  case code of
+    ExitFailure _ -> putStrLn "Compilation failed!"
+    ExitSuccess -> putStrLn "Compilation successful!"
+
 -- | Find/filter out a project and perform an action.
-projectAction :: [Project] -> Options -> IO ()
-projectAction projects opts = do
+project_action :: [Project] -> Maybe Backend -> ProjectOpts -> IO ()
+project_action projects backendM opts = do
   def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
-  let backend = fromMaybe def_backend (Options.backend opts)
+  let backend = fromMaybe def_backend backendM
 
       (find_project, find_command, exec) = case backend of
         Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
@@ -69,15 +80,19 @@ projectAction projects opts = do
 -- TODO: Pingbot integration?
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
-envixWithConfig :: Config -> IO ()
-envixWithConfig config = do
+envix_with_config :: Config -> IO ()
+envix_with_config config = do
   opts <- Options.parse_args
-  projects <- sort_projects <$> find_projects (
-    config { Config.options = merge_opts (Config.options config) opts })
-  if Options.list opts
-    then Envix.list projects opts
-    else projectAction projects opts
+  case Options.sub_command opts of
+    BuildCommand build_opts -> build_action build_opts
+    ProjectCommand project_opts -> do
+      let ptypes = Config.project_types config
+          srcs = Options.source_dirs project_opts
+      projects <- sort_projects <$> find_projects ptypes srcs
+      if Options.list project_opts
+        then Envix.list projects (Options.project project_opts)
+        else project_action projects (Options.backend opts) project_opts
 
 
 envix :: IO ()
-envix = envixWithConfig default_config
+envix = envix_with_config default_config

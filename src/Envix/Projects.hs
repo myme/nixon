@@ -19,9 +19,7 @@ import           Data.Function (on)
 import           Data.List (find, sortBy)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
-import           Envix.Config as Config
 import           Envix.Nix
-import           Envix.Options as Options hiding (select)
 import           Envix.Projects.Types as Types
 import           Envix.Select
 import           Prelude hiding (FilePath)
@@ -44,17 +42,17 @@ find_in_project :: [Project] -> FilePath -> Maybe Project
 find_in_project projects path' = find (is_prefix . project_path) projects
   where is_prefix project = (T.isPrefixOf `on` format fp) project path'
 
-find_projects_by_name :: FilePath -> Config -> IO [Project]
-find_projects_by_name project = fmap find_matching . find_projects
+find_projects_by_name :: FilePath -> [ProjectType] -> [FilePath] -> IO [Project]
+find_projects_by_name project project_types = fmap find_matching . find_projects project_types
   where find_matching = filter ((project `isInfix`) . toText . project_name)
         isInfix p = isInfixOf (toText p)
         toText = format fp
 
-find_projects :: Config -> IO [Project]
-find_projects config = reduce Fold.list $ do
-  expanded <- liftIO $ traverse expand_path (Options.source_dirs $ Config.options config)
+find_projects :: [ProjectType] -> [FilePath] -> IO [Project]
+find_projects project_types source_dirs = reduce Fold.list $ do
+  expanded <- liftIO $ traverse expand_path source_dirs
   candidate <- cat $ map ls (concat expanded)
-  types <- liftIO (find_project_types candidate (Config.project_types config))
+  types <- liftIO (find_project_types candidate project_types)
   if null types
     then mzero
     else pure Project { Types.project_name = filename candidate
