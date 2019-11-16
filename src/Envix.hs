@@ -8,6 +8,7 @@ import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
 import           Envix.Config as Config
 import           Envix.Fzf
+import           Envix.Options as Options
 import           Envix.Projects
 import           Envix.Rofi
 import           Envix.Select hiding (select)
@@ -33,7 +34,7 @@ list projects opts = do
 projectAction :: [Project] -> Options -> IO ()
 projectAction projects opts = do
   def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
-  let backend = fromMaybe def_backend (Config.backend opts)
+  let backend = fromMaybe def_backend (Options.backend opts)
 
       (find_project, find_command, exec) = case backend of
         Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
@@ -46,14 +47,14 @@ projectAction projects opts = do
             project' -> pure project'
         | otherwise = find_project query projects
 
-  find_project' (Config.project opts) >>= \case
+  find_project' (Options.project opts) >>= \case
     Nothing -> do
       printErr "No project selected."
       exit (ExitFailure 1)
     Just project'
-      | Config.select opts -> printf (fp % "\n") (project_path project')
+      | Options.select opts -> printf (fp % "\n") (project_path project')
       | otherwise -> do
-          cmd <- find_command (Config.command opts) project'
+          cmd <- find_command (Options.command opts) project'
           case cmd of
             Nothing -> do
               printErr "No command selected."
@@ -70,10 +71,10 @@ projectAction projects opts = do
 -- showing the progress of starting the environment.
 envixWithConfig :: Config -> IO ()
 envixWithConfig config = do
-  opts <- Config.parse_args
+  opts <- Options.parse_args
   projects <- sort_projects <$> find_projects (
     config { Config.options = merge_opts (Config.options config) opts })
-  if Config.list opts
+  if Options.list opts
     then Envix.list projects opts
     else projectAction projects opts
 

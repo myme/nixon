@@ -19,8 +19,9 @@ import           Data.Function (on)
 import           Data.List (find, sortBy)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
-import           Envix.Config as Config hiding (select)
+import           Envix.Config as Config
 import           Envix.Nix
+import           Envix.Options as Options hiding (select)
 import           Envix.Projects.Types as Types
 import           Envix.Select
 import           Prelude hiding (FilePath)
@@ -51,7 +52,7 @@ find_projects_by_name project = fmap find_matching . find_projects
 
 find_projects :: Config -> IO [Project]
 find_projects config = reduce Fold.list $ do
-  expanded <- liftIO $ traverse expand_path (Config.source_dirs $ Config.options config)
+  expanded <- liftIO $ traverse expand_path (Options.source_dirs $ Config.options config)
   candidate <- cat $ map ls (concat expanded)
   types <- liftIO (find_project_types candidate (Config.project_types config))
   if null types

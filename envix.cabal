@@ -34,6 +34,7 @@ library
                      , Envix.Config
                      , Envix.Fzf
                      , Envix.Nix
+                     , Envix.Options
                      , Envix.Process
                      , Envix.Projects
                      , Envix.Projects.Defaults
@@ -64,6 +65,7 @@ executable envix
                      , Envix.Config
                      , Envix.Fzf
                      , Envix.Nix
+                     , Envix.Options
                      , Envix.Process
                      , Envix.Projects
                      , Envix.Projects.Defaults
