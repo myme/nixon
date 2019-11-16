@@ -19,9 +19,9 @@ import           Data.Function (on)
 import           Data.List (find, sortBy)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
+import           Envix.Config as Config hiding (select)
 import           Envix.Nix
-import           Envix.Projects.Defaults (default_projects)
-import           Envix.Projects.Types
+import           Envix.Projects.Types as Types
 import           Envix.Select
 import           Prelude hiding (FilePath)
 import           System.Wordexp
@@ -43,26 +43,26 @@ find_in_project :: [Project] -> FilePath -> Maybe Project
 find_in_project projects path' = find (is_prefix . project_path) projects
   where is_prefix project = (T.isPrefixOf `on` format fp) project path'
 
-find_projects_by_name :: FilePath -> [FilePath] -> IO [Project]
+find_projects_by_name :: FilePath -> Config -> IO [Project]
 find_projects_by_name project = fmap find_matching . find_projects
   where find_matching = filter ((project `isInfix`) . toText . project_name)
         isInfix p = isInfixOf (toText p)
         toText = format fp
 
-find_projects :: [FilePath] -> IO [Project]
-find_projects source_dirs = reduce Fold.list $ do
-  expanded <- liftIO $ traverse expand_path source_dirs
+find_projects :: Config -> IO [Project]
+find_projects config = reduce Fold.list $ do
+  expanded <- liftIO $ traverse expand_path (Config.source_dirs $ Config.options config)
   candidate <- cat $ map ls (concat expanded)
-  types <- liftIO (find_project_types candidate default_projects)
+  types <- liftIO (find_project_types candidate (Config.project_types config))
   if null types
     then mzero
-    else pure Project { project_name = filename candidate
-                        , project_dir = parent candidate
-                        , project_types = types
-                        }
+    else pure Project { Types.project_name = filename candidate
+                      , Types.project_dir = parent candidate
+                      , Types.project_types = types
+                      }
 
 find_project_commands :: Project -> [Command]
-find_project_commands project = concatMap project_commands (project_types project)
+find_project_commands project = concatMap project_commands (Types.project_types project)
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path' = do

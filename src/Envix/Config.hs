@@ -1,12 +1,19 @@
 module Envix.Config
   ( Backend(..)
   , Options(..)
+  , Config(..)
+  , default_config
+  , default_options
+  , merge_opts
   , parse_args
   ) where
 
 import           Control.Exception (catch)
 import           Data.Maybe (fromMaybe)
+import           Data.Text (Text)
 import qualified Data.Text as T
+import           Envix.Projects.Defaults
+import           Envix.Projects.Types (ProjectType)
 import           Prelude hiding (FilePath)
 import           System.Environment (withArgs)
 import           Turtle hiding (select)
@@ -34,6 +41,26 @@ data Options = Options { project :: Maybe Text
                        } deriving Show
 
 data Backend = Fzf | Rofi deriving Show
+
+data Config = Config { options :: Options
+                     , project_types :: [ProjectType]
+                     }
+
+default_options :: Options
+default_options = Options { project = Nothing
+                          , command = Nothing
+                          , backend = Nothing
+                          , source_dirs = []
+                          , use_nix = False
+                          , config = Nothing
+                          , list = False
+                          , select = False
+                          }
+
+default_config :: Config
+default_config = Config { Envix.Config.options = default_options
+                        , project_types = default_projects
+                        }
 
 parser :: Parser Options
 parser = Options
@@ -72,7 +99,7 @@ merge_opts secondary primary = Options
 parse_args :: IO Options
 parse_args = do
   home' <- home
-  let arg_parser = options "Launch project environment" parser
+  let arg_parser = Turtle.options "Launch project environment" parser
   cli_opts <- arg_parser
   let config_file = fromMaybe (home' </> ".config/envix") (config cli_opts)
   file_args <- map T.unpack <$> read_config config_file
