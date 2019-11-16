@@ -13,7 +13,6 @@ module Envix.Fzf
   , fzf_with_nth
   ) where
 
-import           Control.Arrow (second)
 import           Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import           Data.List (sort)
 import qualified Data.Map as Map
@@ -103,15 +102,17 @@ fzf opts candidates = do
           , arg "--preview" =<< _preview opts
           , arg "--with-nth" =<< format_field_index <$> _with_nth opts
           ]
-  (code, out) <- second T.lines <$> procStrict "fzf" args candidates
-  pure $ case code of
-    ExitFailure 1 -> EmptySelection
-    ExitFailure 130 -> CanceledSelection
-    ExitFailure _ -> undefined
-    ExitSuccess -> case out of
-      ["", selection] -> Selection Default selection
-      ["alt-enter", selection] -> Selection (Alternate 0) selection
-      _ -> undefined
+  (code, out) <- procStrict "fzf" args candidates
+  pure $ case _filter opts of
+    Just _ -> Selection Default out
+    Nothing -> case code of
+      ExitFailure 1 -> EmptySelection
+      ExitFailure 130 -> CanceledSelection
+      ExitFailure _ -> undefined
+      ExitSuccess -> case T.lines out of
+        ["", selection] -> Selection Default selection
+        ["alt-enter", selection] -> Selection (Alternate 0) selection
+        _ -> undefined
 
 fzf_exec :: Command -> Project -> IO ()
 fzf_exec cmd project = do
