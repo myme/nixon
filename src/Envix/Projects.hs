@@ -1,6 +1,7 @@
 module Envix.Projects
   ( Project (..)
   , Command
+  , find_in_project
   , find_projects
   , find_projects_by_name
   , find_project_commands
@@ -15,7 +16,7 @@ module Envix.Projects
 import qualified Control.Foldl as Fold
 import           Control.Monad (filterM)
 import           Data.Function (on)
-import           Data.List (sortBy)
+import           Data.List (find, sortBy)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
 import           Envix.Nix
@@ -36,6 +37,11 @@ implode_home path' = do
   pure $ case stripPrefix (home' </> "") path' of
     Nothing -> path'
     Just rest -> "~" </> rest
+
+-- | Find/filter out a project in which path is a subdirectory.
+find_in_project :: [Project] -> FilePath -> Maybe Project
+find_in_project projects path' = find (is_prefix . project_path) projects
+  where is_prefix project = (T.isPrefixOf `on` format fp) project path'
 
 find_projects_by_name :: FilePath -> [FilePath] -> IO [Project]
 find_projects_by_name project = fmap find_matching . find_projects
