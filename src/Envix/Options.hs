@@ -17,7 +17,6 @@ import           Prelude hiding (FilePath)
 import           System.Environment (withArgs)
 import           Turtle hiding (select)
 
--- TODO: Use Dhall
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
 -- TODO: Add support for independent directory/tree of nix files.
 --       The idea is that for some projects you don't want to "pollute" the

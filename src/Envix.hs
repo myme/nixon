@@ -75,7 +75,6 @@ project_action projects backendM opts = do
 -- TODO: Integrate with `direnv`: direnv exec CMD [ARGS...]
 -- TODO: Launch terminal with nix-shell output if taking a long time.
 -- TODO: Allow changing default command
--- TODO: Allow format strings (%s) in commands to insert e.g. project path
 -- TODO: Project local commands (project/path/.envix)
 -- TODO: Pingbot integration?
 -- If switching to a project takes a long time it would be nice to see a window
@@ -94,5 +93,6 @@ envix_with_config config = do
         else project_action projects (Options.backend opts) project_opts
 
 
+-- | Envix with default configuration
 envix :: IO ()
 envix = envix_with_config default_config

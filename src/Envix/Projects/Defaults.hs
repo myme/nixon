@@ -8,12 +8,6 @@ import Prelude hiding (FilePath)
 
 
 -- TODO: Parse e.g. package.json for npm scripts?
--- TODO: Add associated action with each project type
--- e.g. for *.nix invoke nix-shell
---      for .git do a fetch?
---      This should be configurable.
--- This can then be paired up with a `--type <type>` cli arg to allow override
--- which action to run. This can obsolete `--no-nix` with `--type plain`.
 -- TODO: Add support for local overrides with an .envix project file
 -- TODO: Record commands made within a project and add to list
 -- TODO: List descriptions
