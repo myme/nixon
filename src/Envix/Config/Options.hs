@@ -9,12 +9,12 @@ module Envix.Config.Options
   , parse_args
   ) where
 
-import           Control.Exception (catch)
+import           Control.Monad.Trans.Except
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
-import qualified Data.Text as T
+import           Envix.Config.JSON (JSONError(..))
+import qualified Envix.Config.JSON as JSON
 import           Prelude hiding (FilePath)
-import           System.Environment (withArgs)
 import           Turtle hiding (select)
 
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
@@ -30,6 +30,7 @@ import           Turtle hiding (select)
 data Options = Options
   { backend :: Maybe Backend
     -- , backend_args :: [Text]
+  , source_dirs :: [FilePath]
   , use_direnv :: Bool
   , use_nix :: Bool
   , config :: Maybe FilePath
@@ -48,7 +49,6 @@ data BuildOpts = BuildOpts
 data ProjectOpts = ProjectOpts
   { project :: Maybe Text
   , command :: Maybe Text
-  , source_dirs :: [FilePath]
   , list :: Bool
   , select :: Bool
   } deriving Show
@@ -58,13 +58,13 @@ data Backend = Fzf | Rofi deriving Show
 default_options :: Options
 default_options = Options
   { backend = Nothing
+  , source_dirs = []
   , use_direnv = False
   , use_nix = False
   , config = Nothing
   , sub_command = ProjectCommand ProjectOpts
     { project = Nothing
     , command = Nothing
-    , source_dirs = []
     , list = False
     , select = False
     }
@@ -73,6 +73,7 @@ default_options = Options
 parser :: Parser Options
 parser = Options
   <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
+  <*> many (optPath "path" 'p' "Project directory")
   <*> switch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
   <*> switch "nix" 'n' "Invoke nix-shell if *.nix files are found"
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/envix)")
@@ -93,38 +94,31 @@ project_parser :: Parser ProjectOpts
 project_parser = ProjectOpts
   <$> optional (argText "project" "Project to jump into")
   <*> optional (argText "command" "Command to run")
-  <*> many (optPath "path" 'p' "Project directory")
   <*> switch "list" 'l' "List projects"
   <*> switch "select" 's' "Select a project and output on stdout"
-
--- TODO: Filter comment lines (starting with '#')
--- TODO: Support quoted strings in e.g. file paths: `-p "this is a path"`
-read_config :: FilePath -> IO [Text]
-read_config path = T.words <$> (readTextFile path `catch` as_empty)
-  where as_empty :: IOError -> IO Text
-        as_empty _ = pure ""
 
 merge_opts :: ProjectOpts -> ProjectOpts -> ProjectOpts
 merge_opts secondary primary = ProjectOpts
   { project = project primary <|> project secondary
   , command = command primary <|> command secondary
-  , source_dirs = source_dirs secondary ++ source_dirs primary
   , list = list primary
   , select = select primary
   }
 
 -- | Read configuration from config file and command line arguments
-parse_args :: IO Options
-parse_args = do
-  home' <- home
-  cli_opts <- Turtle.options "Launch project environment" parser
-  case sub_command cli_opts of
-    BuildCommand _ -> pure cli_opts
-    ProjectCommand project_opts -> do
-      let config_file = fromMaybe (home' </> ".config/envix") (config cli_opts)
-      file_args <- map T.unpack <$> read_config config_file
-      if null file_args
-        then pure cli_opts
-        else do
-          file_opts <- withArgs file_args (Turtle.options "config options" project_parser)
-          pure $ cli_opts { sub_command = ProjectCommand $ merge_opts file_opts project_opts }
+parse_args :: IO (Either Text Options)
+parse_args = runExceptT $ do
+  opts <- Turtle.options "Launch project environment" parser
+  let read_config = fmap Just <$> JSON.read_config (config opts)
+  ExceptT read_config `catchE` handle_error opts >>= \case
+    Nothing -> pure opts
+    Just config -> pure opts
+      { source_dirs = JSON.source_dirs config ++ source_dirs opts
+      , use_direnv = JSON.use_direnv config || use_direnv opts
+      , use_nix = JSON.use_nix config || use_nix opts
+      }
+  where handle_error opts NoSuchFile = case config opts of
+          Nothing   -> pure Nothing
+          Just path -> throwE (format ("No such file: "%fp) path)
+        handle_error _ EmptyFile = pure Nothing
+        handle_error _ (ParseError t) = throwE t

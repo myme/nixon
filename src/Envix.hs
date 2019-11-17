@@ -10,7 +10,8 @@ import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
 import           Envix.Config as Config
 import           Envix.Fzf
-import           Envix.Config.Options as Options
+import           Envix.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
+import qualified Envix.Config.Options as Options
 import           Envix.Projects
 import           Envix.Projects.Types
 import           Envix.Rofi
@@ -45,40 +46,43 @@ build_action opts = do
     ExitSuccess -> putStrLn "Compilation successful!"
 
 -- | Find/filter out a project and perform an action.
-project_action :: [Project] -> [ProjectType] -> Maybe Backend -> Options -> ProjectOpts -> IO ()
-project_action projects project_types backendM opts popts = do
-  def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
-  let backend = fromMaybe def_backend backendM
+project_action :: Config -> [Project] -> ProjectOpts -> IO ()
+project_action config projects opts
+  | Options.list opts = Envix.list projects (Options.project opts)
+  | otherwise = do
+      def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
+      let backend = fromMaybe def_backend (Config.backend config)
+          ptypes = Config.project_types config
 
-      (find_project, find_command, exec) = case backend of
-        Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
-        Rofi -> (rofi_projects, rofi_project_command, rofi_exec)
+          (find_project, find_command, exec) = case backend of
+            Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
+            Rofi -> (rofi_projects, rofi_project_command, rofi_exec)
 
-      -- TODO: Generalize rofi/fzf_projects and move this to Envix.Projects using `select`
-      find_project' :: Maybe Text -> IO (Maybe Project)
-      find_project' query
-        | query == Just "." = pwd >>= find_in_project project_types >>= \case
-            Nothing  -> find_project Nothing projects
-            project' -> pure project'
-        | otherwise = find_project query projects
+          -- TODO: Generalize rofi/fzf_projects and move this to Envix.Projects using `select`
+          find_project' :: Maybe Text -> IO (Maybe Project)
+          find_project' query
+            | query == Just "." = pwd >>= find_in_project ptypes >>= \case
+                Nothing  -> find_project Nothing projects
+                project' -> pure project'
+            | otherwise = find_project query projects
 
-  result <- runExceptT $ do
-    project' <- on_empty "No project selected." $ find_project' (Options.project popts)
-    if Options.select popts
-      then printf (fp % "\n") (project_path project')
-      else do
-        cmd <- on_empty "No command selected." $ find_command (Options.command popts) project'
-        liftIO $ if use_direnv opts
-          -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
-          then let parts = command_parts cmd
-                   dir = TextPart $ format fp $ project_path project'
-                   parts' = [TextPart "direnv exec", dir, head parts] ++ tail parts
-               in exec (cmd { command_parts = parts' }) project'
-          else exec cmd project'
+      result <- runExceptT $ do
+        project' <- on_empty "No project selected." $ find_project' (Options.project opts)
+        if Options.select opts
+          then printf (fp % "\n") (project_path project')
+          else do
+            cmd <- on_empty "No command selected." $ find_command (Options.command opts) project'
+            liftIO $ if Config.use_direnv config
+              -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
+              then let parts = command_parts cmd
+                       dir = TextPart $ format fp $ project_path project'
+                       parts' = [TextPart "direnv exec", dir, head parts] ++ tail parts
+                   in exec (cmd { command_parts = parts' }) project'
+              else exec cmd project'
 
-  case result of
-    Left err -> printErr err >> exit (ExitFailure 1)
-    Right _ -> pure ()
+      case result of
+        Left err -> printErr err >> exit (ExitFailure 1)
+        Right _ -> pure ()
 
   where on_empty err = maybeToExceptT err . MaybeT
 
@@ -90,17 +94,17 @@ project_action projects project_types backendM opts popts = do
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
 envix_with_config :: Config -> IO ()
-envix_with_config config = do
-  opts <- Options.parse_args
+envix_with_config user_config = do
+  opts <- either print_error pure =<< Options.parse_args
+  let config = build_config opts user_config
   case Options.sub_command opts of
     BuildCommand build_opts -> build_action build_opts
     ProjectCommand project_opts -> do
       let ptypes = Config.project_types config
-          srcs = Options.source_dirs project_opts
+          srcs = Config.source_dirs config
       projects <- sort_projects <$> find_projects 1 ptypes srcs
-      if Options.list project_opts
-        then Envix.list projects (Options.project project_opts)
-        else project_action projects ptypes (Options.backend opts) opts project_opts
+      project_action config projects project_opts
+  where print_error err = printErr err >> exit (ExitFailure 1)
 
 
 -- | Envix with default configuration

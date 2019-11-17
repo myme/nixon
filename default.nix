@@ -9,7 +9,9 @@ haskellPackages.mkDerivation {
   isLibrary = true;
   isExecutable = true;
   executableHaskellDepends = with haskellPackages; [
+    aeson
     base
+    bytestring
     containers
     directory
     foldl

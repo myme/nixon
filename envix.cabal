@@ -32,6 +32,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Envix
                      , Envix.Config
+                     , Envix.Config.JSON
                      , Envix.Config.Options
                      , Envix.Fzf
                      , Envix.Nix
@@ -42,6 +43,8 @@ library
                      , Envix.Rofi
                      , Envix.Select
   build-depends:       base >=4.12 && <4.13
+                     , aeson
+                     , bytestring
                      , containers
                      , directory
                      , foldl
@@ -63,6 +66,7 @@ executable envix
   main-is:             Main.hs
   other-modules:       Envix
                      , Envix.Config
+                     , Envix.Config.JSON
                      , Envix.Config.Options
                      , Envix.Fzf
                      , Envix.Nix
@@ -74,7 +78,10 @@ executable envix
                      , Envix.Select
   hs-source-dirs:      src
   build-depends:       base >=4.12 && <4.13
+                     , aeson
+                     , bytestring
                      , containers
+                     , directory
                      , foldl
                      , haskeline
                      , process
