@@ -4,6 +4,7 @@ module Envix.Projects.Types
   , ProjectType (..)
   , ProjectMarker (..)
   , Command (..)
+  , CommandOptions (..)
   , (!)
   , desc
   , file

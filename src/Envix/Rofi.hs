@@ -16,7 +16,7 @@ import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Envix.Process
 import           Envix.Projects
-import           Envix.Projects.Types (show_command)
+import           Envix.Projects.Types (command_gui, command_options, show_command)
 import           Envix.Select hiding (select)
 import           Prelude hiding (FilePath)
 import qualified Turtle as Tu
@@ -107,9 +107,17 @@ rofi_projects query projects = do
 
 rofi_exec :: Command -> Project -> IO ()
 rofi_exec cmd project = do
+  let is_gui = command_gui (command_options cmd)
+      path = Just $ project_path project
   cmd' <- runSelect (rofi mempty) $ resolve_command project cmd
-  shell <- fromMaybe "bash" <$> need "SHELL"
-  spawn (shell : ["-c", cmd']) (Just $ project_path project)
+  if is_gui
+    then do
+      shell <- fromMaybe "bash" <$> need "SHELL"
+      spawn (shell : ["-c", cmd']) path
+    else do
+      -- TODO: Add config for terminal
+      let terminal = "x-terminal-emulator"
+      spawn (terminal : ["-e", cmd']) path
 
 rofi_project_command :: Maybe Text -> Project -> IO (Maybe Command)
 rofi_project_command query project = do
