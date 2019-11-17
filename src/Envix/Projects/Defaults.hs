@@ -45,7 +45,7 @@ default_projects =
    ]
   ,proj [".hg"] "Mercurial project" []
   ,proj [".project"] "Ad-hoc project" []
-  ,proj [ProjectFunc (const (pure True))] "Generic project"
+  ,proj [] "Generic project"
    ["x-terminal-emulator" ! desc "Terminal" <> gui
    ,"emacs" ! desc "Emacs" <> gui
    ,"dolphin" <> path ! desc "Files" <> gui

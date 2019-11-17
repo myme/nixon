@@ -21,10 +21,10 @@ import           Data.Text (isInfixOf)
 import qualified Data.Text as T
 import           Envix.Nix
 import           Envix.Projects.Types as Types
-import           Envix.Select
+import qualified Envix.Select as Select
 import           Prelude hiding (FilePath)
 import           System.Wordexp
-import           Turtle hiding (find, select, sort, sortBy, toText)
+import           Turtle hiding (find, sort, sortBy, toText)
 
 mkproject :: FilePath -> Project
 mkproject path' = Project (filename path') (parent path') []
@@ -48,17 +48,27 @@ find_projects_by_name project project_types = fmap find_matching . find_projects
         isInfix p = isInfixOf (toText p)
         toText = format fp
 
+-- | Find projects from a list of source directories.
+--
+-- Filepath expansion is done on each source directory. For each source
+-- directory not a project, look for subdirs being projects.
+-- TODO: Add a max depth for searching
 find_projects :: [ProjectType] -> [FilePath] -> IO [Project]
 find_projects project_types source_dirs = reduce Fold.list $ do
-  expanded <- liftIO $ traverse expand_path source_dirs
-  candidate <- cat $ map ls (concat expanded)
+  expanded <- liftIO $ concat <$> traverse expand_path source_dirs
+  candidate <- select expanded
+  guard =<< testdir candidate
   types <- liftIO (find_project_types candidate project_types)
-  if null types
-    then mzero
-    else pure Project { Types.project_name = filename candidate
-                      , Types.project_dir = parent candidate
-                      , Types.project_types = types
-                      }
+  if all (null . project_markers) types
+    then do
+      children <- ls candidate
+      projects <- liftIO $ find_projects project_types [children]
+      select projects
+    else pure Project
+      { Types.project_name = filename candidate
+      , Types.project_dir = parent candidate
+      , Types.project_types = types
+      }
 
 find_project_commands :: Project -> [Command]
 find_project_commands project = concatMap project_commands (Types.project_types project)
@@ -69,7 +79,7 @@ expand_path path' = do
   pure $ either (const []) (map fromString) expanded
 
 sort_projects :: [Project] -> [Project]
-sort_projects = sortBy (compare `on` project_name)
+sort_projects = sortBy (compare `on` project_path)
 
 project_exec :: (Project -> IO ()) -- ^ Non-nix project action
              -> (FilePath -> IO ()) -- ^ Nix project action
@@ -90,7 +100,9 @@ find_project_types path' project_types = do
   if not is_dir
     then pure []
     else filterM has_markers project_types
-  where has_markers = fmap and . traverse (`test_marker` path') . project_markers
+  where has_markers project = case project_markers project of
+          [] -> pure True
+          xs -> fmap and . traverse (`test_marker` path') $ xs
 
 -- | Test that a marker is valid for a path
 test_marker :: ProjectMarker -> FilePath -> IO Bool
@@ -100,12 +112,12 @@ test_marker (ProjectDir  marker) p = testdir (p </> marker)
 test_marker (ProjectFunc marker) p = marker p
 
 -- | Interpolate all command parts into a single text value.
-resolve_command :: Project -> Command -> Select Text
+resolve_command :: Project -> Command -> Select.Select Text
 resolve_command project (Command parts _) = T.intercalate " " <$> mapM interpolate parts
   where interpolate (TextPart t) = pure t
         interpolate PathPart = pure $ format fp $ project_path project
         interpolate FilePart = do
-          selection <- select (pushd (project_path project) >> inshell "git ls-files" mempty)
+          selection <- Select.select (pushd (project_path project) >> inshell "git ls-files" mempty)
           case selection of
-            Selection _ t -> pure t
+            Select.Selection _ t -> pure t
             _ -> pure ""
