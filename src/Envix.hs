@@ -54,6 +54,7 @@ project_action projects project_types backendM opts popts = do
         Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
         Rofi -> (rofi_projects, rofi_project_command, rofi_exec)
 
+      -- TODO: Generalize rofi/fzf_projects and move this to Envix.Projects using `select`
       find_project' :: Maybe Text -> IO (Maybe Project)
       find_project' query
         | query == Just "." = pwd >>= find_in_project project_types >>= \case
@@ -68,6 +69,7 @@ project_action projects project_types backendM opts popts = do
       else do
         cmd <- on_empty "No command selected." $ find_command (Options.command popts) project'
         liftIO $ if use_direnv opts
+          -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
           then let parts = command_parts cmd
                    dir = TextPart $ format fp $ project_path project'
                    parts' = [TextPart "direnv exec", dir, head parts] ++ tail parts
