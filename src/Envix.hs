@@ -3,6 +3,8 @@ module Envix
   , envix_with_config
   ) where
 
+import           Control.Monad.Trans.Except
+import           Control.Monad.Trans.Maybe
 import           Data.Bool (bool)
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
@@ -15,7 +17,7 @@ import           Envix.Rofi
 import           Envix.Select hiding (select)
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
-import           Turtle hiding (decimal, find, sort, shell, sortBy)
+import           Turtle hiding (decimal, err, find, sort, shell, sortBy)
 
 -- | Print a text message to stderr
 printErr :: Text -> IO ()
@@ -59,24 +61,24 @@ project_action projects project_types backendM opts popts = do
             project' -> pure project'
         | otherwise = find_project query projects
 
-  find_project' (Options.project popts) >>= \case
-    Nothing -> do
-      printErr "No project selected."
-      exit (ExitFailure 1)
-    Just project'
-      | Options.select popts -> printf (fp % "\n") (project_path project')
-      | otherwise -> do
-          cmd <- find_command (Options.command popts) project'
-          case cmd of
-            Nothing -> do
-              printErr "No command selected."
-              exit (ExitFailure 1)
-            Just cmd' -> if use_direnv opts
-              then let parts = command_parts cmd'
-                       dir = TextPart $ format fp $ project_path project'
-                       parts' = [TextPart "direnv exec", dir, head parts] ++ tail parts
-                   in exec (cmd' { command_parts = parts' }) project'
-              else exec cmd' project'
+  result <- runExceptT $ do
+    project' <- on_empty "No project selected." $ find_project' (Options.project popts)
+    if Options.select popts
+      then printf (fp % "\n") (project_path project')
+      else do
+        cmd <- on_empty "No command selected." $ find_command (Options.command popts) project'
+        liftIO $ if use_direnv opts
+          then let parts = command_parts cmd
+                   dir = TextPart $ format fp $ project_path project'
+                   parts' = [TextPart "direnv exec", dir, head parts] ++ tail parts
+               in exec (cmd { command_parts = parts' }) project'
+          else exec cmd project'
+
+  case result of
+    Left err -> printErr err >> exit (ExitFailure 1)
+    Right _ -> pure ()
+
+  where on_empty err = maybeToExceptT err . MaybeT
 
 -- TODO: Integrate with `direnv`: direnv exec CMD [ARGS...]
 -- TODO: Launch terminal with nix-shell output if taking a long time.
