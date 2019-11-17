@@ -10,7 +10,7 @@ import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
 import           Envix.Config as Config
 import           Envix.Fzf
-import           Envix.Options as Options
+import           Envix.Config.Options as Options
 import           Envix.Projects
 import           Envix.Projects.Types
 import           Envix.Rofi

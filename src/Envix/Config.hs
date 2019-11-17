@@ -3,7 +3,7 @@ module Envix.Config
   , default_config
   ) where
 
-import           Envix.Options
+import           Envix.Config.Options
 import           Envix.Projects.Defaults
 import           Envix.Projects.Types (ProjectType)
 import           Prelude hiding (FilePath)

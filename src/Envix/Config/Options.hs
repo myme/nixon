@@ -1,4 +1,4 @@
-module Envix.Options
+module Envix.Config.Options
   ( Backend(..)
   , Options(..)
   , SubCommand(..)
@@ -61,7 +61,7 @@ default_options = Options
   , use_direnv = False
   , use_nix = False
   , config = Nothing
-  , sub_command = ProjectCommand $ ProjectOpts
+  , sub_command = ProjectCommand ProjectOpts
     { project = Nothing
     , command = Nothing
     , source_dirs = []

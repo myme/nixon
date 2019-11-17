@@ -32,9 +32,9 @@ library
   hs-source-dirs:      src
   exposed-modules:     Envix
                      , Envix.Config
+                     , Envix.Config.Options
                      , Envix.Fzf
                      , Envix.Nix
-                     , Envix.Options
                      , Envix.Process
                      , Envix.Projects
                      , Envix.Projects.Defaults
@@ -63,9 +63,9 @@ executable envix
   main-is:             Main.hs
   other-modules:       Envix
                      , Envix.Config
+                     , Envix.Config.Options
                      , Envix.Fzf
                      , Envix.Nix
-                     , Envix.Options
                      , Envix.Process
                      , Envix.Projects
                      , Envix.Projects.Defaults
