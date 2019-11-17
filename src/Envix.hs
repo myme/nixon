@@ -10,6 +10,7 @@ import           Envix.Config as Config
 import           Envix.Fzf
 import           Envix.Options as Options
 import           Envix.Projects
+import           Envix.Projects.Types
 import           Envix.Rofi
 import           Envix.Select hiding (select)
 import           Prelude hiding (FilePath)
@@ -42,8 +43,8 @@ build_action opts = do
     ExitSuccess -> putStrLn "Compilation successful!"
 
 -- | Find/filter out a project and perform an action.
-project_action :: [Project] -> Maybe Backend -> ProjectOpts -> IO ()
-project_action projects backendM opts = do
+project_action :: [Project] -> [ProjectType] -> Maybe Backend -> ProjectOpts -> IO ()
+project_action projects project_types backendM opts = do
   def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
   let backend = fromMaybe def_backend backendM
 
@@ -53,7 +54,7 @@ project_action projects backendM opts = do
 
       find_project' :: Maybe Text -> IO (Maybe Project)
       find_project' query
-        | query == Just "." = find_in_project projects <$> pwd >>= \case
+        | query == Just "." = pwd >>= find_in_project project_types >>= \case
             Nothing  -> find_project Nothing projects
             project' -> pure project'
         | otherwise = find_project query projects
@@ -87,10 +88,10 @@ envix_with_config config = do
     ProjectCommand project_opts -> do
       let ptypes = Config.project_types config
           srcs = Options.source_dirs project_opts
-      projects <- sort_projects <$> find_projects ptypes srcs
+      projects <- sort_projects <$> find_projects 1 ptypes srcs
       if Options.list project_opts
         then Envix.list projects (Options.project project_opts)
-        else project_action projects (Options.backend opts) project_opts
+        else project_action projects ptypes (Options.backend opts) project_opts
 
 
 -- | Envix with default configuration

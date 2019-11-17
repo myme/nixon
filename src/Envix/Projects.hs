@@ -16,7 +16,7 @@ module Envix.Projects
 import qualified Control.Foldl as Fold
 import           Control.Monad (filterM)
 import           Data.Function (on)
-import           Data.List (find, sortBy)
+import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
 import           Envix.Nix
@@ -38,37 +38,50 @@ implode_home path' = do
     Just rest -> "~" </> rest
 
 -- | Find/filter out a project in which path is a subdirectory.
-find_in_project :: [Project] -> FilePath -> Maybe Project
-find_in_project projects path' = find (is_prefix . project_path) projects
-  where is_prefix project = (T.isPrefixOf `on` format fp) project path'
+find_in_project :: [ProjectType] -> FilePath -> IO (Maybe Project)
+find_in_project project_types path' = find_project project_types path' >>= \case
+    Nothing -> if parent path' == root path'
+      then pure Nothing
+      else find_in_project project_types (parent path')
+    project -> pure project
 
 find_projects_by_name :: FilePath -> [ProjectType] -> [FilePath] -> IO [Project]
-find_projects_by_name project project_types = fmap find_matching . find_projects project_types
+find_projects_by_name project project_types = fmap find_matching . find_projects 1 project_types
   where find_matching = filter ((project `isInfix`) . toText . project_name)
         isInfix p = isInfixOf (toText p)
         toText = format fp
+
+find_project :: [ProjectType] -> FilePath -> IO (Maybe Project)
+find_project project_types source_dir = do
+  isdir <- testdir source_dir
+  if not isdir
+    then pure Nothing
+    else do
+      types <- find_project_types source_dir project_types
+      if all (null . project_markers) types
+        then pure Nothing
+        else pure $ Just Project
+          { Types.project_name = filename source_dir
+          , Types.project_dir = parent source_dir
+          , Types.project_types = types
+          }
 
 -- | Find projects from a list of source directories.
 --
 -- Filepath expansion is done on each source directory. For each source
 -- directory not a project, look for subdirs being projects.
--- TODO: Add a max depth for searching
-find_projects :: [ProjectType] -> [FilePath] -> IO [Project]
-find_projects project_types source_dirs = reduce Fold.list $ do
-  expanded <- liftIO $ concat <$> traverse expand_path source_dirs
-  candidate <- select expanded
-  guard =<< testdir candidate
-  types <- liftIO (find_project_types candidate project_types)
-  if all (null . project_markers) types
-    then do
-      children <- ls candidate
-      projects <- liftIO $ find_projects project_types [children]
-      select projects
-    else pure Project
-      { Types.project_name = filename candidate
-      , Types.project_dir = parent candidate
-      , Types.project_types = types
-      }
+find_projects :: Integer -> [ProjectType] -> [FilePath] -> IO [Project]
+find_projects max_depth project_types source_dirs
+  | max_depth < 0 = pure []
+  | otherwise = reduce Fold.list $ do
+    expanded <- liftIO $ concat <$> traverse expand_path source_dirs
+    candidate <- select expanded
+    liftIO (find_project project_types candidate) >>= \case
+      Nothing -> do
+        children <- ls candidate
+        projects <- liftIO $ find_projects (max_depth - 1) project_types [children]
+        select projects
+      Just project -> pure project
 
 find_project_commands :: Project -> [Command]
 find_project_commands project = concatMap project_commands (Types.project_types project)
