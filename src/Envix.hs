@@ -43,8 +43,8 @@ build_action opts = do
     ExitSuccess -> putStrLn "Compilation successful!"
 
 -- | Find/filter out a project and perform an action.
-project_action :: [Project] -> [ProjectType] -> Maybe Backend -> ProjectOpts -> IO ()
-project_action projects project_types backendM opts = do
+project_action :: [Project] -> [ProjectType] -> Maybe Backend -> Options -> ProjectOpts -> IO ()
+project_action projects project_types backendM opts popts = do
   def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
   let backend = fromMaybe def_backend backendM
 
@@ -59,19 +59,24 @@ project_action projects project_types backendM opts = do
             project' -> pure project'
         | otherwise = find_project query projects
 
-  find_project' (Options.project opts) >>= \case
+  find_project' (Options.project popts) >>= \case
     Nothing -> do
       printErr "No project selected."
       exit (ExitFailure 1)
     Just project'
-      | Options.select opts -> printf (fp % "\n") (project_path project')
+      | Options.select popts -> printf (fp % "\n") (project_path project')
       | otherwise -> do
-          cmd <- find_command (Options.command opts) project'
+          cmd <- find_command (Options.command popts) project'
           case cmd of
             Nothing -> do
               printErr "No command selected."
               exit (ExitFailure 1)
-            Just cmd' -> exec cmd' project'
+            Just cmd' -> if use_direnv opts
+              then let parts = command_parts cmd'
+                       dir = TextPart $ format fp $ project_path project'
+                       parts' = [TextPart "direnv exec", dir, head parts] ++ tail parts
+                   in exec (cmd' { command_parts = parts' }) project'
+              else exec cmd' project'
 
 -- TODO: Integrate with `direnv`: direnv exec CMD [ARGS...]
 -- TODO: Launch terminal with nix-shell output if taking a long time.
@@ -91,7 +96,7 @@ envix_with_config config = do
       projects <- sort_projects <$> find_projects 1 ptypes srcs
       if Options.list project_opts
         then Envix.list projects (Options.project project_opts)
-        else project_action projects ptypes (Options.backend opts) project_opts
+        else project_action projects ptypes (Options.backend opts) opts project_opts
 
 
 -- | Envix with default configuration

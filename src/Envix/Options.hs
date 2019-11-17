@@ -30,6 +30,7 @@ import           Turtle hiding (select)
 data Options = Options
   { backend :: Maybe Backend
     -- , backend_args :: [Text]
+  , use_direnv :: Bool
   , use_nix :: Bool
   , config :: Maybe FilePath
   , sub_command :: SubCommand
@@ -57,6 +58,7 @@ data Backend = Fzf | Rofi deriving Show
 default_options :: Options
 default_options = Options
   { backend = Nothing
+  , use_direnv = False
   , use_nix = False
   , config = Nothing
   , sub_command = ProjectCommand $ ProjectOpts
@@ -71,6 +73,7 @@ default_options = Options
 parser :: Parser Options
 parser = Options
   <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
+  <*> switch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
   <*> switch "nix" 'n' "Invoke nix-shell if *.nix files are found"
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/envix)")
   <*> ( BuildCommand <$> subcommand "build" "Build custom envix" build_parser <|>
