@@ -14,12 +14,14 @@ module Envix.Projects.Types
   , proj
   , project_path
   , revision
+  , shell
   , show_command
   ) where
 
 import qualified Data.Text as T
+import           Envix.Select
 import           Prelude hiding (FilePath)
-import           Turtle hiding (d, f, g)
+import           Turtle hiding (d, f, g, shell)
 
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath
@@ -63,12 +65,14 @@ data Part = TextPart Text
           | PathPart
           | FilePart
           | RevisionPart
+          | ShellPart Text (Project -> Select Text)
 
 instance Show Part where
   show (TextPart t) = T.unpack t
   show PathPart = "<project>"
   show FilePart = "<filename>"
   show RevisionPart = "<revision>"
+  show (ShellPart placeholder _) = T.unpack $ format ("<"%s%">") placeholder
 
 data Command = Command
              { command_parts :: [Part]
@@ -95,6 +99,10 @@ file = Command [FilePart] mempty
 -- | Placeholder for a git revision
 revision :: Command
 revision = Command [RevisionPart] mempty
+
+-- | Placeholder for a shell command
+shell :: Text -> (Project -> Select Text) -> Command
+shell placeholder action = Command [ShellPart placeholder action] mempty
 
 data CommandOptions = CommandOptions
                     { command_desc :: Text

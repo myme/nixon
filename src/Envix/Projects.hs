@@ -24,7 +24,7 @@ import           Envix.Projects.Types as Types
 import qualified Envix.Select as Select
 import           Prelude hiding (FilePath)
 import           System.Wordexp
-import           Turtle hiding (find, sort, sortBy, toText)
+import           Turtle hiding (f, find, sort, sortBy, toText)
 
 mkproject :: FilePath -> Project
 mkproject path' = Project (filename path') (parent path') []
@@ -137,3 +137,4 @@ resolve_command project (Command parts _) = T.intercalate " " <$> mapM interpola
             pushd (project_path project)
             inshell "git log --oneline --color" mempty
           pure $ Select.default_selection "HEAD" (T.takeWhile (/= ' ') <$> selection)
+        interpolate (ShellPart _ f) = f project
