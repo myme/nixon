@@ -3,6 +3,7 @@ module Envix.Select
   , Selection (..)
   , SelectionType (..)
   , build_map
+  , default_selection
   , runSelect
   , select
   , text_to_line
@@ -28,6 +29,10 @@ instance Functor Selection where
 type Selector = Shell Line -> IO (Selection Text)
 
 type Select a = ReaderT Selector IO a
+
+default_selection :: a -> Selection a -> a
+default_selection _ (Selection _ value) = value
+default_selection def _ = def
 
 build_map :: (a -> Text) -> [a] -> Map.Map Text a
 build_map f = Map.fromList . map (f &&& id)

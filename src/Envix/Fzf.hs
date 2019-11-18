@@ -94,7 +94,7 @@ fzf :: FzfOpts -> Shell Line -> IO (Selection Text)
 fzf opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
-        Nothing -> "-1" : "--expect=alt-enter" : build_args
+        Nothing -> "-1" : "--expect=alt-enter" : "--ansi" : build_args
           [ flag "--border" (_border opts)
           , arg "--header" =<< _header opts
           , arg "--height" =<< format (d%"%") <$> _height opts

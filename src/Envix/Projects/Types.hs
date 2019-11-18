@@ -13,6 +13,7 @@ module Envix.Projects.Types
   , path
   , proj
   , project_path
+  , revision
   , show_command
   ) where
 
@@ -58,7 +59,16 @@ instance Show ProjectMarker where
   show (ProjectFile p) = "ProjectFile" ++ show p
   show (ProjectDir p)  = "ProjectDir"  ++ show p
 
-data Part = TextPart Text | PathPart | FilePart deriving Show
+data Part = TextPart Text
+          | PathPart
+          | FilePart
+          | RevisionPart
+
+instance Show Part where
+  show (TextPart t) = T.unpack t
+  show PathPart = "<project>"
+  show FilePart = "<filename>"
+  show RevisionPart = "<revision>"
 
 data Command = Command
              { command_parts :: [Part]
@@ -66,10 +76,7 @@ data Command = Command
              } deriving Show
 
 show_command :: Command -> Text
-show_command (Command parts _) = T.unwords $ map fmt parts
-  where fmt (TextPart t) = t
-        fmt PathPart = "<project>"
-        fmt FilePart = "<filename>"
+show_command (Command parts _) = T.unwords $ map (T.pack . show) parts
 
 instance IsString Command where
   fromString ss = Command (map TextPart $ T.words $ T.pack ss) mempty
@@ -84,6 +91,10 @@ path = Command [PathPart] mempty
 -- | Placeholder for project file
 file :: Command
 file = Command [FilePart] mempty
+
+-- | Placeholder for a git revision
+revision :: Command
+revision = Command [RevisionPart] mempty
 
 data CommandOptions = CommandOptions
                     { command_desc :: Text

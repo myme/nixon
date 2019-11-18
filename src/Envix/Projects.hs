@@ -129,8 +129,11 @@ resolve_command :: Project -> Command -> Select.Select Text
 resolve_command project (Command parts _) = T.intercalate " " <$> mapM interpolate parts
   where interpolate (TextPart t) = pure t
         interpolate PathPart = pure $ format fp $ project_path project
-        interpolate FilePart = do
-          selection <- Select.select (pushd (project_path project) >> inshell "git ls-files" mempty)
-          case selection of
-            Select.Selection _ t -> pure t
-            _ -> pure ""
+        interpolate FilePart = fmap (Select.default_selection "") <$> Select.select $ do
+          pushd (project_path project)
+          inshell "git ls-files" mempty
+        interpolate RevisionPart = do
+          selection <- Select.select $ do
+            pushd (project_path project)
+            inshell "git log --oneline --color" mempty
+          pure $ Select.default_selection "HEAD" (T.takeWhile (/= ' ') <$> selection)

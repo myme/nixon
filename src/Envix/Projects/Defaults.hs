@@ -2,8 +2,8 @@ module Envix.Projects.Defaults
   ( default_projects
   ) where
 
-import Envix.Projects.Types
 import Envix.Nix
+import Envix.Projects.Types
 import Prelude hiding (FilePath)
 
 
@@ -34,7 +34,8 @@ default_projects =
    ,"direnv reload" ! desc "Direnv reload"
    ]
   ,proj [".git"] "Git repository"
-   ["git fetch" ! desc "Git fetch"
+   ["git blame" <> revision <> file ! desc "Git blame"
+   ,"git fetch" ! desc "Git fetch"
    ,"git log" ! desc "Git log"
    ,"git rebase" ! desc "Git rebase"
    ,"git status" ! desc "Git status"
