@@ -114,9 +114,16 @@ fzf opts candidates = do
         ["alt-enter", selection] -> Selection (Alternate 0) selection
         _ -> undefined
 
+fzf_with_edit :: FzfOpts -> Shell Line -> IO (Selection Text)
+fzf_with_edit opts candidates = fzf opts candidates >>= \case
+  Selection (Alternate idx) selection -> fzf_edit_selection Nothing selection >>= \case
+    Just selection' -> pure $ Selection (Alternate idx) selection'
+    Nothing -> pure EmptySelection
+  x -> pure x
+
 fzf_exec :: Command -> Project -> IO ()
 fzf_exec cmd project = do
-  cmd' <- runSelect (fzf mempty) $ resolve_command project cmd
+  cmd' <- runSelect (fzf_with_edit mempty) $ resolve_command project cmd
   run [cmd'] (Just $ project_path project)
 
 fzf_format_project_name :: Project -> IO (Text, Project)
@@ -155,7 +162,7 @@ fzf_project_command query project = do
     Selection Default cmd -> pure cmd
     Selection (Alternate _) cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
-      resolved <- liftIO $ runSelect (fzf mempty) (resolve_command project cmd')
+      resolved <- liftIO $ runSelect (fzf_with_edit mempty) (resolve_command project cmd')
       edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection (Just path) resolved)
       pure $ edited { command_options = command_options cmd' }
     _ -> pure Nothing
