@@ -129,6 +129,10 @@ resolve_command :: Project -> Command -> Select.Select Text
 resolve_command project (Command parts _) = T.intercalate " " <$> mapM interpolate parts
   where interpolate (TextPart t) = pure t
         interpolate PathPart = pure $ format fp $ project_path project
+        interpolate DirPart = fmap (Select.default_selection "") <$> Select.select $ do
+          path' <- lstree (project_path project)
+          guard =<< testdir path'
+          select $ textToLines $ format fp path'
         interpolate FilePart = fmap (Select.default_selection "") <$> Select.select $ do
           pushd (project_path project)
           inshell "git ls-files" mempty

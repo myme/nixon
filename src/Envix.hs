@@ -75,8 +75,8 @@ project_action config projects opts
             liftIO $ if Config.use_direnv config
               -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
               then let parts = command_parts cmd
-                       dir = TextPart $ format fp $ project_path project'
-                       parts' = [TextPart "direnv exec", dir, head parts] ++ tail parts
+                       dir' = TextPart $ format fp $ project_path project'
+                       parts' = [TextPart "direnv exec", dir', head parts] ++ tail parts
                    in exec (cmd { command_parts = parts' }) project'
               else exec cmd project'
 

@@ -7,6 +7,7 @@ module Envix.Projects.Types
   , CommandOptions (..)
   , (!)
   , desc
+  , dir
   , file
   , from_path
   , gui
@@ -63,6 +64,7 @@ instance Show ProjectMarker where
 
 data Part = TextPart Text
           | PathPart
+          | DirPart
           | FilePart
           | RevisionPart
           | ShellPart Text (Project -> Select Text)
@@ -70,6 +72,7 @@ data Part = TextPart Text
 instance Show Part where
   show (TextPart t) = T.unpack t
   show PathPart = "<project>"
+  show DirPart = "<dirname>"
   show FilePart = "<filename>"
   show RevisionPart = "<revision>"
   show (ShellPart placeholder _) = T.unpack $ format ("<"%s%">") placeholder
@@ -91,6 +94,10 @@ instance Semigroup Command where
 -- | Placeholder for project path
 path :: Command
 path = Command [PathPart] mempty
+
+-- | Placeholder for project directory
+dir :: Command
+dir = Command [DirPart] mempty
 
 -- | Placeholder for project file
 file :: Command
