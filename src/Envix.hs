@@ -6,7 +6,7 @@ module Envix
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Data.Bool (bool)
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, isJust)
 import qualified Data.Text.IO as T
 import           Envix.Config as Config
 import           Envix.Fzf
@@ -82,13 +82,15 @@ project_action config projects opts
           then printf (fp % "\n") (project_path project')
           else do
             cmd <- on_empty "No command selected." $ find_command (Options.command opts) project'
-            liftIO $ if Config.use_direnv config
-              -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
-              then let parts = command_parts cmd
-                       dir' = TextPart $ format fp $ project_path project'
-                       parts' = [TextPart "direnv exec", dir', head parts] ++ tail parts
-                   in exec (cmd { command_parts = parts' }) project'
-              else exec cmd project'
+            liftIO $ do
+              has_direnv <- isJust <$> find_dominating_file (project_path project') ".envrc"
+              if Config.use_direnv config && has_direnv
+                -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
+                then let parts = command_parts cmd
+                         dir' = TextPart $ format fp $ project_path project'
+                         parts' = [TextPart "direnv exec", dir', head parts] ++ tail parts
+                     in exec (cmd { command_parts = parts' }) project'
+                else exec cmd project'
 
 -- TODO: Integrate with `direnv`: direnv exec CMD [ARGS...]
 -- TODO: Launch terminal with nix-shell output if taking a long time.

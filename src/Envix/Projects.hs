@@ -1,6 +1,7 @@
 module Envix.Projects
   ( Project (..)
   , Command
+  , find_dominating_file
   , find_in_project
   , find_projects
   , find_projects_by_name
@@ -15,6 +16,7 @@ module Envix.Projects
 
 import qualified Control.Foldl as Fold
 import           Control.Monad (filterM)
+import           Data.Bool (bool)
 import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
@@ -36,6 +38,16 @@ implode_home path' = do
   pure $ case stripPrefix (home' </> "") path' of
     Nothing -> path'
     Just rest -> "~" </> rest
+
+-- | Locate a file going up the filesystem hierarchy
+find_dominating_file :: FilePath -> FilePath -> IO (Maybe FilePath)
+find_dominating_file path' name = let candidate = path' </> name in
+  testdir path' >>=
+  bool up (testpath candidate >>=
+  bool up (pure $ Just candidate))
+  where up = if parent path' == root path'
+          then pure Nothing
+          else find_dominating_file (parent path') name
 
 -- | Find/filter out a project in which path is a subdirectory.
 find_in_project :: [ProjectType] -> FilePath -> IO (Maybe Project)
