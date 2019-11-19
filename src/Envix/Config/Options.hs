@@ -71,6 +71,7 @@ default_options = Options
     }
   }
 
+-- TODO: Allow switching off "use_direnv" and "use_nix"
 parser :: Parser Options
 parser = Options
   <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")

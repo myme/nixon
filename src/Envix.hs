@@ -59,6 +59,7 @@ get_backend config = do
   pure $ fromMaybe def_backend (Config.backend config)
 
 -- | Convert a regular command to a direnv command
+-- TODO: Check if already *in* a direnv, and skip evaluating again.
 direnv_cmd :: Config -> Command -> FilePath -> IO Command
 direnv_cmd config cmd path' = do
   has_direnv <- isJust <$> find_dominating_file path' ".envrc"

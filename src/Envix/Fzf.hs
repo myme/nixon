@@ -148,6 +148,7 @@ project_history_file :: FilePath -> FilePath
 project_history_file = (</> ".envix_history")
 
 -- TODO: Add "delete from history" (alt-delete)
+-- TODO: Add to shell/zsh/bash history?
 -- | Find commands applicable to a project
 fzf_project_command :: Maybe Text -> Project -> IO (Maybe Command)
 fzf_project_command query project = do
