@@ -21,8 +21,8 @@ import qualified System.IO as IO
 import           Turtle hiding (decimal, err, find, sort, shell, sortBy)
 
 -- | Print a text message to stderr
-printErr :: Text -> IO ()
-printErr = T.hPutStrLn IO.stderr
+printErr :: (MonadIO m) => Text -> m ()
+printErr = liftIO . T.hPutStrLn IO.stderr
 
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Maybe Text -> IO ()
@@ -45,28 +45,38 @@ build_action opts = do
     ExitFailure _ -> putStrLn "Compilation failed!"
     ExitSuccess -> putStrLn "Compilation successful!"
 
+on_empty :: (Monad m) => Text -> m (Maybe a) -> ExceptT Text m a
+on_empty err = maybeToExceptT err . MaybeT
+
+handleExcept :: (MonadIO m) => ExceptT Text m () -> m ()
+handleExcept action = runExceptT action >>= \case
+  Left err -> printErr err >> exit (ExitFailure 1)
+  Right _ -> pure ()
+
+get_backend :: Config -> IO Backend
+get_backend config = do
+  def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
+  pure $ fromMaybe def_backend (Config.backend config)
+
 -- | Find/filter out a project and perform an action.
 project_action :: Config -> [Project] -> ProjectOpts -> IO ()
 project_action config projects opts
   | Options.list opts = Envix.list projects (Options.project opts)
   | otherwise = do
-      def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
-      let backend = fromMaybe def_backend (Config.backend config)
-          ptypes = Config.project_types config
+      backend <- get_backend config
+      let ptypes = Config.project_types config
 
           (find_project, find_command, exec) = case backend of
             Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
             Rofi -> (rofi_projects, rofi_project_command, rofi_exec)
 
           -- TODO: Generalize rofi/fzf_projects and move this to Envix.Projects using `select`
-          find_project' :: Maybe Text -> IO (Maybe Project)
-          find_project' query
-            | query == Just "." = pwd >>= find_in_project ptypes >>= \case
-                Nothing  -> find_project Nothing projects
-                project' -> pure project'
-            | otherwise = find_project query projects
+          find_project' (Just ".") = runMaybeT
+             $  MaybeT (find_in_project ptypes =<< pwd)
+            <|> MaybeT (find_project Nothing projects)
+          find_project' query = find_project query projects
 
-      result <- runExceptT $ do
+      handleExcept $ do
         project' <- on_empty "No project selected." $ find_project' (Options.project opts)
         if Options.select opts
           then printf (fp % "\n") (project_path project')
@@ -79,12 +89,6 @@ project_action config projects opts
                        parts' = [TextPart "direnv exec", dir', head parts] ++ tail parts
                    in exec (cmd { command_parts = parts' }) project'
               else exec cmd project'
-
-      case result of
-        Left err -> printErr err >> exit (ExitFailure 1)
-        Right _ -> pure ()
-
-  where on_empty err = maybeToExceptT err . MaybeT
 
 -- TODO: Integrate with `direnv`: direnv exec CMD [ARGS...]
 -- TODO: Launch terminal with nix-shell output if taking a long time.

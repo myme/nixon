@@ -140,9 +140,9 @@ fzf_projects query projects = do
         -- <> fzf_height 40
         <> maybe mempty fzf_query query
         -- <> fzf_preview "ls $(eval echo {})"
-  fzf opts (select . map text_to_line . sort $ Map.keys candidates) >>= \case
-    Selection _ out -> pure (Map.lookup out candidates)
-    _ -> pure Nothing
+  fzf opts (select . map text_to_line . sort $ Map.keys candidates) >>= pure . \case
+    Selection _ out -> Map.lookup out candidates
+    _ -> Nothing
 
 project_history_file :: FilePath -> FilePath
 project_history_file = (</> ".envix_history")
