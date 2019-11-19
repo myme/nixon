@@ -39,6 +39,7 @@ data Options = Options
 
 data SubCommand = BuildCommand BuildOpts
                 | ProjectCommand ProjectOpts
+                | RunCommand ProjectOpts
                 deriving Show
 
 data BuildOpts = BuildOpts
@@ -79,6 +80,7 @@ parser = Options
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/envix)")
   <*> ( BuildCommand <$> subcommand "build" "Build custom envix" build_parser <|>
         ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
+        RunCommand <$> subcommand "run" "Run command" project_parser <|>
         ProjectCommand <$> project_parser)
   where
     parse_backend "fzf" = Just Fzf

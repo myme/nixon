@@ -58,6 +58,19 @@ get_backend config = do
   def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
   pure $ fromMaybe def_backend (Config.backend config)
 
+-- | Convert a regular command to a direnv command
+direnv_cmd :: Config -> Command -> FilePath -> IO Command
+direnv_cmd config cmd path' = do
+  has_direnv <- isJust <$> find_dominating_file path' ".envrc"
+  if Config.use_direnv config && has_direnv
+    -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
+    then let parts = command_parts cmd
+             dir' = TextPart (format fp path')
+             parts' = [TextPart "direnv exec", dir', head parts] ++ tail parts
+         in pure cmd { command_parts = parts' }
+    else pure cmd
+
+
 -- | Find/filter out a project and perform an action.
 project_action :: Config -> [Project] -> ProjectOpts -> IO ()
 project_action config projects opts
@@ -77,22 +90,31 @@ project_action config projects opts
           find_project' query = find_project query projects
 
       handleExcept $ do
-        project' <- on_empty "No project selected." $ find_project' (Options.project opts)
+        project <- on_empty "No project selected." $ find_project' (Options.project opts)
         if Options.select opts
-          then printf (fp % "\n") (project_path project')
+          then printf (fp % "\n") (project_path project)
           else do
-            cmd <- on_empty "No command selected." $ find_command (Options.command opts) project'
+            cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
             liftIO $ do
-              has_direnv <- isJust <$> find_dominating_file (project_path project') ".envrc"
-              if Config.use_direnv config && has_direnv
-                -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
-                then let parts = command_parts cmd
-                         dir' = TextPart $ format fp $ project_path project'
-                         parts' = [TextPart "direnv exec", dir', head parts] ++ tail parts
-                     in exec (cmd { command_parts = parts' }) project'
-                else exec cmd project'
+              cmd' <- direnv_cmd config cmd (project_path project)
+              exec cmd' project
 
--- TODO: Integrate with `direnv`: direnv exec CMD [ARGS...]
+-- | Run a command from current directory
+run_action :: Config -> ProjectOpts -> IO ()
+run_action config opts = do
+  backend <- get_backend config
+  let ptypes = Config.project_types config
+      (find_command, exec) = case backend of
+        Fzf -> (fzf_project_command, fzf_exec)
+        Rofi -> (rofi_project_command, rofi_exec)
+  current <- from_path <$> pwd
+  handleExcept $ do
+    project <- liftIO $ fromMaybe current <$> (find_in_project ptypes =<< pwd)
+    cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
+    liftIO $ do
+      cmd' <- direnv_cmd config cmd (project_path project)
+      exec cmd' project
+
 -- TODO: Launch terminal with nix-shell output if taking a long time.
 -- TODO: Allow changing default command
 -- TODO: Project local commands (project/path/.envix)
@@ -110,6 +132,7 @@ envix_with_config user_config = do
           srcs = Config.source_dirs config
       projects <- sort_projects <$> find_projects 1 ptypes srcs
       project_action config projects project_opts
+    RunCommand run_opts -> run_action config run_opts
   where print_error err = printErr err >> exit (ExitFailure 1)
 
 
