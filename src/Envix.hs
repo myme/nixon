@@ -7,6 +7,7 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Data.Bool (bool)
 import           Data.Maybe (fromMaybe, isJust)
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Envix.Config as Config
 import           Envix.Fzf
@@ -59,18 +60,17 @@ get_backend config = do
   pure $ fromMaybe def_backend (Config.backend config)
 
 -- | Convert a regular command to a direnv command
--- TODO: Check if already *in* a direnv, and skip evaluating again.
 direnv_cmd :: Config -> Command -> FilePath -> IO Command
-direnv_cmd config cmd path' = do
-  has_direnv <- isJust <$> find_dominating_file path' ".envrc"
-  if Config.use_direnv config && has_direnv
-    -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
-    then let parts = command_parts cmd
-             dir' = TextPart (format fp path')
-             parts' = [TextPart "direnv exec", dir', head parts] ++ tail parts
-         in pure cmd { command_parts = parts' }
-    else pure cmd
-
+direnv_cmd config cmd path'
+  | not (Config.use_direnv config) = pure cmd
+  | otherwise = maybe True (not . path_in_env) <$> need "DIRENV_DIR" >>=
+    bool (pure cmd) (
+      isJust <$> find_dominating_file path' ".envrc" >>=
+      bool (pure cmd) (
+        let (cmd':args) = command_parts cmd
+            parts = [TextPart "direnv exec" , TextPart (format fp path') , cmd'] ++ args
+        in pure cmd { command_parts = parts }))
+    where path_in_env = (`elem` parents path') . fromText . T.dropWhile (/= '/')
 
 -- | Find/filter out a project and perform an action.
 project_action :: Config -> [Project] -> ProjectOpts -> IO ()
@@ -97,6 +97,7 @@ project_action config projects opts
           else do
             cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
             liftIO $ do
+              -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
               cmd' <- direnv_cmd config cmd (project_path project)
               exec cmd' project
 

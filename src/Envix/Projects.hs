@@ -8,6 +8,7 @@ module Envix.Projects
   , find_project_commands
   , implode_home
   , mkproject
+  , parents
   , project_exec
   , project_path
   , resolve_command
@@ -38,6 +39,11 @@ implode_home path' = do
   pure $ case stripPrefix (home' </> "") path' of
     Nothing -> path'
     Just rest -> "~" </> rest
+
+parents :: FilePath -> [FilePath]
+parents path'
+  | path' == parent path' = [path']
+  | otherwise = path' : parents (parent path')
 
 -- | Locate a file going up the filesystem hierarchy
 find_dominating_file :: FilePath -> FilePath -> IO (Maybe FilePath)
