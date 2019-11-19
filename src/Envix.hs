@@ -68,7 +68,7 @@ direnv_cmd config cmd path'
       isJust <$> find_dominating_file path' ".envrc" >>=
       bool (pure cmd) (
         let (cmd':args) = command_parts cmd
-            parts = [TextPart "direnv exec" , TextPart (format fp path') , cmd'] ++ args
+            parts = ["direnv exec" , TextPart (format fp path') , cmd'] ++ args
         in pure cmd { command_parts = parts }))
     where path_in_env = (`elem` parents path') . fromText . T.dropWhile (/= '/')
 

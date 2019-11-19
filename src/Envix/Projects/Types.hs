@@ -69,6 +69,9 @@ data Part = TextPart Text
           | RevisionPart
           | ShellPart Text (Project -> Select Text)
 
+instance IsString Part where
+  fromString = TextPart . T.pack
+
 instance Show Part where
   show (TextPart t) = T.unpack t
   show PathPart = "<project>"
