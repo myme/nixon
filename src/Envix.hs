@@ -109,9 +109,10 @@ run_action config opts = do
       (find_command, exec) = case backend of
         Fzf -> (fzf_project_command, fzf_exec)
         Rofi -> (rofi_project_command, rofi_exec)
-  current <- from_path <$> pwd
   handleExcept $ do
-    project <- liftIO $ fromMaybe current <$> (find_in_project ptypes =<< pwd)
+    project <- liftIO $ do
+      current <- from_path <$> pwd
+      fromMaybe current <$> (find_in_project ptypes =<< pwd)
     cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
     liftIO $ do
       cmd' <- direnv_cmd config cmd (project_path project)
