@@ -164,7 +164,7 @@ fzf_project_command query project = do
   let path = project_path project
       history_file = T.unpack $ format fp $ project_history_file path
   history <- map fromString . historyLines <$> readHistory history_file
-  let commands = map (show_command &&& id) $ (history ++) $ find_project_commands project
+  let commands = map (show_command &&& id) $ (++ history) $ find_project_commands project
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
       opts = fzf_header header <> maybe mempty fzf_query query <> fzf_no_sort
       input' = select $ text_to_line . fst <$> commands
