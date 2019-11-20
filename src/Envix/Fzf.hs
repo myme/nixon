@@ -11,6 +11,7 @@ module Envix.Fzf
   , fzf_preview
   , fzf_project_command
   , fzf_with_nth
+  , fzf_no_sort
   ) where
 
 import           Control.Arrow ((&&&))
@@ -35,6 +36,7 @@ data FzfOpts = FzfOpts
   , _filter :: Maybe Text
   , _preview :: Maybe Text
   , _with_nth :: Maybe FieldIndex
+  , _no_sort :: Bool
   }
 
 data FieldIndex = FieldIndex Integer
@@ -51,6 +53,7 @@ instance Semigroup FzfOpts where
                           , _filter = _filter right <|> _filter left
                           , _preview = _preview right <|> _preview left
                           , _with_nth = _with_nth right <|> _with_nth left
+                          , _no_sort = _no_sort right || _no_sort left
                           }
 
 instance Monoid FzfOpts where
@@ -61,6 +64,7 @@ instance Monoid FzfOpts where
                    , _filter = Nothing
                    , _preview = Nothing
                    , _with_nth = Nothing
+                   , _no_sort = False
                    }
 
 fzf_border :: FzfOpts
@@ -84,6 +88,9 @@ fzf_preview cmd = mempty { _preview = Just cmd }
 fzf_with_nth :: FieldIndex -> FzfOpts
 fzf_with_nth with_nth = mempty { _with_nth = Just with_nth }
 
+fzf_no_sort :: FzfOpts
+fzf_no_sort = mempty { _no_sort = True }
+
 format_field_index :: FieldIndex -> Text
 format_field_index (FieldIndex idx) = format d idx
 format_field_index (FieldTo idx) = format (".."%d) idx
@@ -95,13 +102,14 @@ fzf :: FzfOpts -> Shell Line -> IO (Selection Text)
 fzf opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
-        Nothing -> "-1" : "--expect=alt-enter" : "--ansi" : "--no-sort" : build_args
+        Nothing -> "-1" : "--expect=alt-enter" : "--ansi" : build_args
           [ flag "--border" (_border opts)
           , arg "--header" =<< _header opts
           , arg "--height" =<< format (d%"%") <$> _height opts
           , arg "--query" =<< _query opts
           , arg "--preview" =<< _preview opts
           , arg "--with-nth" =<< format_field_index <$> _with_nth opts
+          , flag "--no-sort" (_no_sort opts)
           ]
   (code, out) <- procStrict "fzf" args candidates
   pure $ case _filter opts of
@@ -158,7 +166,7 @@ fzf_project_command query project = do
   history <- map fromString . historyLines <$> readHistory history_file
   let commands = map (show_command &&& id) $ (history ++) $ find_project_commands project
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
-      opts = fzf_header header <> maybe mempty fzf_query query
+      opts = fzf_header header <> maybe mempty fzf_query query <> fzf_no_sort
       input' = select $ text_to_line . fst <$> commands
   fmap (`lookup` commands) <$> fzf opts input' >>= \case
     Selection Default cmd -> pure cmd
