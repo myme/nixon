@@ -54,6 +54,7 @@ library
                      , transformers
                      , turtle
                      , unix
+                     , unordered-containers
                      , wordexp
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings
@@ -89,6 +90,7 @@ executable envix
                      , transformers
                      , turtle
                      , unix
+                     , unordered-containers
                      , wordexp
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings

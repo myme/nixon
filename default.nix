@@ -21,6 +21,7 @@ haskellPackages.mkDerivation {
     transformers
     turtle
     unix
+    unordered-containers
     wordexp
   ];
   executableSystemDepends = with pkgs; [

@@ -2,10 +2,31 @@ module Envix.Projects.Defaults
   ( default_projects
   ) where
 
-import Envix.Nix
-import Envix.Projects.Types
-import Prelude hiding (FilePath)
+import           Control.Monad.Trans.Maybe
+import           Data.Aeson
+import           Data.Aeson.Types
+import qualified Data.HashMap.Strict as Map
+import           Data.Maybe (fromMaybe)
+import qualified Data.Text as T
+import           Envix.Nix
+import           Envix.Projects
+import           Envix.Projects.Types
+import qualified Envix.Select as Select
+import           Prelude hiding (FilePath)
+import           Turtle
 
+-- | Find NPM scripts from a project package.json file
+npm_scripts :: Command
+npm_scripts = Command [ShellPart "script" scripts] mempty
+  where scripts project = fmap (Select.default_selection "") <$> Select.select $ do
+          content <- liftIO $ runMaybeT $ do
+            package <- MaybeT $ find_dominating_file (project_path project) "package.json"
+            MaybeT $ decodeFileStrict (T.unpack $ format fp package)
+          let keys = do
+                map' <- parseMaybe parse_script =<< content
+                mapM textToLine (Map.keys (map' :: Map.HashMap Text Value))
+          select (fromMaybe [] keys)
+        parse_script = withObject "package.json" (.: "scripts")
 
 -- TODO: Parse e.g. package.json for npm scripts?
 -- TODO: Add support for local overrides with an .envix project file
@@ -20,7 +41,8 @@ default_projects =
    ,"cabal new-test" ! desc "Cabal test"
    ]
   ,proj ["package.json"] "NPM project"
-   ["npm install" ! desc "NPM install"
+   ["npm" <> npm_scripts ! desc "Run npm scripts"
+   ,"npm install" ! desc "NPM install"
    ,"npm start" ! desc "NPM run"
    ,"npm test" ! desc "NPM test"
    ]
