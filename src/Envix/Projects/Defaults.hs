@@ -41,7 +41,7 @@ default_projects =
    ,"cabal new-test" ! desc "Cabal test"
    ]
   ,proj ["package.json"] "NPM project"
-   ["npm" <> npm_scripts ! desc "Run npm scripts"
+   ["npm run" <> npm_scripts ! desc "Run npm scripts"
    ,"npm install" ! desc "NPM install"
    ,"npm start" ! desc "NPM run"
    ,"npm test" ! desc "NPM test"

@@ -19,7 +19,7 @@ import           Envix.Rofi
 import           Envix.Select hiding (select)
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
-import           Turtle hiding (decimal, err, find, sort, shell, sortBy)
+import           Turtle hiding (decimal, err, find, shell)
 
 -- | Print a text message to stderr
 printErr :: (MonadIO m) => Text -> m ()

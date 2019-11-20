@@ -13,6 +13,7 @@ module Envix.Fzf
   , fzf_with_nth
   ) where
 
+import           Control.Arrow ((&&&))
 import           Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import           Data.List (sort)
 import qualified Data.Map as Map
@@ -94,7 +95,7 @@ fzf :: FzfOpts -> Shell Line -> IO (Selection Text)
 fzf opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
-        Nothing -> "-1" : "--expect=alt-enter" : "--ansi" : build_args
+        Nothing -> "-1" : "--expect=alt-enter" : "--ansi" : "--no-sort" : build_args
           [ flag "--border" (_border opts)
           , arg "--header" =<< _header opts
           , arg "--height" =<< format (d%"%") <$> _height opts
@@ -155,11 +156,11 @@ fzf_project_command query project = do
   let path = project_path project
       history_file = T.unpack $ format fp $ project_history_file path
   history <- map fromString . historyLines <$> readHistory history_file
-  let commands = build_map show_command $ (history ++) $ find_project_commands project
+  let commands = map (show_command &&& id) $ (history ++) $ find_project_commands project
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
       opts = fzf_header header <> maybe mempty fzf_query query
-      input' = select $ text_to_line <$> Map.keys commands
-  fmap (`Map.lookup` commands) <$> fzf opts input' >>= \case
+      input' = select $ text_to_line . fst <$> commands
+  fmap (`lookup` commands) <$> fzf opts input' >>= \case
     Selection Default cmd -> pure cmd
     Selection (Alternate _) cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
