@@ -17,7 +17,6 @@ module Envix.Projects
 
 import qualified Control.Foldl as Fold
 import           Control.Monad (filterM)
-import           Data.Bool (bool)
 import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
@@ -47,13 +46,13 @@ parents path'
 
 -- | Locate a file going up the filesystem hierarchy
 find_dominating_file :: FilePath -> FilePath -> IO (Maybe FilePath)
-find_dominating_file path' name = let candidate = path' </> name in
-  testdir path' >>=
-  bool up (testpath candidate >>=
-  bool up (pure $ Just candidate))
-  where up = if parent path' == root path'
-          then pure Nothing
-          else find_dominating_file (parent path') name
+find_dominating_file path' name = do
+  let candidate = path' </> name
+      is_root = parent path' == root path'
+  (&&) <$> testdir path' <*> testpath candidate >>= \case
+    True -> pure $ Just candidate
+    False | is_root -> pure Nothing
+          | otherwise -> find_dominating_file (parent path') name
 
 -- | Find/filter out a project in which path is a subdirectory.
 find_in_project :: [ProjectType] -> FilePath -> IO (Maybe Project)
