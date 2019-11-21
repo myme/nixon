@@ -9,7 +9,6 @@ module Envix.Projects
   , implode_home
   , mkproject
   , parents
-  , project_exec
   , project_path
   , resolve_command
   , sort_projects
@@ -21,7 +20,6 @@ import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
-import           Envix.Nix
 import           Envix.Projects.Types as Types
 import qualified Envix.Select as Select
 import           Prelude hiding (FilePath)
@@ -110,18 +108,6 @@ expand_path path' = do
 
 sort_projects :: [Project] -> [Project]
 sort_projects = sortBy (compare `on` project_path)
-
-project_exec :: (Project -> IO ()) -- ^ Non-nix project action
-             -> (FilePath -> IO ()) -- ^ Nix project action
-             -> Bool -- ^ Use nix
-             -> Project -> IO ()
-project_exec plain with_nix use_nix project =
-  let action = if use_nix
-        then find_nix_file (project_path project)
-        else pure Nothing
-  in action >>= \case
-    Nothing -> plain project
-    Just nix_file -> with_nix nix_file
 
 -- | Given a path, find matching markers/project type.
 find_project_types :: FilePath -> [ProjectType] -> IO [ProjectType]
