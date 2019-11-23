@@ -28,9 +28,7 @@ npm_scripts = Command [ShellPart "script" scripts] mempty
           select (fromMaybe [] keys)
         parse_script = withObject "package.json" (.: "scripts")
 
--- TODO: Parse e.g. package.json for npm scripts?
 -- TODO: Add support for local overrides with an .envix project file
--- TODO: Record commands made within a project and add to list
 -- TODO: List descriptions
 default_projects :: [ProjectType]
 default_projects =
