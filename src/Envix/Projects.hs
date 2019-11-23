@@ -9,6 +9,7 @@ module Envix.Projects
   , implode_home
   , mkproject
   , parents
+  , project_exec
   , project_path
   , resolve_command
   , sort_projects
@@ -18,11 +19,15 @@ import qualified Control.Foldl as Fold
 import           Control.Monad (filterM)
 import           Data.Function (on)
 import           Data.List (sortBy)
+import           Data.Maybe (fromMaybe)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
+import           Envix.Process
+import           Envix.Projects.Types (command_gui, command_options)
 import           Envix.Projects.Types as Types
 import qualified Envix.Select as Select
 import           Prelude hiding (FilePath)
+import qualified System.IO as IO
 import           System.Wordexp
 import           Turtle hiding (f, find, sort, sortBy, toText)
 
@@ -111,14 +116,29 @@ sort_projects = sortBy (compare `on` project_path)
 
 -- | Given a path, find matching markers/project type.
 find_project_types :: FilePath -> [ProjectType] -> IO [ProjectType]
-find_project_types path' project_types = do
-  is_dir <- isDirectory <$> stat path'
-  if not is_dir
-    then pure []
-    else filterM has_markers project_types
+find_project_types path' project_types = testdir path' >>= \case
+  False -> pure []
+  True  -> filterM has_markers project_types
   where has_markers project = case project_markers project of
           [] -> pure True
           xs -> fmap and . traverse (`test_marker` path') $ xs
+
+project_exec :: Command -> Project -> Select.Select ()
+project_exec cmd project = do
+  cmd' <- resolve_command project cmd
+  liftIO $ IO.hIsTerminalDevice IO.stdin >>= \case
+    True  -> run [cmd'] (Just $ project_path project)
+    False -> do
+      let is_gui = command_gui (command_options cmd)
+          path' = Just $ project_path project
+      if is_gui
+        then do
+          shell' <- fromMaybe "bash" <$> need "SHELL"
+          spawn (shell' : ["-c", cmd']) path'
+        else do
+          -- TODO: Add config for terminal
+          let terminal = "x-terminal-emulator"
+          spawn (terminal : ["-e", cmd']) path'
 
 -- | Test that a marker is valid for a path
 test_marker :: ProjectMarker -> FilePath -> IO Bool

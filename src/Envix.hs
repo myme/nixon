@@ -80,9 +80,9 @@ project_action config projects opts
       backend <- get_backend config
       let ptypes = Config.project_types config
 
-          (find_project, find_command, exec) = case backend of
-            Fzf -> (fzf_projects, fzf_project_command, fzf_exec)
-            Rofi -> (rofi_projects, rofi_project_command, rofi_exec)
+          (find_project, find_command, selector) = case backend of
+            Fzf -> (fzf_projects, fzf_project_command, fzf_with_edit mempty)
+            Rofi -> (rofi_projects, rofi_project_command, rofi mempty)
 
           -- TODO: Generalize rofi/fzf_projects and move this to Envix.Projects using `select`
           find_project' (Just ".") = runMaybeT
@@ -97,18 +97,17 @@ project_action config projects opts
           else do
             cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
             liftIO $ do
-              -- TODO: Generalize fzf/rofi_exec and move this to Envix.Projects/Envix.Direnv
               cmd' <- direnv_cmd config cmd (project_path project)
-              exec cmd' project
+              runSelect selector $ project_exec cmd' project
 
 -- | Run a command from current directory
 run_action :: Config -> ProjectOpts -> IO ()
 run_action config opts = do
   backend <- get_backend config
   let ptypes = Config.project_types config
-      (find_command, exec) = case backend of
-        Fzf -> (fzf_project_command, fzf_exec)
-        Rofi -> (rofi_project_command, rofi_exec)
+      (find_command, selector) = case backend of
+        Fzf -> (fzf_project_command, fzf_with_edit mempty)
+        Rofi -> (rofi_project_command, rofi mempty)
   handleExcept $ do
     project <- liftIO $ do
       current <- from_path <$> pwd
@@ -116,7 +115,7 @@ run_action config opts = do
     cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
     liftIO $ do
       cmd' <- direnv_cmd config cmd (project_path project)
-      exec cmd' project
+      runSelect selector $ project_exec cmd' project
 
 -- TODO: Launch terminal with nix-shell output if taking a long time.
 -- TODO: Allow changing default command

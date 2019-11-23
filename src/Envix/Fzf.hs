@@ -3,13 +3,13 @@ module Envix.Fzf
   , fzf_border
   , fzf_header
   , fzf_height
-  , fzf_exec
   , fzf_format_project_name
   , fzf_projects
   , fzf_query
   , fzf_filter
   , fzf_preview
   , fzf_project_command
+  , fzf_with_edit
   , fzf_with_nth
   , fzf_no_sort
   ) where
@@ -129,11 +129,6 @@ fzf_with_edit opts candidates = fzf opts candidates >>= \case
     Just selection' -> pure $ Selection (Alternate idx) selection'
     Nothing -> pure EmptySelection
   x -> pure x
-
-fzf_exec :: Command -> Project -> IO ()
-fzf_exec cmd project = do
-  cmd' <- runSelect (fzf_with_edit mempty) $ resolve_command project cmd
-  run [cmd'] (Just $ project_path project)
 
 fzf_format_project_name :: Project -> IO (Text, Project)
 fzf_format_project_name project = do
