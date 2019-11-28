@@ -1,6 +1,7 @@
 module Envix
   ( envix
   , envix_with_config
+  , default_config
   ) where
 
 import           Control.Monad.Trans.Except
@@ -13,8 +14,9 @@ import           Envix.Config as Config
 import           Envix.Fzf
 import           Envix.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
 import qualified Envix.Config.Options as Options
-import           Envix.Projects
-import           Envix.Projects.Types
+import           Envix.Projects hiding (project_types)
+import           Envix.Projects.Defaults
+import           Envix.Projects.Types hiding (project_types)
 import           Envix.Rofi
 import           Envix.Select hiding (select)
 import           Prelude hiding (FilePath)
@@ -137,6 +139,13 @@ envix_with_config user_config = do
     RunCommand run_opts -> run_action config run_opts
   where print_error err = printErr err >> exit (ExitFailure 1)
 
+default_config :: Config
+default_config = Config { backend = Nothing
+                        , project_types = default_projects
+                        , source_dirs = []
+                        , use_direnv = False
+                        , use_nix = False
+                        }
 
 -- | Envix with default configuration
 envix :: IO ()
