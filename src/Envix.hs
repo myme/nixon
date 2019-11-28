@@ -7,13 +7,13 @@ module Envix
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Data.Bool (bool)
-import           Data.Maybe (fromMaybe, isJust)
-import qualified Data.Text as T
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
 import           Envix.Config as Config
 import           Envix.Fzf
 import           Envix.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
 import qualified Envix.Config.Options as Options
+import           Envix.Direnv
 import           Envix.Projects hiding (project_types)
 import           Envix.Projects.Defaults
 import           Envix.Projects.Types hiding (project_types)
@@ -60,19 +60,6 @@ get_backend :: Config -> IO Backend
 get_backend config = do
   def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
   pure $ fromMaybe def_backend (Config.backend config)
-
--- | Convert a regular command to a direnv command
-direnv_cmd :: Config -> Command -> FilePath -> IO Command
-direnv_cmd config cmd path'
-  | not (Config.use_direnv config) = pure cmd
-  | otherwise = maybe True (not . path_in_env) <$> need "DIRENV_DIR" >>=
-    bool (pure cmd) (
-      isJust <$> find_dominating_file path' ".envrc" >>=
-      bool (pure cmd) (
-        let (cmd':args) = command_parts cmd
-            parts = ["direnv exec" , TextPart (format fp path') , cmd'] ++ args
-        in pure cmd { command_parts = parts }))
-    where path_in_env = (`elem` parents path') . fromText . T.dropWhile (/= '/')
 
 -- | Find/filter out a project and perform an action.
 project_action :: Config -> [Project] -> ProjectOpts -> IO ()
