@@ -122,7 +122,7 @@ find_project_types path' project_types = testdir path' >>= \case
   True  -> filterM has_markers project_types
   where has_markers project = case project_markers project of
           [] -> pure True
-          xs -> fmap and . traverse (`test_marker` path') $ xs
+          xs -> fmap or . traverse (`test_marker` path') $ xs
 
 project_exec :: Command -> Project -> Select.Select ()
 project_exec cmd project = do
