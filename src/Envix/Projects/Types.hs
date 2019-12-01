@@ -68,6 +68,7 @@ data Part = TextPart Text
           | FilePart
           | RevisionPart
           | ShellPart Text (Project -> Select Text)
+          | NestedPart [Part]
 
 instance IsString Part where
   fromString = TextPart . T.pack
@@ -79,6 +80,7 @@ instance Show Part where
   show FilePart = "<filename>"
   show RevisionPart = "<revision>"
   show (ShellPart placeholder _) = T.unpack $ format ("<"%s%">") placeholder
+  show (NestedPart parts) = unwords (map show parts)
 
 data Command = Command
              { command_parts :: [Part]

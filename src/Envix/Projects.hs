@@ -150,7 +150,7 @@ test_marker (ProjectFunc marker) p = marker p
 
 -- | Interpolate all command parts into a single text value.
 resolve_command :: Project -> Command -> Select.Select Text
-resolve_command project (Command parts _) = T.intercalate " " <$> mapM interpolate parts
+resolve_command project (Command parts opts) = T.unwords <$> mapM interpolate parts
   where interpolate (TextPart t) = pure t
         interpolate PathPart = pure $ format fp $ project_path project
         interpolate DirPart = fmap (Select.default_selection "") <$> Select.select $ do
@@ -166,3 +166,4 @@ resolve_command project (Command parts _) = T.intercalate " " <$> mapM interpola
             inshell "git log --oneline --color" mempty
           pure $ Select.default_selection "HEAD" (T.takeWhile (/= ' ') <$> selection)
         interpolate (ShellPart _ f) = f project
+        interpolate (NestedPart ps) = resolve_command project (Command ps opts)

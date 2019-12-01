@@ -14,6 +14,7 @@ import           Envix.Fzf
 import           Envix.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
 import qualified Envix.Config.Options as Options
 import           Envix.Direnv
+import           Envix.Nix
 import           Envix.Projects hiding (project_types)
 import           Envix.Projects.Defaults
 import           Envix.Projects.Types hiding (project_types)
@@ -86,7 +87,9 @@ project_action config projects opts
           else do
             cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
             liftIO $ do
-              cmd' <- direnv_cmd config cmd (project_path project)
+              cmd' <- fmap (fromMaybe cmd) $ runMaybeT $
+                MaybeT (direnv_cmd config cmd (project_path project)) <|>
+                MaybeT (nix_cmd config cmd (project_path project))
               runSelect selector $ project_exec cmd' project
 
 -- | Run a command from current directory
@@ -103,7 +106,9 @@ run_action config opts = do
       fromMaybe current <$> (find_in_project ptypes =<< pwd)
     cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
     liftIO $ do
-      cmd' <- direnv_cmd config cmd (project_path project)
+      cmd' <- fmap (fromMaybe cmd) $ runMaybeT $
+        MaybeT (direnv_cmd config cmd (project_path project)) <|>
+        MaybeT (nix_cmd config cmd (project_path project))
       runSelect selector $ project_exec cmd' project
 
 -- TODO: Launch terminal with nix-shell output if taking a long time.
