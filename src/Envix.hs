@@ -62,6 +62,12 @@ get_backend config = do
   def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
   pure $ fromMaybe def_backend (Config.backend config)
 
+-- | Maybe wrap a command in direnv/nix.
+maybe_wrap_cmd :: Config -> Project -> Command -> IO Command
+maybe_wrap_cmd config project cmd = fmap (fromMaybe cmd) $ runMaybeT
+   $  MaybeT (direnv_cmd config cmd (project_path project))
+  <|> MaybeT (nix_cmd config cmd (project_path project))
+
 -- | Find/filter out a project and perform an action.
 project_action :: Config -> [Project] -> ProjectOpts -> IO ()
 project_action config projects opts
@@ -87,9 +93,7 @@ project_action config projects opts
           else do
             cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
             liftIO $ do
-              cmd' <- fmap (fromMaybe cmd) $ runMaybeT $
-                MaybeT (direnv_cmd config cmd (project_path project)) <|>
-                MaybeT (nix_cmd config cmd (project_path project))
+              cmd' <- maybe_wrap_cmd config project cmd
               runSelect selector $ project_exec cmd' project
 
 -- | Run a command from current directory
@@ -106,9 +110,7 @@ run_action config opts = do
       fromMaybe current <$> (find_in_project ptypes =<< pwd)
     cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
     liftIO $ do
-      cmd' <- fmap (fromMaybe cmd) $ runMaybeT $
-        MaybeT (direnv_cmd config cmd (project_path project)) <|>
-        MaybeT (nix_cmd config cmd (project_path project))
+      cmd' <- maybe_wrap_cmd config project cmd
       runSelect selector $ project_exec cmd' project
 
 -- TODO: Launch terminal with nix-shell output if taking a long time.
