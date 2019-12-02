@@ -14,7 +14,6 @@ module Envix.Projects.Types
   , path
   , proj
   , project_path
-  , revision
   , shell
   , show_command
   ) where
@@ -66,7 +65,6 @@ data Part = TextPart Text
           | PathPart
           | DirPart
           | FilePart
-          | RevisionPart
           | ShellPart Text (Project -> Select Text)
           | NestedPart [Part]
 
@@ -78,7 +76,6 @@ instance Show Part where
   show PathPart = "<project>"
   show DirPart = "<dirname>"
   show FilePart = "<filename>"
-  show RevisionPart = "<revision>"
   show (ShellPart placeholder _) = T.unpack $ format ("<"%s%">") placeholder
   show (NestedPart parts) = unwords (map show parts)
 
@@ -107,10 +104,6 @@ dir = Command [DirPart] mempty
 -- | Placeholder for project file
 file :: Command
 file = Command [FilePart] mempty
-
--- | Placeholder for a git revision
-revision :: Command
-revision = Command [RevisionPart] mempty
 
 -- | Placeholder for a shell command
 shell :: Text -> (Project -> Select Text) -> Command

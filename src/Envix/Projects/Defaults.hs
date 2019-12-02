@@ -28,6 +28,15 @@ npm_scripts = Command [ShellPart "script" scripts] mempty
           select (fromMaybe [] keys)
         parse_script = withObject "package.json" (.: "scripts")
 
+-- | Placeholder for a git revision
+revision :: Command
+revision = Command [ShellPart "revision" revisions] mempty
+  where revisions project = do
+          selection <- Select.select $ do
+            pushd (project_path project)
+            inshell "git log --oneline --color" mempty
+          pure $ Select.default_selection "HEAD" (T.takeWhile (/= ' ') <$> selection)
+
 -- TODO: Add support for local overrides with an .envix project file
 -- TODO: List descriptions
 default_projects :: [ProjectType]

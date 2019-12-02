@@ -160,10 +160,5 @@ resolve_command project (Command parts opts) = T.unwords <$> mapM interpolate pa
         interpolate FilePart = fmap (Select.default_selection "") <$> Select.select $ do
           pushd (project_path project)
           inshell "git ls-files" mempty
-        interpolate RevisionPart = do
-          selection <- Select.select $ do
-            pushd (project_path project)
-            inshell "git log --oneline --color" mempty
-          pure $ Select.default_selection "HEAD" (T.takeWhile (/= ' ') <$> selection)
         interpolate (ShellPart _ f) = f project
         interpolate (NestedPart ps) = resolve_command project (Command ps opts)
