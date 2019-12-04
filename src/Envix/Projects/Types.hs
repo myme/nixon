@@ -18,6 +18,7 @@ module Envix.Projects.Types
   , show_command
   ) where
 
+import           Data.List (intercalate)
 import qualified Data.Text as T
 import           Envix.Select
 import           Prelude hiding (FilePath)
@@ -47,17 +48,19 @@ data ProjectType = ProjectType { project_markers :: [ProjectMarker]
 proj :: [ProjectMarker] -> Text -> [Command] -> ProjectType
 proj = ProjectType
 
-data ProjectMarker = ProjectPath FilePath
-                   | ProjectFile FilePath
-                   | ProjectDir FilePath
-                   | ProjectFunc (FilePath -> IO Bool)
+data ProjectMarker = ProjectPath FilePath -- ^ Check if path exists
+                   | ProjectFile FilePath -- ^ Check if path is a file
+                   | ProjectDir FilePath -- ^ Check if path is a directory
+                   | ProjectOr [ProjectMarker] -- ^ Logical `or` two marker checks
+                   | ProjectFunc (FilePath -> IO Bool) -- ^ Run arbitrary check on candidate dir
 
 instance IsString ProjectMarker where
   fromString = ProjectPath . fromText . T.pack
 
 instance Show ProjectMarker where
   show (ProjectFunc _) = "ProjectFunc (..)"
-  show (ProjectPath p) = "ProjectP" ++ show p
+  show (ProjectOr ms)  = "ProjectOr (" ++ intercalate ", " (map show ms) ++ ")"
+  show (ProjectPath p) = "ProjectPath" ++ show p
   show (ProjectFile p) = "ProjectFile" ++ show p
   show (ProjectDir p)  = "ProjectDir"  ++ show p
 

@@ -53,7 +53,7 @@ default_projects =
    ,"npm start" ! desc "NPM run"
    ,"npm test" ! desc "NPM test"
    ]
-  ,proj (map ProjectPath nix_files) "Nix project"
+  ,proj [ProjectOr $ map ProjectFile nix_files] "Nix project"
    ["nix-build" ! desc "Nix build"
    ,"nix-shell" ! desc "Nix shell"
    ]

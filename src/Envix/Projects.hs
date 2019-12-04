@@ -122,7 +122,7 @@ find_project_types path' project_types = testdir path' >>= \case
   True  -> filterM has_markers project_types
   where has_markers project = case project_markers project of
           [] -> pure True
-          xs -> fmap or . traverse (`test_marker` path') $ xs
+          xs -> fmap and . traverse (test_marker path') $ xs
 
 project_exec :: Command -> Project -> Select.Select ()
 project_exec cmd project = do
@@ -142,11 +142,12 @@ project_exec cmd project = do
           spawn (terminal : ["-e", cmd']) path'
 
 -- | Test that a marker is valid for a path
-test_marker :: ProjectMarker -> FilePath -> IO Bool
-test_marker (ProjectPath marker) p = testpath (p </> marker)
-test_marker (ProjectFile marker) p = testfile (p </> marker)
-test_marker (ProjectDir  marker) p = testdir (p </> marker)
-test_marker (ProjectFunc marker) p = marker p
+test_marker :: FilePath -> ProjectMarker -> IO Bool
+test_marker p (ProjectPath marker) = testpath (p </> marker)
+test_marker p (ProjectFile marker) = testfile (p </> marker)
+test_marker p (ProjectDir  marker) = testdir (p </> marker)
+test_marker p (ProjectOr   ms)     = or <$> mapM (test_marker p) ms
+test_marker p (ProjectFunc marker) = marker p
 
 -- | Interpolate all command parts into a single text value.
 resolve_command :: Project -> Command -> Select.Select Text
