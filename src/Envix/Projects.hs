@@ -38,9 +38,7 @@ mkproject path' = Project (filename path') (parent path') []
 implode_home :: FilePath -> IO FilePath
 implode_home path' = do
   home' <- home
-  pure $ case stripPrefix (home' </> "") path' of
-    Nothing -> path'
-    Just rest -> "~" </> rest
+  pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')
 
 parents :: FilePath -> [FilePath]
 parents path'
