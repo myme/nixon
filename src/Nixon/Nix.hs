@@ -1,4 +1,4 @@
-module Envix.Nix
+module Nixon.Nix
   ( find_nix_file
   , nix_files
   , nix_shell
@@ -9,10 +9,10 @@ module Envix.Nix
 import Control.Monad (filterM)
 import Control.Monad.Trans.Maybe
 import Data.Maybe (listToMaybe)
-import Envix.Config
-import Envix.Process
-import Envix.Projects
-import Envix.Projects.Types hiding (dir)
+import Nixon.Config
+import Nixon.Process
+import Nixon.Projects
+import Nixon.Projects.Types hiding (dir)
 import Prelude hiding (FilePath)
 import Turtle hiding (arg)
 

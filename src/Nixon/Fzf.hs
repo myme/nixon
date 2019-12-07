@@ -1,4 +1,4 @@
-module Envix.Fzf
+module Nixon.Fzf
   ( fzf
   , fzf_border
   , fzf_header
@@ -19,10 +19,10 @@ import           Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import           Data.List (sort)
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import           Envix.Process
-import           Envix.Projects
-import           Envix.Projects.Types hiding (path)
-import           Envix.Select hiding (select)
+import           Nixon.Process
+import           Nixon.Projects
+import           Nixon.Projects.Types hiding (path)
+import           Nixon.Select hiding (select)
 import           Prelude hiding (FilePath, filter)
 import           System.Console.Haskeline
 import           System.Console.Haskeline.History (historyLines, readHistory)
@@ -149,7 +149,7 @@ fzf_projects query projects = do
     _ -> Nothing
 
 project_history_file :: FilePath -> FilePath
-project_history_file = (</> ".envix_history")
+project_history_file = (</> ".nixon_history")
 
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?

@@ -1,4 +1,4 @@
-module Envix.Projects.Defaults
+module Nixon.Projects.Defaults
   ( default_projects
   ) where
 
@@ -8,10 +8,10 @@ import           Data.Aeson.Types
 import qualified Data.HashMap.Strict as Map
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import           Envix.Nix
-import           Envix.Projects
-import           Envix.Projects.Types
-import qualified Envix.Select as Select
+import           Nixon.Nix
+import           Nixon.Projects
+import           Nixon.Projects.Types
+import qualified Nixon.Select as Select
 import           Prelude hiding (FilePath)
 import           Turtle
 
@@ -37,7 +37,7 @@ revision = Command [ShellPart "revision" revisions] mempty
             inshell "git log --oneline --color" mempty
           pure $ Select.default_selection "HEAD" (T.takeWhile (/= ' ') <$> selection)
 
--- TODO: Add support for local overrides with an .envix project file
+-- TODO: Add support for local overrides with an .nixon project file
 -- TODO: List descriptions
 default_projects :: [ProjectType]
 default_projects =

@@ -1,6 +1,6 @@
 cabal-version:       >=1.10
 
-name:                envix
+name:                nixon
 -- https://pvp.haskell.org
 version:             0.1.0.0
 
@@ -30,19 +30,19 @@ extra-source-files:  CHANGELOG.md
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Envix
-                     , Envix.Config
-                     , Envix.Config.JSON
-                     , Envix.Config.Options
-                     , Envix.Direnv
-                     , Envix.Fzf
-                     , Envix.Nix
-                     , Envix.Process
-                     , Envix.Projects
-                     , Envix.Projects.Defaults
-                     , Envix.Projects.Types
-                     , Envix.Rofi
-                     , Envix.Select
+  exposed-modules:     Nixon
+                     , Nixon.Config
+                     , Nixon.Config.JSON
+                     , Nixon.Config.Options
+                     , Nixon.Direnv
+                     , Nixon.Fzf
+                     , Nixon.Nix
+                     , Nixon.Process
+                     , Nixon.Projects
+                     , Nixon.Projects.Defaults
+                     , Nixon.Projects.Types
+                     , Nixon.Rofi
+                     , Nixon.Select
   build-depends:       base >=4.12 && <4.13
                      , aeson
                      , bytestring
@@ -64,21 +64,21 @@ library
                      , TupleSections
   ghc-options:         -Wall
 
-executable envix
+executable nixon
   main-is:             Main.hs
-  other-modules:       Envix
-                     , Envix.Config
-                     , Envix.Config.JSON
-                     , Envix.Config.Options
-                     , Envix.Direnv
-                     , Envix.Fzf
-                     , Envix.Nix
-                     , Envix.Process
-                     , Envix.Projects
-                     , Envix.Projects.Defaults
-                     , Envix.Projects.Types
-                     , Envix.Rofi
-                     , Envix.Select
+  other-modules:       Nixon
+                     , Nixon.Config
+                     , Nixon.Config.JSON
+                     , Nixon.Config.Options
+                     , Nixon.Direnv
+                     , Nixon.Fzf
+                     , Nixon.Nix
+                     , Nixon.Process
+                     , Nixon.Projects
+                     , Nixon.Projects.Defaults
+                     , Nixon.Projects.Types
+                     , Nixon.Rofi
+                     , Nixon.Select
   hs-source-dirs:      src
   build-depends:       base >=4.12 && <4.13
                      , aeson
@@ -102,7 +102,7 @@ executable envix
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
 
-test-suite envix-test
+test-suite nixon-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   hs-source-dirs:
@@ -111,7 +111,7 @@ test-suite envix-test
   build-depends:
       base >=4.7 && <5
     , hspec
-    , envix
+    , nixon
     , text
   default-language: Haskell2010
   default-extensions:  OverloadedStrings

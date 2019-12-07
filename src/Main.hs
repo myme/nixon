@@ -1,6 +1,6 @@
 module Main where
 
-import Envix
+import Nixon
 
 main :: IO ()
-main = envix
+main = nixon

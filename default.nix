@@ -3,7 +3,7 @@
   haskellPackages ? pkgs.haskellPackages,
 }:
 haskellPackages.mkDerivation {
-  pname = "envix";
+  pname = "nixon";
   version = "0.1.0.0";
   src = ./.;
   isLibrary = true;

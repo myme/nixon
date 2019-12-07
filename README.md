@@ -1,4 +1,4 @@
-# Envix
+# Nixon
 
 Project environment and command launcher.
 
@@ -7,29 +7,29 @@ Project environment and command launcher.
 Query for a project and command:
 
 ``` shell
-envix
+nixon
 ```
 
 Simply run a command from the current directory:
 
 ``` shell
-envix run
+nixon run
 ```
 
 ## Build
 
-The `build` sub-command allows building envix with a custom configuration:
+The `build` sub-command allows building nixon with a custom configuration:
 
 ``` haskell
 {-# LANGUAGE OverloadedStrings #-}
 
-import Envix
-import Envix.Config as Config
-import Envix.Projects.Defaults
-import Envix.Projects.Types
+import Nixon
+import Nixon.Config as Config
+import Nixon.Projects.Defaults
+import Nixon.Projects.Types
 
 main :: IO ()
-main = envix_with_config config
+main = nixon_with_config config
   where config = default_config { Config.project_types = projects }
         projects = default_projects ++
           [proj ["package.json"] "My JavaScript projects"
@@ -39,8 +39,8 @@ main = envix_with_config config
 ```
 
 ``` shell
-# envix build INFLIE OUTFILE
-envix build custom_envix.hs custom_envix
+# nixon build INFLIE OUTFILE
+nixon build custom_nixon.hs custom_nixon
 ```
 
 NB: `build` requires a working `ghc`.

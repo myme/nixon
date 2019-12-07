@@ -1,8 +1,8 @@
 module Main where
 
-import Envix.Projects
-import Envix.Projects.Types
-import Envix.Select
+import Nixon.Projects
+import Nixon.Projects.Types
+import Nixon.Select
 import Test.Hspec
 
 main :: IO ()

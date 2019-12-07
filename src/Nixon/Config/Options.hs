@@ -1,4 +1,4 @@
-module Envix.Config.Options
+module Nixon.Config.Options
   ( Backend(..)
   , Options(..)
   , SubCommand(..)
@@ -12,15 +12,15 @@ module Envix.Config.Options
 import           Control.Monad.Trans.Except
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
-import           Envix.Config.JSON (JSONError(..))
-import qualified Envix.Config.JSON as JSON
+import           Nixon.Config.JSON (JSONError(..))
+import qualified Nixon.Config.JSON as JSON
 import           Prelude hiding (FilePath)
 import           Turtle hiding (select)
 
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
 -- TODO: Add support for independent directory/tree of nix files.
 --       The idea is that for some projects you don't want to "pollute" the
---       project by adding e.g. nix files. Add support so that "envix" can find
+--       project by adding e.g. nix files. Add support so that "nixon" can find
 --       these files and launch the appropriate environment without the files
 --       having to be *in* the project root.
 -- TODO: Add "Backend" configuration support (for e.g. styles like height)
@@ -78,8 +78,8 @@ parser = Options
   <*> many (optPath "path" 'p' "Project directory")
   <*> switch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
   <*> switch "nix" 'n' "Invoke nix-shell if *.nix files are found"
-  <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/envix)")
-  <*> ( BuildCommand <$> subcommand "build" "Build custom envix" build_parser <|>
+  <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/nixon)")
+  <*> ( BuildCommand <$> subcommand "build" "Build custom nixon" build_parser <|>
         ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
         RunCommand <$> subcommand "run" "Run command" project_parser <|>
         ProjectCommand <$> project_parser)
@@ -90,8 +90,8 @@ parser = Options
 
 build_parser :: Parser BuildOpts
 build_parser = BuildOpts
-  <$> (fromMaybe "envix.hs" <$> optional (argPath "infile" "Input file (default: envix.hs)"))
-  <*> (fromMaybe "envix"    <$> optional (argPath "outfile" "Output file (default: envix)"))
+  <$> (fromMaybe "nixon.hs" <$> optional (argPath "infile" "Input file (default: nixon.hs)"))
+  <*> (fromMaybe "nixon"    <$> optional (argPath "outfile" "Output file (default: nixon)"))
 
 project_parser :: Parser ProjectOpts
 project_parser = ProjectOpts

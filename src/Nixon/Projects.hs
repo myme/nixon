@@ -1,4 +1,4 @@
-module Envix.Projects
+module Nixon.Projects
   ( Project (..)
   , Command
   , find_dominating_file
@@ -22,10 +22,10 @@ import           Data.List (sortBy)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
-import           Envix.Process
-import           Envix.Projects.Types (command_gui, command_options)
-import           Envix.Projects.Types as Types
-import qualified Envix.Select as Select
+import           Nixon.Process
+import           Nixon.Projects.Types (command_gui, command_options)
+import           Nixon.Projects.Types as Types
+import qualified Nixon.Select as Select
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           System.Wordexp

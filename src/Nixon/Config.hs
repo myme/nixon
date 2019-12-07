@@ -1,11 +1,11 @@
-module Envix.Config
+module Nixon.Config
   ( Config(..)
   , build_config
   ) where
 
-import           Envix.Config.Options (Options, Backend(..))
-import qualified Envix.Config.Options as Options
-import           Envix.Projects.Types (ProjectType)
+import           Nixon.Config.Options (Options, Backend(..))
+import qualified Nixon.Config.Options as Options
+import           Nixon.Projects.Types (ProjectType)
 import           Prelude hiding (FilePath)
 import           Turtle
 

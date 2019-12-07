@@ -1,4 +1,4 @@
-module Envix.Projects.Types
+module Nixon.Projects.Types
   ( Part (..)
   , Project (..)
   , ProjectType (..)
@@ -20,7 +20,7 @@ module Envix.Projects.Types
 
 import           Data.List (intercalate)
 import qualified Data.Text as T
-import           Envix.Select
+import           Nixon.Select
 import           Prelude hiding (FilePath)
 import           Turtle hiding (d, f, g, shell)
 

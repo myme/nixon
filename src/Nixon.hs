@@ -1,6 +1,6 @@
-module Envix
-  ( envix
-  , envix_with_config
+module Nixon
+  ( nixon
+  , nixon_with_config
   , default_config
   ) where
 
@@ -9,17 +9,17 @@ import           Control.Monad.Trans.Maybe
 import           Data.Bool (bool)
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
-import           Envix.Config as Config
-import           Envix.Fzf
-import           Envix.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
-import qualified Envix.Config.Options as Options
-import           Envix.Direnv
-import           Envix.Nix
-import           Envix.Projects hiding (project_types)
-import           Envix.Projects.Defaults
-import           Envix.Projects.Types hiding (project_types)
-import           Envix.Rofi
-import           Envix.Select hiding (select)
+import           Nixon.Config as Config
+import           Nixon.Fzf
+import           Nixon.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
+import qualified Nixon.Config.Options as Options
+import           Nixon.Direnv
+import           Nixon.Nix
+import           Nixon.Projects hiding (project_types)
+import           Nixon.Projects.Defaults
+import           Nixon.Projects.Types hiding (project_types)
+import           Nixon.Rofi
+import           Nixon.Select hiding (select)
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           Turtle hiding (decimal, err, find, shell)
@@ -38,7 +38,7 @@ list projects query = do
     Selection _ matching -> T.putStr matching
     _ -> printErr "No projects."
 
--- | Wrap GHC to build envix with a custom config.
+-- | Wrap GHC to build nixon with a custom config.
 build_action :: BuildOpts -> IO ()
 build_action opts = do
   let infile = format fp (Options.infile opts)
@@ -71,7 +71,7 @@ maybe_wrap_cmd config project cmd = fmap (fromMaybe cmd) $ runMaybeT
 -- | Find/filter out a project and perform an action.
 project_action :: Config -> [Project] -> ProjectOpts -> IO ()
 project_action config projects opts
-  | Options.list opts = Envix.list projects (Options.project opts)
+  | Options.list opts = Nixon.list projects (Options.project opts)
   | otherwise = do
       backend <- get_backend config
       let ptypes = Config.project_types config
@@ -80,7 +80,7 @@ project_action config projects opts
             Fzf -> (fzf_projects, fzf_project_command, fzf_with_edit mempty)
             Rofi -> (rofi_projects, rofi_project_command, rofi mempty)
 
-          -- TODO: Generalize rofi/fzf_projects and move this to Envix.Projects using `select`
+          -- TODO: Generalize rofi/fzf_projects and move this to Nixon.Projects using `select`
           find_project' (Just ".") = runMaybeT
              $  MaybeT (find_in_project ptypes =<< pwd)
             <|> MaybeT (find_project Nothing projects)
@@ -115,12 +115,12 @@ run_action config opts = do
 
 -- TODO: Launch terminal with nix-shell output if taking a long time.
 -- TODO: Allow changing default command
--- TODO: Project local commands (project/path/.envix)
+-- TODO: Project local commands (project/path/.nixon)
 -- TODO: Pingbot integration?
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
-envix_with_config :: Config -> IO ()
-envix_with_config user_config = do
+nixon_with_config :: Config -> IO ()
+nixon_with_config user_config = do
   opts <- either print_error pure =<< Options.parse_args
   let config = build_config opts user_config
   case Options.sub_command opts of
@@ -141,6 +141,6 @@ default_config = Config { backend = Nothing
                         , use_nix = False
                         }
 
--- | Envix with default configuration
-envix :: IO ()
-envix = envix_with_config default_config
+-- | Nixon with default configuration
+nixon :: IO ()
+nixon = nixon_with_config default_config

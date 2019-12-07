@@ -1,4 +1,4 @@
-module Envix.Rofi
+module Nixon.Rofi
   ( rofi
   , rofi_format_project_name
   , rofi_markup
@@ -12,10 +12,10 @@ module Envix.Rofi
 import           Control.Arrow (second)
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import           Envix.Process
-import           Envix.Projects
-import           Envix.Projects.Types (show_command)
-import           Envix.Select hiding (select)
+import           Nixon.Process
+import           Nixon.Projects
+import           Nixon.Projects.Types (show_command)
+import           Nixon.Select hiding (select)
 import           Prelude hiding (FilePath)
 import qualified Turtle as Tu
 import           Turtle hiding (arg, decimal, s, d, f, x, shell)

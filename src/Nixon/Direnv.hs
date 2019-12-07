@@ -1,4 +1,4 @@
-module Envix.Direnv
+module Nixon.Direnv
   ( direnv_cmd
   ) where
 
@@ -6,9 +6,9 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           Data.List (elemIndex)
 import qualified Data.Text as T
-import           Envix.Config
-import           Envix.Projects
-import           Envix.Projects.Types
+import           Nixon.Config
+import           Nixon.Projects
+import           Nixon.Projects.Types
 import           Prelude hiding (FilePath)
 import           Turtle hiding (find, root)
 

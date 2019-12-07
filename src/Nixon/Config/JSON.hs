@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Envix.Config.JSON
+module Nixon.Config.JSON
   ( Config(..)
   , JSONError(..)
   , default_path
@@ -31,7 +31,7 @@ instance FromJSON Config where
     <*> v .: "use_nix"
 
 default_path :: IO FilePath
-default_path = fromString <$> Directory.getXdgDirectory Directory.XdgConfig "envix.json"
+default_path = fromString <$> Directory.getXdgDirectory Directory.XdgConfig "nixon.json"
 
 data JSONError = NoSuchFile
                | EmptyFile

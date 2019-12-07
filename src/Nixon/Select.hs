@@ -1,4 +1,4 @@
-module Envix.Select
+module Nixon.Select
   ( Select
   , Selection (..)
   , SelectionType (..)
