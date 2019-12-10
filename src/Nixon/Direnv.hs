@@ -17,8 +17,8 @@ direnv_cmd :: Config -> Command -> FilePath -> IO (Maybe Command)
 direnv_cmd config cmd path'
   | not (use_direnv config) = pure Nothing
   | otherwise = runMaybeT $ do
-      _ <- liftIO (fmap find_path <$> need "DIRENV_DIR")
-      _ <- liftIO (fmap dirname <$> find_dominating_file path' ".envrc")
+      _ <- MaybeT (fmap find_path <$> need "DIRENV_DIR")
+      _ <- MaybeT (fmap dirname <$> find_dominating_file path' ".envrc")
       let (cmd':args) = command_parts cmd
           parts = ["direnv exec", TextPart (format fp path'), cmd'] ++ args
       lift . pure $ cmd { command_parts = parts }
