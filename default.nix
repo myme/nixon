@@ -2,10 +2,14 @@
   pkgs ? import ./nixpkgs.nix {},
   haskellPackages ? pkgs.haskellPackages,
 }:
-haskellPackages.mkDerivation {
+
+let
+  gitignore = pkgs.nix-gitignore.gitignoreSourcePure [ ./.gitignore ];
+
+in haskellPackages.mkDerivation {
   pname = "nixon";
   version = "0.1.0.0";
-  src = ./.;
+  src = (gitignore ./.);
   isLibrary = true;
   isExecutable = true;
   executableHaskellDepends = with haskellPackages; [
