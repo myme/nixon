@@ -2,6 +2,7 @@ module Nixon.Select
   ( Select
   , Selection (..)
   , SelectionType (..)
+  , Selector
   , build_map
   , default_selection
   , runSelect

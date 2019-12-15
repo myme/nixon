@@ -67,6 +67,19 @@ maybe_wrap_cmd config project cmd = fmap (fromMaybe cmd) $ runMaybeT
    $  MaybeT (direnv_cmd config cmd (project_path project))
   <|> MaybeT (nix_cmd config cmd (project_path project))
 
+-- | Find and run a command in a project.
+run_cmd :: (Maybe Text -> Project -> IO (Maybe Command))
+             -> Project
+             -> ProjectOpts
+             -> Selector
+             -> ExceptT Text Nixon ()
+run_cmd find_command project opts selector = do
+  config <- lift ask
+  cmd <- on_empty "No command selected." $ liftIO $ find_command (Options.command opts) project
+  cmd' <- liftIO $ maybe_wrap_cmd config project cmd
+  lift $ log_info (format ("Running command '"%w%"'") cmd')
+  liftIO $ runSelect selector $ project_exec cmd' project
+
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
 project_action projects opts
@@ -90,11 +103,7 @@ project_action projects opts
         project <- on_empty "No project selected." $ liftIO $ find_project' (Options.project opts)
         if Options.select opts
           then liftIO $ printf (fp % "\n") (project_path project)
-          else do
-            cmd <- on_empty "No command selected." $ liftIO $ find_command (Options.command opts) project
-            cmd' <- liftIO $ maybe_wrap_cmd config project cmd
-            lift $ log_info (format ("Running command '"%w%"'") cmd')
-            liftIO $ runSelect selector $ project_exec cmd' project
+          else run_cmd find_command project opts selector
 
 -- | Run a command from current directory
 run_action :: ProjectOpts -> Nixon ()
@@ -109,10 +118,7 @@ run_action opts = do
     project <- liftIO $ do
       current <- from_path <$> pwd
       fromMaybe current <$> (find_in_project ptypes =<< pwd)
-    cmd <- on_empty "No command selected." $ liftIO $ find_command (Options.command opts) project
-    liftIO $ do
-      cmd' <- maybe_wrap_cmd config project cmd
-      runSelect selector $ project_exec cmd' project
+    run_cmd find_command project opts selector
 
 -- TODO: Launch terminal with nix-shell output if taking a long time.
 -- TODO: Allow changing default command
