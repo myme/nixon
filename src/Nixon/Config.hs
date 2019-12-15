@@ -1,8 +1,12 @@
 module Nixon.Config
   ( Config(..)
+  , Nixon
+  , ask
   , build_config
+  , runNixon
   ) where
 
+import           Control.Monad.Trans.Reader
 import           Nixon.Config.Options (Options, Backend(..))
 import qualified Nixon.Config.Options as Options
 import           Nixon.Projects.Types (ProjectType)
@@ -24,3 +28,8 @@ build_config opts config = config
   , use_direnv = use_direnv config || Options.use_direnv opts
   , use_nix = use_nix config || Options.use_nix opts
   }
+
+type Nixon = ReaderT Config IO
+
+runNixon :: Config -> ReaderT Config m a -> m a
+runNixon = flip runReaderT

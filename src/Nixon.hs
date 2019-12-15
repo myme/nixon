@@ -57,9 +57,10 @@ handleExcept action = runExceptT action >>= \case
   Left err -> printErr err >> exit (ExitFailure 1)
   Right _ -> pure ()
 
-get_backend :: Config -> IO Backend
-get_backend config = do
-  def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
+get_backend :: Nixon Backend
+get_backend = do
+  config <- ask
+  def_backend <- liftIO (bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin)
   pure $ fromMaybe def_backend (Config.backend config)
 
 -- | Maybe wrap a command in direnv/nix.
@@ -69,11 +70,12 @@ maybe_wrap_cmd config project cmd = fmap (fromMaybe cmd) $ runMaybeT
   <|> MaybeT (nix_cmd config cmd (project_path project))
 
 -- | Find/filter out a project and perform an action.
-project_action :: Config -> [Project] -> ProjectOpts -> IO ()
-project_action config projects opts
-  | Options.list opts = Nixon.list projects (Options.project opts)
+project_action :: [Project] -> ProjectOpts -> Nixon ()
+project_action projects opts
+  | Options.list opts = liftIO $ Nixon.list projects (Options.project opts)
   | otherwise = do
-      backend <- get_backend config
+      config <- ask
+      backend <- get_backend
       let ptypes = Config.project_types config
 
           (find_project, find_command, selector) = case backend of
@@ -87,19 +89,20 @@ project_action config projects opts
           find_project' query = find_project query projects
 
       handleExcept $ do
-        project <- on_empty "No project selected." $ find_project' (Options.project opts)
+        project <- on_empty "No project selected." $ liftIO $ find_project' (Options.project opts)
         if Options.select opts
-          then printf (fp % "\n") (project_path project)
+          then liftIO $ printf (fp % "\n") (project_path project)
           else do
-            cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
+            cmd <- on_empty "No command selected." $ liftIO $ find_command (Options.command opts) project
             liftIO $ do
               cmd' <- maybe_wrap_cmd config project cmd
               runSelect selector $ project_exec cmd' project
 
 -- | Run a command from current directory
-run_action :: Config -> ProjectOpts -> IO ()
-run_action config opts = do
-  backend <- get_backend config
+run_action :: ProjectOpts -> Nixon ()
+run_action opts = do
+  config <- ask
+  backend <- get_backend
   let ptypes = Config.project_types config
       (find_command, selector) = case backend of
         Fzf -> (fzf_project_command, fzf_with_edit mempty)
@@ -108,7 +111,7 @@ run_action config opts = do
     project <- liftIO $ do
       current <- from_path <$> pwd
       fromMaybe current <$> (find_in_project ptypes =<< pwd)
-    cmd <- on_empty "No command selected." $ find_command (Options.command opts) project
+    cmd <- on_empty "No command selected." $ liftIO $ find_command (Options.command opts) project
     liftIO $ do
       cmd' <- maybe_wrap_cmd config project cmd
       runSelect selector $ project_exec cmd' project
@@ -123,14 +126,14 @@ nixon_with_config :: Config -> IO ()
 nixon_with_config user_config = do
   opts <- either print_error pure =<< Options.parse_args
   let config = build_config opts user_config
-  case Options.sub_command opts of
-    BuildCommand build_opts -> build_action build_opts
+  runNixon config $ case Options.sub_command opts of
+    BuildCommand build_opts -> liftIO (build_action build_opts)
     ProjectCommand project_opts -> do
       let ptypes = Config.project_types config
           srcs = Config.source_dirs config
-      projects <- sort_projects <$> find_projects 1 ptypes srcs
-      project_action config projects project_opts
-    RunCommand run_opts -> run_action config run_opts
+      projects <- sort_projects <$> liftIO (find_projects 1 ptypes srcs)
+      project_action projects project_opts
+    RunCommand run_opts -> run_action run_opts
   where print_error err = printErr err >> exit (ExitFailure 1)
 
 default_config :: Config
