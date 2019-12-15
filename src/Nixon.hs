@@ -4,29 +4,27 @@ module Nixon
   , default_config
   ) where
 
+import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Data.Bool (bool)
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
 import           Nixon.Config as Config
-import           Nixon.Fzf
 import           Nixon.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
 import           Nixon.Direnv
+import           Nixon.Fzf
+import           Nixon.Logging
 import           Nixon.Nix
 import           Nixon.Projects hiding (project_types)
 import           Nixon.Projects.Defaults
 import           Nixon.Projects.Types hiding (project_types)
 import           Nixon.Rofi
 import           Nixon.Select hiding (select)
-import           Prelude hiding (FilePath)
+import           Prelude hiding (FilePath, log)
 import qualified System.IO as IO
 import           Turtle hiding (decimal, err, find, shell)
-
--- | Print a text message to stderr
-printErr :: (MonadIO m) => Text -> m ()
-printErr = liftIO . T.hPutStrLn IO.stderr
 
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Maybe Text -> IO ()
@@ -94,9 +92,9 @@ project_action projects opts
           then liftIO $ printf (fp % "\n") (project_path project)
           else do
             cmd <- on_empty "No command selected." $ liftIO $ find_command (Options.command opts) project
-            liftIO $ do
-              cmd' <- maybe_wrap_cmd config project cmd
-              runSelect selector $ project_exec cmd' project
+            cmd' <- liftIO $ maybe_wrap_cmd config project cmd
+            lift $ log_info (format ("Running command '"%w%"'") cmd')
+            liftIO $ runSelect selector $ project_exec cmd' project
 
 -- | Run a command from current directory
 run_action :: ProjectOpts -> Nixon ()
@@ -127,13 +125,18 @@ nixon_with_config user_config = do
   opts <- either print_error pure =<< Options.parse_args
   let config = build_config opts user_config
   runNixon config $ case Options.sub_command opts of
-    BuildCommand build_opts -> liftIO (build_action build_opts)
+    BuildCommand build_opts -> do
+      log_info "Running <build> command"
+      liftIO (build_action build_opts)
     ProjectCommand project_opts -> do
+      log_info "Running <project> command"
       let ptypes = Config.project_types config
           srcs = Config.source_dirs config
       projects <- sort_projects <$> liftIO (find_projects 1 ptypes srcs)
       project_action projects project_opts
-    RunCommand run_opts -> run_action run_opts
+    RunCommand run_opts -> do
+      log_info "Running <run> command"
+      run_action run_opts
   where print_error err = printErr err >> exit (ExitFailure 1)
 
 default_config :: Config
@@ -142,6 +145,7 @@ default_config = Config { backend = Nothing
                         , source_dirs = []
                         , use_direnv = False
                         , use_nix = False
+                        , loglevel = LogWarning
                         }
 
 -- | Nixon with default configuration

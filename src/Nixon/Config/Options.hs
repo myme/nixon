@@ -1,5 +1,6 @@
 module Nixon.Config.Options
   ( Backend(..)
+  , LogLevel(..)
   , Options(..)
   , SubCommand(..)
   , BuildOpts(..)
@@ -17,6 +18,9 @@ import qualified Nixon.Config.JSON as JSON
 import           Prelude hiding (FilePath)
 import           Turtle hiding (select)
 
+data LogLevel = LogDebug | LogInfo | LogWarning | LogError
+  deriving (Eq, Ord, Show)
+
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
 -- TODO: Add support for independent directory/tree of nix files.
 --       The idea is that for some projects you don't want to "pollute" the
@@ -33,6 +37,7 @@ data Options = Options
   , source_dirs :: [FilePath]
   , use_direnv :: Bool
   , use_nix :: Bool
+  , loglevel :: Maybe LogLevel
   , config :: Maybe FilePath
   , sub_command :: SubCommand
   } deriving Show
@@ -62,6 +67,7 @@ default_options = Options
   , source_dirs = []
   , use_direnv = False
   , use_nix = False
+  , loglevel = Just LogWarning
   , config = Nothing
   , sub_command = ProjectCommand ProjectOpts
     { project = Nothing
@@ -78,15 +84,24 @@ parser = Options
   <*> many (optPath "path" 'p' "Project directory")
   <*> switch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
   <*> switch "nix" 'n' "Invoke nix-shell if *.nix files are found"
+  <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/nixon)")
   <*> ( BuildCommand <$> subcommand "build" "Build custom nixon" build_parser <|>
         ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
         RunCommand <$> subcommand "run" "Run command" project_parser <|>
         ProjectCommand <$> project_parser)
   where
-    parse_backend "fzf" = Just Fzf
-    parse_backend "rofi" = Just Rofi
-    parse_backend _ = Nothing
+    parse_backend = flip lookup
+      [("fzf", Fzf)
+      ,("rofi", Rofi)
+      ]
+    parse_loglevel = flip lookup
+      [("debug", LogDebug)
+      ,("info", LogInfo)
+      ,("warning", LogWarning)
+      ,("warn", LogWarning)
+      ,("error", LogError)
+      ]
 
 build_parser :: Parser BuildOpts
 build_parser = BuildOpts

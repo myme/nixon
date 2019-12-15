@@ -36,6 +36,7 @@ library
                      , Nixon.Config.Options
                      , Nixon.Direnv
                      , Nixon.Fzf
+                     , Nixon.Logging
                      , Nixon.Nix
                      , Nixon.Process
                      , Nixon.Projects
@@ -72,6 +73,7 @@ executable nixon
                      , Nixon.Config.Options
                      , Nixon.Direnv
                      , Nixon.Fzf
+                     , Nixon.Logging
                      , Nixon.Nix
                      , Nixon.Process
                      , Nixon.Projects
