@@ -160,4 +160,4 @@ resolve_command project (Command parts opts) = T.unwords <$> mapM interpolate pa
           pushd (project_path project)
           inshell "git ls-files" mempty
         interpolate (ShellPart _ f) = f project
-        interpolate (NestedPart ps) = resolve_command project (Command ps opts)
+        interpolate (NestedPart ps) = format ("\""%s%"\"") <$> resolve_command project (Command ps opts)
