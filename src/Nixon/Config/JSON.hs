@@ -14,7 +14,7 @@ import           Data.Char
 import qualified Data.Text as T
 import           GHC.Generics
 import           Prelude hiding (FilePath)
-import qualified System.Directory as Directory
+import           System.Directory (XdgDirectory(..), getXdgDirectory)
 import           System.IO.Error
 import           Turtle hiding (err)
 
@@ -31,7 +31,7 @@ instance FromJSON Config where
     <*> v .: "use_nix"
 
 default_path :: IO FilePath
-default_path = fromString <$> Directory.getXdgDirectory Directory.XdgConfig "nixon.json"
+default_path = fromString <$> getXdgDirectory XdgConfig "nixon.json"
 
 data JSONError = NoSuchFile
                | EmptyFile
