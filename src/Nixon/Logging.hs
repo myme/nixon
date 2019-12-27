@@ -11,7 +11,8 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Text
 import qualified Data.Text.IO as T
-import           Nixon.Config
+import           Nixon.Types
+import           Nixon.Config.Types (LogLevel(..))
 import           Prelude hiding (log)
 import qualified System.IO as IO
 

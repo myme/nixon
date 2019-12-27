@@ -9,7 +9,7 @@ module Nixon.Nix
 import Control.Monad (filterM)
 import Control.Monad.Trans.Maybe
 import Data.Maybe (listToMaybe)
-import Nixon.Config
+import Nixon.Types
 import Nixon.Process
 import Nixon.Projects
 import Nixon.Projects.Types hiding (dir)
@@ -44,17 +44,17 @@ nix_run run' nix_file cmd = do
                         , arg "--run" =<< cmd]
   run' ("nix-shell" : args) (Just $ parent nix_file)
 
-nix_cmd :: Config -> Command -> FilePath -> IO (Maybe Command)
-nix_cmd config cmd path'
-  | not (use_nix config) = pure Nothing
-  | otherwise = runMaybeT $ do
-      nix_file <-
-        MaybeT (find_dominating_file path' "shell.nix") <|>
-        MaybeT (find_dominating_file path' "default.nix")
-      let parts =
-            ["nix-shell"
-            ,"--command"
-            ,NestedPart (command_parts cmd)
-            ,TextPart (format fp nix_file)
-            ]
-      pure cmd { command_parts = parts }
+nix_cmd :: Command -> FilePath -> Nixon (Maybe Command)
+nix_cmd cmd path' = use_nix <$> ask >>= \case
+  False -> pure Nothing
+  True -> liftIO $ runMaybeT $ do
+    nix_file <-
+      MaybeT (find_dominating_file path' "shell.nix") <|>
+      MaybeT (find_dominating_file path' "default.nix")
+    let parts =
+          ["nix-shell"
+          ,"--command"
+          ,NestedPart (command_parts cmd)
+          ,TextPart (format fp nix_file)
+          ]
+    pure cmd { command_parts = parts }

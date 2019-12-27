@@ -15,11 +15,9 @@ import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import           Nixon.Config.JSON (JSONError(..))
 import qualified Nixon.Config.JSON as JSON
+import           Nixon.Config.Types hiding (Config(..))
 import           Prelude hiding (FilePath)
 import           Turtle hiding (select)
-
-data LogLevel = LogDebug | LogInfo | LogWarning | LogError
-  deriving (Eq, Ord, Show)
 
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
 -- TODO: Add support for independent directory/tree of nix files.
@@ -58,8 +56,6 @@ data ProjectOpts = ProjectOpts
   , list :: Bool
   , select :: Bool
   } deriving Show
-
-data Backend = Fzf | Rofi deriving Show
 
 default_options :: Options
 default_options = Options

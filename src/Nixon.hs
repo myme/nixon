@@ -1,18 +1,17 @@
 module Nixon
   ( nixon
   , nixon_with_config
-  , default_config
   ) where
 
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
-import           Data.Bool (bool)
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
-import           Nixon.Config as Config
 import           Nixon.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
+import           Nixon.Config.Types (Config, LogLevel(..))
+import qualified Nixon.Config.Types as Config
 import           Nixon.Direnv
 import           Nixon.Fzf
 import           Nixon.Logging
@@ -22,9 +21,9 @@ import           Nixon.Projects.Defaults
 import           Nixon.Projects.Types hiding (project_types)
 import           Nixon.Rofi
 import           Nixon.Select hiding (select)
+import           Nixon.Types
 import           Prelude hiding (FilePath, log)
-import qualified System.IO as IO
-import           Turtle hiding (decimal, err, find, shell)
+import           Turtle hiding (decimal, env, err, find, shell)
 
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Maybe Text -> IO ()
@@ -55,17 +54,11 @@ handleExcept action = runExceptT action >>= \case
   Left err -> printErr err >> exit (ExitFailure 1)
   Right _ -> pure ()
 
-get_backend :: Nixon Backend
-get_backend = do
-  config <- ask
-  def_backend <- liftIO (bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin)
-  pure $ fromMaybe def_backend (Config.backend config)
-
 -- | Maybe wrap a command in direnv/nix.
-maybe_wrap_cmd :: Config -> Project -> Command -> IO Command
-maybe_wrap_cmd config project cmd = fmap (fromMaybe cmd) $ runMaybeT
-   $  MaybeT (direnv_cmd config cmd (project_path project))
-  <|> MaybeT (nix_cmd config cmd (project_path project))
+maybe_wrap_cmd :: Project -> Command -> Nixon Command
+maybe_wrap_cmd project cmd = fmap (fromMaybe cmd) $ runMaybeT
+   $  MaybeT (direnv_cmd cmd (project_path project))
+  <|> MaybeT (nix_cmd cmd (project_path project))
 
 -- | Find and run a command in a project.
 run_cmd :: (Maybe Text -> Project -> IO (Maybe Command))
@@ -74,9 +67,8 @@ run_cmd :: (Maybe Text -> Project -> IO (Maybe Command))
              -> Selector
              -> ExceptT Text Nixon ()
 run_cmd find_command project opts selector = do
-  config <- lift ask
   cmd <- on_empty "No command selected." $ liftIO $ find_command (Options.command opts) project
-  cmd' <- liftIO $ maybe_wrap_cmd config project cmd
+  cmd' <- lift $ maybe_wrap_cmd project cmd
   lift $ log_info (format ("Running command '"%w%"'") cmd')
   liftIO $ runSelect selector $ project_exec cmd' project
 
@@ -85,11 +77,10 @@ project_action :: [Project] -> ProjectOpts -> Nixon ()
 project_action projects opts
   | Options.list opts = liftIO $ Nixon.list projects (Options.project opts)
   | otherwise = do
-      config <- ask
-      backend <- get_backend
-      let ptypes = Config.project_types config
+      env <- ask
+      let ptypes = project_types env
 
-          (find_project, find_command, selector) = case backend of
+          (find_project, find_command, selector) = case backend env of
             Fzf -> (fzf_projects, fzf_project_command, fzf_with_edit mempty)
             Rofi -> (rofi_projects, rofi_project_command, rofi mempty)
 
@@ -108,10 +99,9 @@ project_action projects opts
 -- | Run a command from current directory
 run_action :: ProjectOpts -> Nixon ()
 run_action opts = do
-  config <- ask
-  backend <- get_backend
-  let ptypes = Config.project_types config
-      (find_command, selector) = case backend of
+  env <- ask
+  let ptypes = project_types env
+      (find_command, selector) = case backend env of
         Fzf -> (fzf_project_command, fzf_with_edit mempty)
         Rofi -> (rofi_project_command, rofi mempty)
   handleExcept $ do
@@ -129,15 +119,15 @@ run_action opts = do
 nixon_with_config :: Config -> IO ()
 nixon_with_config user_config = do
   opts <- either print_error pure =<< Options.parse_args
-  let config = build_config opts user_config
-  runNixon config $ case Options.sub_command opts of
+  runNixon opts user_config $ case Options.sub_command opts of
     BuildCommand build_opts -> do
       log_info "Running <build> command"
       liftIO (build_action build_opts)
     ProjectCommand project_opts -> do
       log_info "Running <project> command"
-      let ptypes = Config.project_types config
-          srcs = Config.source_dirs config
+      env <- ask
+      let ptypes = project_types env
+          srcs = source_dirs env
       projects <- sort_projects <$> liftIO (find_projects 1 ptypes srcs)
       project_action projects project_opts
     RunCommand run_opts -> do
@@ -146,13 +136,14 @@ nixon_with_config user_config = do
   where print_error err = printErr err >> exit (ExitFailure 1)
 
 default_config :: Config
-default_config = Config { backend = Nothing
-                        , project_types = default_projects
-                        , source_dirs = []
-                        , use_direnv = False
-                        , use_nix = False
-                        , loglevel = LogWarning
-                        }
+default_config = Config.Config
+  { Config.backend = Nothing
+  , Config.project_types = default_projects
+  , Config.source_dirs = []
+  , Config.use_direnv = False
+  , Config.use_nix = False
+  , Config.loglevel = LogWarning
+  }
 
 -- | Nixon with default configuration
 nixon :: IO ()

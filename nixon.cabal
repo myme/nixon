@@ -31,9 +31,9 @@ extra-source-files:  CHANGELOG.md
 library
   hs-source-dirs:      src
   exposed-modules:     Nixon
-                     , Nixon.Config
                      , Nixon.Config.JSON
                      , Nixon.Config.Options
+                     , Nixon.Config.Types
                      , Nixon.Direnv
                      , Nixon.Fzf
                      , Nixon.Logging
@@ -44,6 +44,7 @@ library
                      , Nixon.Projects.Types
                      , Nixon.Rofi
                      , Nixon.Select
+                     , Nixon.Types
   build-depends:       base >=4.12 && <4.13
                      , aeson
                      , bytestring
@@ -68,9 +69,9 @@ library
 executable nixon
   main-is:             Main.hs
   other-modules:       Nixon
-                     , Nixon.Config
                      , Nixon.Config.JSON
                      , Nixon.Config.Options
+                     , Nixon.Config.Types
                      , Nixon.Direnv
                      , Nixon.Fzf
                      , Nixon.Logging
@@ -81,6 +82,7 @@ executable nixon
                      , Nixon.Projects.Types
                      , Nixon.Rofi
                      , Nixon.Select
+                     , Nixon.Types
   hs-source-dirs:      src
   build-depends:       base >=4.12 && <4.13
                      , aeson
