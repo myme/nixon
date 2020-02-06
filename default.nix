@@ -20,6 +20,7 @@ in haskellPackages.mkDerivation {
     directory
     foldl
     haskeline
+    optparse-applicative
     process
     text
     transformers

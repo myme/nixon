@@ -20,8 +20,8 @@ import           Turtle hiding (err)
 
 data Config = Config
   { source_dirs :: [FilePath]
-  , use_direnv :: Bool
-  , use_nix :: Bool
+  , use_direnv :: Maybe Bool
+  , use_nix :: Maybe Bool
   } deriving (Generic, Show)
 
 instance FromJSON Config where

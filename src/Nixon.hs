@@ -1,6 +1,7 @@
 module Nixon
   ( nixon
   , nixon_with_config
+  , default_config
   ) where
 
 import           Control.Exception
@@ -141,8 +142,8 @@ default_config = Config.Config
   { Config.backend = Nothing
   , Config.project_types = default_projects
   , Config.source_dirs = []
-  , Config.use_direnv = False
-  , Config.use_nix = False
+  , Config.use_direnv = Nothing
+  , Config.use_nix = Nothing
   , Config.loglevel = LogWarning
   }
 

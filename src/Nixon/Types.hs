@@ -21,8 +21,8 @@ import           Turtle hiding (env)
 data Env = Env { backend :: Backend
                , project_types :: [ProjectType]
                , source_dirs :: [FilePath]
-               , use_direnv :: Bool
-               , use_nix :: Bool
+               , use_direnv :: Maybe Bool
+               , use_nix :: Maybe Bool
                , loglevel :: LogLevel
                }
 
@@ -39,8 +39,8 @@ build_env opts config = do
     { backend
     , project_types = Config.project_types config
     , source_dirs = Config.source_dirs config ++ Options.source_dirs opts
-    , use_direnv = Config.use_direnv config || Options.use_direnv opts
-    , use_nix = Config.use_nix config || Options.use_nix opts
+    , use_direnv =  Options.use_direnv opts <|> Config.use_direnv config
+    , use_nix =  Options.use_nix opts <|> Config.use_nix config
     , loglevel = fromMaybe (Config.loglevel config) (Options.loglevel opts)
     }
 

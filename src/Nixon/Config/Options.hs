@@ -13,10 +13,12 @@ module Nixon.Config.Options
 import           Control.Monad.Trans.Except
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
+import qualified Data.Text as Text
 import           Nixon.Config.JSON (JSONError(..))
 import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Types hiding (Config(..))
 import           Prelude hiding (FilePath)
+import qualified Options.Applicative as Opts
 import           Turtle hiding (select)
 
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
@@ -33,8 +35,8 @@ data Options = Options
   { backend :: Maybe Backend
     -- , backend_args :: [Text]
   , source_dirs :: [FilePath]
-  , use_direnv :: Bool
-  , use_nix :: Bool
+  , use_direnv :: Maybe Bool
+  , use_nix :: Maybe Bool
   , loglevel :: Maybe LogLevel
   , config :: Maybe FilePath
   , sub_command :: SubCommand
@@ -61,8 +63,8 @@ default_options :: Options
 default_options = Options
   { backend = Nothing
   , source_dirs = []
-  , use_direnv = False
-  , use_nix = False
+  , use_direnv = Nothing
+  , use_nix = Nothing
   , loglevel = Just LogWarning
   , config = Nothing
   , sub_command = ProjectCommand ProjectOpts
@@ -73,13 +75,22 @@ default_options = Options
     }
   }
 
+-- | Add options supporting negation with a "no-" prefix.
+maybeSwitch :: Text -> Char -> Text -> Parser (Maybe Bool)
+maybeSwitch long short help = Opts.flag Nothing (Just True) (
+                                  Opts.short short <>
+                                  Opts.long (Text.unpack long) <>
+                                  Opts.help (Text.unpack help)) <|>
+                              Opts.flag Nothing (Just False) (
+                                  Opts.long ("no-" ++ Text.unpack long))
+
 -- TODO: Allow switching off "use_direnv" and "use_nix"
 parser :: Parser Options
 parser = Options
   <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
   <*> many (optPath "path" 'p' "Project directory")
-  <*> switch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
-  <*> switch "nix" 'n' "Invoke nix-shell if *.nix files are found"
+  <*> maybeSwitch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
+  <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
   <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/nixon)")
   <*> ( BuildCommand <$> subcommand "build" "Build custom nixon" build_parser <|>
@@ -128,8 +139,8 @@ parse_args = runExceptT $ do
     Nothing -> pure opts
     Just config -> pure opts
       { source_dirs = JSON.source_dirs config ++ source_dirs opts
-      , use_direnv = JSON.use_direnv config || use_direnv opts
-      , use_nix = JSON.use_nix config || use_nix opts
+      , use_direnv = use_direnv opts <|> JSON.use_direnv config
+      , use_nix = use_nix opts <|> JSON.use_nix config
       }
   where handle_error opts NoSuchFile = case config opts of
           Nothing   -> pure Nothing

@@ -46,8 +46,7 @@ nix_run run' nix_file cmd = do
 
 nix_cmd :: Command -> FilePath -> Nixon (Maybe Command)
 nix_cmd cmd path' = use_nix <$> ask >>= \case
-  False -> pure Nothing
-  True -> liftIO $ runMaybeT $ do
+  Just True -> liftIO $ runMaybeT $ do
     nix_file <-
       MaybeT (find_dominating_file path' "shell.nix") <|>
       MaybeT (find_dominating_file path' "default.nix")
@@ -58,3 +57,4 @@ nix_cmd cmd path' = use_nix <$> ask >>= \case
           ,TextPart (format fp nix_file)
           ]
     pure cmd { command_parts = parts }
+  _ -> pure Nothing

@@ -52,6 +52,7 @@ library
                      , directory
                      , foldl
                      , haskeline
+                     , optparse-applicative
                      , process
                      , text
                      , transformers
@@ -91,6 +92,7 @@ executable nixon
                      , directory
                      , foldl
                      , haskeline
+                     , optparse-applicative
                      , process
                      , text
                      , transformers
