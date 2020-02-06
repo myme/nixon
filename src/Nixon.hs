@@ -6,8 +6,10 @@ module Nixon
 
 import           Control.Exception
 import           Control.Monad.Trans.Maybe
+import           Control.Monad.Trans.Reader
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
+import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
 import           Nixon.Config.Types (Config, LogLevel(..))
@@ -61,13 +63,25 @@ maybe_wrap_cmd project cmd = fmap (fromMaybe cmd) $ runMaybeT
    $  MaybeT (direnv_cmd cmd (project_path project))
   <|> MaybeT (nix_cmd cmd (project_path project))
 
+-- | Attempt to parse a local JSON
+with_local_config :: Project -> Nixon () -> Nixon ()
+with_local_config project action =
+  liftIO (JSON.find_local_config (project_path project)) >>= \case
+    Nothing -> action
+    Just json -> do
+      let update_env env = env
+            { use_direnv = JSON.use_direnv json
+            , use_nix = JSON.use_nix json
+            }
+      local update_env action
+
 -- | Find and run a command in a project.
 run_cmd :: (Maybe Text -> Project -> IO (Maybe Command))
              -> Project
              -> ProjectOpts
              -> Selector
              -> Nixon ()
-run_cmd find_command project opts selector = do
+run_cmd find_command project opts selector = with_local_config project $ do
   cmd <- liftIO $ fail_empty "No command selected." $ find_command (Options.command opts) project
   cmd' <- maybe_wrap_cmd project cmd
   log_info (format ("Running command '"%w%"'") cmd')

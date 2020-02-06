@@ -10,7 +10,6 @@ module Nixon.Config.Options
   , parse_args
   ) where
 
-import           Control.Monad.Trans.Except
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -19,7 +18,7 @@ import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Types hiding (Config(..))
 import           Prelude hiding (FilePath)
 import qualified Options.Applicative as Opts
-import           Turtle hiding (select)
+import           Turtle hiding (err, select)
 
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
 --       https://github.com/pcapriotti/optparse-applicative#bash-zsh-and-fish-completions
@@ -133,18 +132,17 @@ merge_opts secondary primary = ProjectOpts
 
 -- | Read configuration from config file and command line arguments
 parse_args :: IO (Either Text Options)
-parse_args = runExceptT $ do
+parse_args = do
   opts <- Turtle.options "Launch project environment" parser
-  let read_config = fmap Just <$> JSON.read_config (config opts)
-  ExceptT read_config `catchE` handle_error opts >>= \case
-    Nothing -> pure opts
-    Just config -> pure opts
-      { source_dirs = JSON.source_dirs config ++ source_dirs opts
-      , use_direnv = use_direnv opts <|> JSON.use_direnv config
-      , use_nix = use_nix opts <|> JSON.use_nix config
+  config_path <- maybe JSON.default_path pure (config opts)
+  JSON.read_config config_path >>= \case
+    Left NoSuchFile -> case config opts of
+      Nothing -> pure $ Right opts
+      Just p  -> pure $ Left (format ("No such file:"%fp) p)
+    Left EmptyFile -> pure $ Right opts
+    Left (ParseError err) -> pure $ Left err
+    Right json -> pure $ Right opts
+      { source_dirs = JSON.source_dirs json ++ source_dirs opts
+      , use_direnv = use_direnv opts <|> JSON.use_direnv json
+      , use_nix = use_nix opts <|> JSON.use_nix json
       }
-  where handle_error opts NoSuchFile = case config opts of
-          Nothing   -> pure Nothing
-          Just path -> throwE (format ("No such file: "%fp) path)
-        handle_error _ EmptyFile = pure Nothing
-        handle_error _ (ParseError t) = throwE t
