@@ -20,7 +20,6 @@ import           Nixon.Logging
 import           Nixon.Nix
 import           Nixon.Projects hiding (project_types)
 import           Nixon.Projects.Defaults
-import           Nixon.Projects.Types hiding (project_types)
 import           Nixon.Rofi
 import           Nixon.Select hiding (select)
 import           Nixon.Types
@@ -118,9 +117,7 @@ run_action opts = do
       (find_command, selector) = case backend env of
         Fzf -> (fzf_project_command, fzf_with_edit mempty)
         Rofi -> (rofi_project_command, rofi mempty)
-  project <- liftIO $ do
-    current <- from_path <$> pwd
-    fromMaybe current <$> (find_in_project ptypes =<< pwd)
+  project <- liftIO (find_in_project_or_default ptypes =<< pwd)
   run_cmd find_command project opts selector
 
 -- TODO: Launch terminal with nix-shell output if taking a long time.

@@ -3,6 +3,7 @@ module Nixon.Projects
   , Command
   , find_dominating_file
   , find_in_project
+  , find_in_project_or_default
   , find_projects
   , find_projects_by_name
   , find_project_commands
@@ -62,6 +63,12 @@ find_in_project project_types path' = find_project project_types path' >>= \case
       then pure Nothing
       else find_in_project project_types (parent path')
     project -> pure project
+
+find_in_project_or_default :: [ProjectType] -> FilePath -> IO Project
+find_in_project_or_default project_types path' = do
+  types <- find_project_types path' project_types
+  let current = (from_path path') { Types.project_types = types }
+  fromMaybe current <$> (find_in_project project_types path')
 
 find_projects_by_name :: FilePath -> [ProjectType] -> [FilePath] -> IO [Project]
 find_projects_by_name project project_types = fmap find_matching . find_projects 1 project_types
