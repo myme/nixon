@@ -88,7 +88,10 @@ data Command = Command
              } deriving Show
 
 show_command :: Command -> Text
-show_command (Command parts _) = T.unwords $ map (T.pack . show) parts
+show_command (Command parts opts) = T.unwords (map (T.pack . show) parts) <> description
+  where description = if not $ T.null (command_desc opts)
+          then format (" ("%s%")") (command_desc opts)
+          else ""
 
 instance IsString Command where
   fromString ss = Command (map TextPart $ T.words $ T.pack ss) mempty
