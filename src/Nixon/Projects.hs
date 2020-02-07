@@ -27,10 +27,11 @@ import           Nixon.Process
 import           Nixon.Projects.Types (command_gui, command_options)
 import           Nixon.Projects.Types as Types
 import qualified Nixon.Select as Select
+import           Nixon.Select (Select)
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           System.Wordexp
-import           Turtle hiding (f, find, sort, sortBy, toText)
+import           Turtle hiding (f, find, sort, sortBy, text, toText)
 
 mkproject :: FilePath -> Project
 mkproject path' = Project (filename path') (parent path') []
@@ -129,7 +130,7 @@ find_project_types path' project_types = testdir path' >>= \case
           [] -> pure True
           xs -> fmap and . traverse (test_marker path') $ xs
 
-project_exec :: Command -> Project -> Select.Select ()
+project_exec :: Command -> Project -> Select ()
 project_exec cmd project = do
   cmd' <- resolve_command project cmd
   liftIO $ IO.hIsTerminalDevice IO.stdin >>= \case
@@ -155,16 +156,17 @@ test_marker p (ProjectOr   ms)     = or <$> mapM (test_marker p) ms
 test_marker p (ProjectFunc marker) = marker p
 
 -- | Interpolate all command parts into a single text value.
-resolve_command :: Project -> Command -> Select.Select Text
+resolve_command :: Project -> Command -> Select Text
 resolve_command project (Command parts opts) = T.unwords <$> mapM interpolate parts
   where interpolate (TextPart t) = pure t
         interpolate PathPart = pure $ format fp $ project_path project
         interpolate DirPart = fmap (Select.default_selection "") <$> Select.select $ do
           path' <- lstree (project_path project)
           guard =<< testdir path'
-          select $ textToLines $ format fp path'
+          return $ Select.Identity (format fp path')
         interpolate FilePart = fmap (Select.default_selection "") <$> Select.select $ do
           pushd (project_path project)
-          inshell "git ls-files" mempty
+          text <- lineToText <$> inshell "git ls-files" mempty
+          return (Select.Identity text)
         interpolate (ShellPart _ f) = f project
         interpolate (NestedPart ps) = format ("\""%s%"\"") <$> resolve_command project (Command ps opts)

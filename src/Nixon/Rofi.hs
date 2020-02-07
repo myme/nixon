@@ -15,7 +15,9 @@ import qualified Data.Text as T
 import           Nixon.Process
 import           Nixon.Projects
 import           Nixon.Projects.Types (show_command)
-import           Nixon.Select hiding (select)
+import qualified Nixon.Select as Select
+import           Nixon.Select (Candidate, Selection(..), SelectionType(..))
+import           Nixon.Utils (toLines)
 import           Prelude hiding (FilePath)
 import qualified Turtle as Tu
 import           Turtle hiding (arg, decimal, s, d, f, x, shell)
@@ -62,7 +64,7 @@ data RofiResult = RofiCancel
                 deriving (Eq, Show)
 
 -- | Launch rofi with the given options and candidates
-rofi :: RofiOpts -> Shell Line -> IO (Selection Text)
+rofi :: RofiOpts -> Shell Candidate -> IO (Selection Text)
 rofi opts candidates = do
   let args = "-dmenu" : "-matching" : "fuzzy" : build_args
         [ flag "-markup-rows" (_markup opts)
@@ -71,7 +73,7 @@ rofi opts candidates = do
         , arg "-filter" =<< _query opts
         ]
 
-  (code, out) <- second T.strip <$> procStrict "rofi" args candidates
+  (code, out) <- second T.strip <$> procStrict "rofi" args (toLines $ Select.candidate_text <$> candidates)
   pure $ case code of
     ExitSuccess -> Selection Default out
     ExitFailure 1 -> CanceledSelection
@@ -99,14 +101,14 @@ rofi_projects query projects = do
         maybe mempty rofi_query query
   candidates <- traverse rofi_format_project_name projects
   let map' = Map.fromList (zip candidates projects)
-  rofi opts (select $ text_to_line <$> candidates) >>= pure . \case
+  rofi opts (Select.Identity <$> select candidates) >>= pure . \case
     Selection _ key -> Map.lookup key map'
     _ -> Nothing
 
 rofi_project_command :: Maybe Text -> Project -> IO (Maybe Command)
 rofi_project_command query project = do
-  let commands = build_map show_command $ find_project_commands project
+  let commands = Select.build_map show_command $ find_project_commands project
       opts = rofi_prompt "Select command" <> maybe mempty rofi_query query
-  rofi opts (select $ text_to_line <$> Map.keys commands) >>= pure . \case
+  rofi opts (Select.Identity <$> select (Map.keys commands)) >>= pure . \case
     Selection _ txt -> Map.lookup txt commands
     _ -> Nothing

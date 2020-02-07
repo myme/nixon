@@ -22,7 +22,9 @@ import qualified Data.Text as T
 import           Nixon.Process
 import           Nixon.Projects
 import           Nixon.Projects.Types hiding (path)
-import           Nixon.Select hiding (select)
+import qualified Nixon.Select as Select
+import           Nixon.Select (Candidate, Selection(..), SelectionType(..))
+import           Nixon.Utils (toLines)
 import           Prelude hiding (FilePath, filter)
 import           System.Console.Haskeline
 import           System.Console.Haskeline.History (historyLines, readHistory)
@@ -98,7 +100,7 @@ format_field_index (FieldFrom idx) = format (d%"..") idx
 format_field_index (FieldRange start stop) = format (d%".."%d) start stop
 format_field_index AllFields = ".."
 
-fzf :: FzfOpts -> Shell Line -> IO (Selection Text)
+fzf :: FzfOpts -> Shell Candidate -> IO (Selection Text)
 fzf opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
@@ -111,7 +113,7 @@ fzf opts candidates = do
           , arg "--with-nth" =<< format_field_index <$> _with_nth opts
           , flag "--no-sort" (_no_sort opts)
           ]
-  (code, out) <- procStrict "fzf" args candidates
+  (code, out) <- procStrict "fzf" args (toLines $ Select.candidate_text <$> candidates)
   pure $ case _filter opts of
     Just _ -> Selection Default out
     Nothing -> case code of
@@ -123,7 +125,7 @@ fzf opts candidates = do
         ["alt-enter", selection] -> Selection (Alternate 0) selection
         _ -> undefined
 
-fzf_with_edit :: FzfOpts -> Shell Line -> IO (Selection Text)
+fzf_with_edit :: FzfOpts -> Shell Candidate -> IO (Selection Text)
 fzf_with_edit opts candidates = fzf opts candidates >>= \case
   Selection (Alternate idx) selection -> fzf_edit_selection Nothing selection >>= \case
     Just selection' -> pure $ Selection (Alternate idx) selection'
@@ -144,7 +146,7 @@ fzf_projects query projects = do
         -- <> fzf_height 40
         <> maybe mempty fzf_query query
         -- <> fzf_preview "ls $(eval echo {})"
-  fzf opts (select . map text_to_line . sort $ Map.keys candidates) >>= pure . \case
+  fzf opts (Select.Identity <$> (select . sort $ Map.keys candidates)) >>= pure . \case
     Selection _ out -> Map.lookup out candidates
     _ -> Nothing
 
@@ -162,12 +164,12 @@ fzf_project_command query project = do
   let commands = map (show_command &&& id) $ (++ history) $ find_project_commands project
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
       opts = fzf_header header <> maybe mempty fzf_query query <> fzf_no_sort
-      input' = select $ text_to_line . fst <$> commands
+      input' = Select.Identity <$> select (fst <$> commands)
   fmap (`lookup` commands) <$> fzf opts input' >>= \case
     Selection Default cmd -> pure cmd
     Selection (Alternate _) cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
-      resolved <- liftIO $ runSelect (fzf_with_edit mempty) (resolve_command project cmd')
+      resolved <- liftIO $ Select.runSelect (fzf_with_edit mempty) (resolve_command project cmd')
       edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection (Just path) resolved)
       pure $ edited { command_options = command_options cmd' }
     _ -> pure Nothing

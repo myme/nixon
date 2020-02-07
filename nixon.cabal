@@ -45,6 +45,7 @@ library
                      , Nixon.Rofi
                      , Nixon.Select
                      , Nixon.Types
+                     , Nixon.Utils
   build-depends:       base >=4.12 && <4.13
                      , aeson
                      , bytestring
@@ -84,6 +85,7 @@ executable nixon
                      , Nixon.Rofi
                      , Nixon.Select
                      , Nixon.Types
+                     , Nixon.Utils
   hs-source-dirs:      src
   build-depends:       base >=4.12 && <4.13
                      , aeson

@@ -1,9 +1,12 @@
+{-# LANGUAGE RankNTypes #-}
 module Nixon.Select
   ( Select
   , Selection (..)
   , SelectionType (..)
   , Selector
+  , Candidate (..)
   , build_map
+  , candidate_text
   , default_selection
   , runSelect
   , select
@@ -22,12 +25,20 @@ data Selection a = EmptySelection
                  | Selection SelectionType a
                  deriving Show
 
+data Candidate = Identity Text
+               | WithTitle Text Text -- ^ Title Value
+               deriving Show
+
+candidate_text :: Candidate -> Text
+candidate_text (Identity t) = t
+candidate_text (WithTitle _ t) = t
+
 instance Functor Selection where
   fmap f (Selection t x) = Selection t (f x)
   fmap _ EmptySelection = EmptySelection
   fmap _ CanceledSelection =  CanceledSelection
 
-type Selector = Shell Line -> IO (Selection Text)
+type Selector = Shell Candidate -> IO (Selection Text)
 
 type Select a = ReaderT Selector IO a
 
@@ -41,10 +52,10 @@ build_map f = Map.fromList . map (f &&& id)
 runSelect :: Selector -> Select a -> IO a
 runSelect = flip runReaderT
 
-select :: Shell Line -> Select (Selection Text)
+select :: Shell Candidate -> Select (Selection Text)
 select input = do
-  select' <- ask
-  liftIO $ select' input
+  selector <- ask
+  liftIO $ selector input
 
 text_to_line :: Text -> Line
 text_to_line = fromMaybe "" . textToLine

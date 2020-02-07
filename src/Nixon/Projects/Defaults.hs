@@ -18,14 +18,15 @@ import           Turtle
 -- | Find NPM scripts from a project package.json file
 npm_scripts :: Command
 npm_scripts = Command [ShellPart "script" scripts] mempty
+  -- TODO: Do not use "default_selection", but cancel the operation/command
   where scripts project = fmap (Select.default_selection "") <$> Select.select $ do
           content <- liftIO $ runMaybeT $ do
             package <- MaybeT $ find_dominating_file (project_path project) "package.json"
             MaybeT $ decodeFileStrict (T.unpack $ format fp package)
           let keys = do
                 map' <- parseMaybe parse_script =<< content
-                mapM textToLine (Map.keys (map' :: Map.HashMap Text Value))
-          select (fromMaybe [] keys)
+                pure (Map.keys (map' :: Map.HashMap Text Value))
+          select $ Select.Identity <$> (fromMaybe [] keys)
         parse_script = withObject "package.json" (.: "scripts")
 
 -- | Placeholder for a git revision
@@ -34,7 +35,9 @@ revision = Command [ShellPart "revision" revisions] mempty
   where revisions project = do
           selection <- Select.select $ do
             pushd (project_path project)
-            inshell "git log --oneline --color" mempty
+            line <- inshell "git log --oneline --color" mempty
+            pure (Select.Identity (lineToText line))
+          -- TODO: Do not use "default_selection", but cancel the operation/command
           pure $ Select.default_selection "HEAD" (T.takeWhile (/= ' ') <$> selection)
 
 -- TODO: Add support for local overrides with an .nixon project file
@@ -67,6 +70,7 @@ default_projects =
    ,"git fetch" ! desc "Git fetch"
    ,"git log" ! desc "Git log"
    ,"git rebase" ! desc "Git rebase"
+   ,"git show" <> revision ! desc "Git show"
    ,"git status" ! desc "Git status"
    -- Uses "git ls-files"
    ,"vim" <> file ! desc "Vim"

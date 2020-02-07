@@ -21,7 +21,8 @@ import           Nixon.Nix
 import           Nixon.Projects hiding (project_types)
 import           Nixon.Projects.Defaults
 import           Nixon.Rofi
-import           Nixon.Select hiding (select)
+import qualified Nixon.Select as Select
+import           Nixon.Select (Selection(..), Selector)
 import           Nixon.Types
 import           Prelude hiding (FilePath, log)
 import           Turtle hiding (decimal, env, err, find, shell, x)
@@ -29,7 +30,7 @@ import           Turtle hiding (decimal, env, err, find, shell, x)
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Maybe Text -> IO ()
 list projects query = do
-  let fmt_line = fmap (text_to_line . format fp)
+  let fmt_line = fmap (Select.Identity . format fp)
   paths <- fmt_line <$> traverse (implode_home . project_path) projects
   let fzf_opts = fzf_filter $ fromMaybe "" query
   fzf fzf_opts (Turtle.select paths) >>= \case
@@ -84,7 +85,7 @@ run_cmd find_command project opts selector = with_local_config project $ do
   cmd <- liftIO $ fail_empty "No command selected." $ find_command (Options.command opts) project
   cmd' <- maybe_wrap_cmd project cmd
   log_info (format ("Running command '"%w%"'") cmd')
-  liftIO $ runSelect selector $ project_exec cmd' project
+  liftIO $ Select.runSelect selector $ project_exec cmd' project
 
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
