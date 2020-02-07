@@ -1,9 +1,14 @@
 let
-  inherit (import <nixpkgs> {}) fetchFromGitHub;
-  nixpkgs = import (fetchFromGitHub {
-    owner  = "NixOS";
-    repo   = "nixpkgs-channels";
-    rev    = "851d5bdfb04aa1f1f8e2a89323cdb9ba03daba99";
-    sha256 = "0srrspy7bpdywywy8w95zxkh8j7xsvq58msgsqymm5fphsfsyad6";
+  nixpkgs = import (builtins.fetchGit {
+    url = "https://github.com/NixOS/nixpkgs-channels";
+    rev = "2de9367299f325c2b2021a44c2f63c810f8ad023";
   });
-in nixpkgs
+
+  koi = import (builtins.fetchGit {
+    url = "https://github.com/NixOS/nixpkgs-channels";
+    rev = "c8db7a8a16ee9d54103cade6e766509e1d1c8d7b";
+  });
+
+in {
+  inherit nixpkgs koi;
+}
