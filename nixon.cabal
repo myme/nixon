@@ -55,6 +55,7 @@ library
                      , haskeline
                      , optparse-applicative
                      , process
+                     , strip-ansi-escape
                      , text
                      , transformers
                      , turtle
@@ -96,6 +97,7 @@ executable nixon
                      , haskeline
                      , optparse-applicative
                      , process
+                     , strip-ansi-escape
                      , text
                      , transformers
                      , turtle

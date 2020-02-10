@@ -23,6 +23,7 @@ in haskellPackages.mkDerivation {
     optparse-applicative
     quickcheck-instances
     process
+    strip-ansi-escape
     text
     transformers
     turtle

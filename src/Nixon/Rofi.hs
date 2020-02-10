@@ -73,7 +73,7 @@ rofi opts candidates = do
         , arg "-filter" =<< _query opts
         ]
 
-  (code, out) <- second T.strip <$> procStrict "rofi" args (toLines $ Select.candidate_text <$> candidates)
+  (code, out) <- second T.strip <$> procStrict "rofi" args (toLines $ Select.candidate_value <$> candidates)
   pure $ case code of
     ExitSuccess -> Selection Default out
     ExitFailure 1 -> CanceledSelection

@@ -14,17 +14,18 @@ module Nixon.Fzf
   , fzf_no_sort
   ) where
 
-import           Control.Arrow ((&&&))
+import           Control.Arrow ((&&&), second)
 import           Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import           Data.List (sort)
 import qualified Data.Map as Map
+import           Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
 import           Nixon.Process
 import           Nixon.Projects
 import           Nixon.Projects.Types hiding (path)
-import qualified Nixon.Select as Select
 import           Nixon.Select (Candidate, Selection(..), SelectionType(..))
-import           Nixon.Utils (toLines)
+import qualified Nixon.Select as Select
+import           Nixon.Utils
 import           Prelude hiding (FilePath, filter)
 import           System.Console.Haskeline
 import           System.Console.Haskeline.History (historyLines, readHistory)
@@ -100,8 +101,8 @@ format_field_index (FieldFrom idx) = format (d%"..") idx
 format_field_index (FieldRange start stop) = format (d%".."%d) start stop
 format_field_index AllFields = ".."
 
-fzf :: FzfOpts -> Shell Candidate -> IO (Selection Text)
-fzf opts candidates = do
+fzf_raw :: FzfOpts -> Shell Line -> IO (Selection Text)
+fzf_raw opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
         Nothing -> "-1" : "--expect=alt-enter" : "--ansi" : build_args
@@ -113,7 +114,7 @@ fzf opts candidates = do
           , arg "--with-nth" =<< format_field_index <$> _with_nth opts
           , flag "--no-sort" (_no_sort opts)
           ]
-  (code, out) <- procStrict "fzf" args (toLines $ Select.candidate_text <$> candidates)
+  (code, out) <- procStrict "fzf" args candidates
   pure $ case _filter opts of
     Just _ -> Selection Default out
     Nothing -> case code of
@@ -124,6 +125,19 @@ fzf opts candidates = do
         ["", selection] -> Selection Default selection
         ["alt-enter", selection] -> Selection (Alternate 0) selection
         _ -> undefined
+
+fzf :: FzfOpts -> Shell Candidate -> IO (Selection Text)
+fzf opts candidates = do
+  let mkidx = zip (map (T.pack . show) [1 :: Int ..])
+      mkout = map (uncurry (format (s%" "%s)) . second Select.candidate_title)
+      mkmap = Map.fromList . map (second Select.candidate_value)
+  (cs_input, cs) <- (mkout &&& mkmap) . mkidx <$> shell_to_list candidates
+  selection <- fzf_raw (opts <> fzf_with_nth (FieldFrom 2)) (toLines $ select cs_input)
+  let selected = fmap stripAnsiEscapeCodes . flip Map.lookup cs . takeToSpace <$> selection
+  pure $ case selected of
+    Selection t sel -> maybe EmptySelection (Selection t) sel
+    CanceledSelection -> CanceledSelection
+    EmptySelection -> EmptySelection
 
 fzf_with_edit :: FzfOpts -> Shell Candidate -> IO (Selection Text)
 fzf_with_edit opts candidates = fzf opts candidates >>= \case

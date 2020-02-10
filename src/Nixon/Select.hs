@@ -6,7 +6,8 @@ module Nixon.Select
   , Selector
   , Candidate (..)
   , build_map
-  , candidate_text
+  , candidate_title
+  , candidate_value
   , default_selection
   , runSelect
   , select
@@ -33,9 +34,13 @@ data Candidate = Identity Text
                | WithTitle Text Text -- ^ Title Value
                deriving Show
 
-candidate_text :: Candidate -> Text
-candidate_text (Identity t) = t
-candidate_text (WithTitle _ t) = t
+candidate_title :: Candidate -> Text
+candidate_title (Identity t) = t
+candidate_title (WithTitle t _) = t
+
+candidate_value :: Candidate -> Text
+candidate_value (Identity v) = v
+candidate_value (WithTitle _ v) = v
 
 instance Functor Selection where
   fmap f (Selection t x) = Selection t (f x)
