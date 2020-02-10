@@ -14,7 +14,7 @@ import           Nixon.Projects.Types
 import qualified Nixon.Select as Select
 import           Nixon.Utils
 import           Prelude hiding (FilePath)
-import           Turtle
+import           Turtle hiding (text)
 
 -- | Find NPM scripts from a project package.json file
 npm_scripts :: Command
@@ -41,6 +41,20 @@ revision = Command [ShellPart "revision" revisions] mempty
           -- TODO: Do not use "default_selection", but cancel the operation/command
           pure (T.takeWhile (/= ' ') <$> selection)
 
+rg_files :: Command
+rg_files = Command [ShellPart "filename" files] mempty
+  where files project = Select.select $ do
+          pushd (project_path project)
+          text <- lineToText <$> inshell "rg --files" mempty
+          return (Select.Identity text)
+
+git_files :: Command
+git_files = Command [ShellPart "filename" files] mempty
+  where files project = Select.select $ do
+          pushd (project_path project)
+          text <- lineToText <$> inshell "git ls-files" mempty
+          return (Select.Identity text)
+
 -- TODO: Add support for local overrides with an .nixon project file
 default_projects :: [ProjectType]
 default_projects =
@@ -66,15 +80,15 @@ default_projects =
    ,"direnv reload" ! desc "Direnv reload"
    ]
   ,proj [".git"] "Git repository"
-   ["git blame" <> revision <> file ! desc "Git blame"
+   ["git blame" <> revision <> git_files ! desc "Git blame"
    ,"git fetch" ! desc "Git fetch"
    ,"git log" ! desc "Git log"
    ,"git rebase" ! desc "Git rebase"
    ,"git show" <> revision ! desc "Git show"
    ,"git status" ! desc "Git status"
    -- Uses "git ls-files"
-   ,"vim" <> file ! desc "Vim"
-   ,"bat" <> file ! desc "Preview file"
+   ,"vim" <> rg_files ! desc "Vim"
+   ,"bat" <> rg_files ! desc "Preview file"
    -- git log --color --pretty=format:"%C(green)%h %C(blue)%cr %Creset%s%C(yellow)%d %Creset%C(cyan)<%ae>%Creset" | fzf +s --ansi --preview='git show --color {1}'
    ]
   ,proj [".hg"] "Mercurial project" []

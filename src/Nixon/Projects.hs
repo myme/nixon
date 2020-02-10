@@ -164,10 +164,6 @@ resolve_command project (Command parts opts) = go [] parts
       path' <- lstree (project_path project)
       guard =<< testdir path'
       return $ Select.Identity (format fp path')
-    interpolate FilePart = Select.select $ do
-      pushd (project_path project)
-      text <- lineToText <$> inshell "git ls-files" mempty
-      return (Select.Identity text)
     interpolate (ShellPart _ f) = f project
     interpolate (NestedPart ps) = do
       nested <- resolve_command project (Command ps opts)

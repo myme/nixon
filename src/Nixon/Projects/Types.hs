@@ -8,7 +8,6 @@ module Nixon.Projects.Types
   , (!)
   , desc
   , dir
-  , file
   , from_path
   , gui
   , path
@@ -67,7 +66,6 @@ instance Show ProjectMarker where
 data Part = TextPart Text
           | PathPart
           | DirPart
-          | FilePart
           | ShellPart Text (Project -> Select (Selection Text))
           | NestedPart [Part]
 
@@ -78,7 +76,6 @@ instance Show Part where
   show (TextPart t) = T.unpack t
   show PathPart = "<project>"
   show DirPart = "<dirname>"
-  show FilePart = "<filename>"
   show (ShellPart placeholder _) = T.unpack $ format ("<"%s%">") placeholder
   show (NestedPart parts) = unwords (map show parts)
 
@@ -106,10 +103,6 @@ path = Command [PathPart] mempty
 -- | Placeholder for project directory
 dir :: Command
 dir = Command [DirPart] mempty
-
--- | Placeholder for project file
-file :: Command
-file = Command [FilePart] mempty
 
 -- | Placeholder for a shell command
 shell :: Text -> (Project -> Select (Selection Text)) -> Command
