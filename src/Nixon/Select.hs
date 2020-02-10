@@ -10,6 +10,7 @@ module Nixon.Select
   , default_selection
   , runSelect
   , select
+  , selection
   , text_to_line
   ) where
 
@@ -24,6 +25,9 @@ data Selection a = EmptySelection
                  | CanceledSelection
                  | Selection SelectionType a
                  deriving Show
+
+selection :: s -> Selection s
+selection = Selection Default
 
 data Candidate = Identity Text
                | WithTitle Text Text -- ^ Title Value
