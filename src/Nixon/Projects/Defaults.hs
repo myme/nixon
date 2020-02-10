@@ -12,6 +12,7 @@ import           Nixon.Nix
 import           Nixon.Projects
 import           Nixon.Projects.Types
 import qualified Nixon.Select as Select
+import           Nixon.Utils
 import           Prelude hiding (FilePath)
 import           Turtle
 

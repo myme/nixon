@@ -15,7 +15,7 @@ import qualified Data.ByteString.Char8 as ByteString
 import           Data.Char
 import qualified Data.Text as T
 import           GHC.Generics
-import           Nixon.Projects (find_dominating_file)
+import           Nixon.Utils (find_dominating_file)
 import           Prelude hiding (FilePath)
 import           System.Directory (XdgDirectory(..), getXdgDirectory)
 import           System.IO.Error

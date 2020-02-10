@@ -1,7 +1,6 @@
 module Nixon.Projects
   ( Project (..)
   , Command
-  , find_dominating_file
   , find_in_project
   , find_in_project_or_default
   , find_projects
@@ -46,16 +45,6 @@ parents :: FilePath -> [FilePath]
 parents path'
   | path' == parent path' = [path']
   | otherwise = path' : parents (parent path')
-
--- | Locate a file going up the filesystem hierarchy
-find_dominating_file :: FilePath -> FilePath -> IO (Maybe FilePath)
-find_dominating_file path' name = do
-  let candidate = path' </> name
-      is_root = parent path' == root path'
-  (&&) <$> testdir path' <*> testpath candidate >>= \case
-    True -> pure $ Just candidate
-    False | is_root -> pure Nothing
-          | otherwise -> find_dominating_file (parent path') name
 
 -- | Find/filter out a project in which path is a subdirectory.
 find_in_project :: [ProjectType] -> FilePath -> IO (Maybe Project)

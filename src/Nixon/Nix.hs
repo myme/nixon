@@ -13,6 +13,7 @@ import Nixon.Types
 import Nixon.Process
 import Nixon.Projects
 import Nixon.Projects.Types hiding (dir)
+import Nixon.Utils
 import Prelude hiding (FilePath)
 import Turtle hiding (arg)
 
