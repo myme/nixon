@@ -20,14 +20,14 @@ import           Turtle
 npm_scripts :: Command
 npm_scripts = Command [ShellPart "script" scripts] mempty
   -- TODO: Do not use "default_selection", but cancel the operation/command
-  where scripts project = fmap (Select.default_selection "") <$> Select.select $ do
+  where scripts project = Select.select $ do
           content <- liftIO $ runMaybeT $ do
             package <- MaybeT $ find_dominating_file (project_path project) "package.json"
             MaybeT $ decodeFileStrict (T.unpack $ format fp package)
           let keys = do
                 map' <- parseMaybe parse_script =<< content
                 pure (Map.keys (map' :: Map.HashMap Text Value))
-          select $ Select.Identity <$> (fromMaybe [] keys)
+          select $ Select.Identity <$> fromMaybe [] keys
         parse_script = withObject "package.json" (.: "scripts")
 
 -- | Placeholder for a git revision
@@ -39,7 +39,7 @@ revision = Command [ShellPart "revision" revisions] mempty
             line <- inshell "git log --oneline --color" mempty
             pure (Select.Identity (lineToText line))
           -- TODO: Do not use "default_selection", but cancel the operation/command
-          pure $ Select.default_selection "HEAD" (T.takeWhile (/= ' ') <$> selection)
+          pure (T.takeWhile (/= ' ') <$> selection)
 
 -- TODO: Add support for local overrides with an .nixon project file
 -- TODO: List descriptions

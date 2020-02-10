@@ -155,7 +155,6 @@ project_history_file = (</> ".nixon_history")
 
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?
--- TODO: Switch to Select (Maybe Command)
 -- | Find commands applicable to a project
 fzf_project_command :: Maybe Text -> Project -> IO (Maybe Command)
 fzf_project_command query project = do
@@ -171,8 +170,11 @@ fzf_project_command query project = do
     Selection (Alternate _) cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
       resolved <- liftIO $ Select.runSelect (fzf_with_edit mempty) (resolve_command project cmd')
-      edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection (Just path) resolved)
-      pure $ edited { command_options = command_options cmd' }
+      case resolved of
+        Selection _ selection -> do
+          edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection (Just path) selection)
+          pure $ edited { command_options = command_options cmd' }
+        _ -> MaybeT (pure Nothing)
     _ -> pure Nothing
 
 -- | Use readline to manipulate/change a fzf selection

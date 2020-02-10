@@ -68,7 +68,7 @@ data Part = TextPart Text
           | PathPart
           | DirPart
           | FilePart
-          | ShellPart Text (Project -> Select Text)
+          | ShellPart Text (Project -> Select (Selection Text))
           | NestedPart [Part]
 
 instance IsString Part where
@@ -112,7 +112,7 @@ file :: Command
 file = Command [FilePart] mempty
 
 -- | Placeholder for a shell command
-shell :: Text -> (Project -> Select Text) -> Command
+shell :: Text -> (Project -> Select (Selection Text)) -> Command
 shell placeholder action = Command [ShellPart placeholder action] mempty
 
 data CommandOptions = CommandOptions

@@ -18,4 +18,4 @@ find_dominating_file path' name = do
           | otherwise -> find_dominating_file (parent path') name
 
 toLines :: Shell Text -> Shell Line
-toLines = join . fmap (select . toList . textToLines)
+toLines = ((select . toList . textToLines) =<<)

@@ -15,6 +15,7 @@ module Nixon.Projects
   , sort_projects
   ) where
 
+import           Control.Exception
 import qualified Control.Foldl as Fold
 import           Control.Monad (filterM)
 import           Data.Function (on)
@@ -25,8 +26,8 @@ import qualified Data.Text as T
 import           Nixon.Process
 import           Nixon.Projects.Types (command_gui, command_options)
 import           Nixon.Projects.Types as Types
+import           Nixon.Select (Select, Selection(..))
 import qualified Nixon.Select as Select
-import           Nixon.Select (Select)
 import           Nixon.Types
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
@@ -59,7 +60,7 @@ find_in_project_or_default :: [ProjectType] -> FilePath -> IO Project
 find_in_project_or_default project_types path' = do
   types <- find_project_types path' project_types
   let current = (from_path path') { Types.project_types = types }
-  fromMaybe current <$> (find_in_project project_types path')
+  fromMaybe current <$> find_in_project project_types path'
 
 find_projects_by_name :: FilePath -> [ProjectType] -> [FilePath] -> IO [Project]
 find_projects_by_name project project_types = fmap find_matching . find_projects 1 project_types
@@ -121,21 +122,23 @@ find_project_types path' project_types = testdir path' >>= \case
           xs -> fmap and . traverse (test_marker path') $ xs
 
 project_exec :: Command -> Project -> Select ()
-project_exec cmd project = do
-  cmd' <- resolve_command project cmd
-  liftIO $ IO.hIsTerminalDevice IO.stdin >>= \case
-    True  -> run [cmd'] (Just $ project_path project)
-    False -> do
-      let is_gui = command_gui (command_options cmd)
-          path' = Just $ project_path project
-      if is_gui
-        then do
-          shell' <- fromMaybe "bash" <$> need "SHELL"
-          spawn (shell' : ["-c", cmd']) path'
-        else do
-          -- TODO: Add config for terminal
-          let terminal = "x-terminal-emulator"
-          spawn (terminal : ["-e", cmd']) path'
+project_exec cmd project = resolve_command project cmd >>= \case
+    Selection _ cmd' -> go cmd'
+    _ -> liftIO $ throwIO (EmptyError "Command placeholder expansion aborted.")
+  where
+    go cmd' = liftIO $ IO.hIsTerminalDevice IO.stdin >>= \case
+      True  -> run [cmd'] (Just $ project_path project)
+      False -> do
+        let is_gui = command_gui (command_options cmd)
+            path' = Just $ project_path project
+        if is_gui
+          then do
+            shell' <- fromMaybe "bash" <$> need "SHELL"
+            spawn (shell' : ["-c", cmd']) path'
+          else do
+            -- TODO: Add config for terminal
+            let terminal = "x-terminal-emulator"
+            spawn (terminal : ["-e", cmd']) path'
 
 -- | Test that a marker is valid for a path
 test_marker :: FilePath -> ProjectMarker -> IO Bool
@@ -146,17 +149,25 @@ test_marker p (ProjectOr   ms)     = or <$> mapM (test_marker p) ms
 test_marker p (ProjectFunc marker) = marker p
 
 -- | Interpolate all command parts into a single text value.
-resolve_command :: Project -> Command -> Select Text
-resolve_command project (Command parts opts) = T.unwords <$> mapM interpolate parts
-  where interpolate (TextPart t) = pure t
-        interpolate PathPart = pure $ format fp $ project_path project
-        interpolate DirPart = fmap (Select.default_selection "") <$> Select.select $ do
-          path' <- lstree (project_path project)
-          guard =<< testdir path'
-          return $ Select.Identity (format fp path')
-        interpolate FilePart = fmap (Select.default_selection "") <$> Select.select $ do
-          pushd (project_path project)
-          text <- lineToText <$> inshell "git ls-files" mempty
-          return (Select.Identity text)
-        interpolate (ShellPart _ f) = f project
-        interpolate (NestedPart ps) = format ("\""%s%"\"") <$> resolve_command project (Command ps opts)
+resolve_command :: Project -> Command -> Select (Selection Text)
+resolve_command project (Command parts opts) = go [] parts
+  where
+    go is [] = pure $ Select.selection (T.unwords is)
+    go is (p:ps) = interpolate p >>= \case
+      Selection _ i -> go (i:is) ps
+      selection -> pure selection
+
+    interpolate (TextPart t) = pure $ Select.selection t
+    interpolate PathPart = pure $ Select.selection $ format fp $ project_path project
+    interpolate DirPart = Select.select $ do
+      path' <- lstree (project_path project)
+      guard =<< testdir path'
+      return $ Select.Identity (format fp path')
+    interpolate FilePart = Select.select $ do
+      pushd (project_path project)
+      text <- lineToText <$> inshell "git ls-files" mempty
+      return (Select.Identity text)
+    interpolate (ShellPart _ f) = f project
+    interpolate (NestedPart ps) = do
+      nested <- resolve_command project (Command ps opts)
+      pure (format ("\""%s%"\"") <$> nested)
