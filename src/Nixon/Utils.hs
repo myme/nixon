@@ -1,11 +1,14 @@
 module Nixon.Utils
  ( find_dominating_file
  , toLines
+ , takeToSpace
  ) where
 
-import Data.List.NonEmpty (toList)
-import Prelude hiding (FilePath)
-import Turtle
+import           Data.Char (isSpace)
+import           Data.List.NonEmpty (toList)
+import qualified Data.Text as T
+import           Prelude hiding (FilePath)
+import           Turtle
 
 -- | Locate a file going up the filesystem hierarchy
 find_dominating_file :: FilePath -> FilePath -> IO (Maybe FilePath)
@@ -19,3 +22,6 @@ find_dominating_file path' name = do
 
 toLines :: Shell Text -> Shell Line
 toLines = ((select . toList . textToLines) =<<)
+
+takeToSpace :: Text -> Text
+takeToSpace = T.takeWhile (not . isSpace)

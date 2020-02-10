@@ -21,6 +21,7 @@ in haskellPackages.mkDerivation {
     foldl
     haskeline
     optparse-applicative
+    quickcheck-instances
     process
     text
     transformers

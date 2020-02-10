@@ -37,8 +37,7 @@ npm_scripts = Command [ShellPart "script" scripts] mempty
 -- | Placeholder for a git revision
 revision :: Command
 revision = Command [ShellPart "revision" revisions] mempty
-  where read_to_space = (fmap (T.takeWhile (/= ' ')))
-        revisions project = fmap read_to_space $ Select.select $ do
+  where revisions project = fmap (fmap takeToSpace) $ Select.select $ do
           pushd (project_path project)
           candidate_lines <$> inshell "git log --oneline --color" mempty
 

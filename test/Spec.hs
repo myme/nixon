@@ -1,13 +1,34 @@
 module Main where
 
-import Data.Text (Text)
-import Nixon.Projects
-import Nixon.Projects.Types
-import Nixon.Select
-import Test.Hspec
+import           Data.Char (isSpace, isPrint)
+import           Data.Text (Text)
+import qualified Data.Text as T
+import           Nixon.Projects
+import           Nixon.Projects.Types
+import           Nixon.Select
+import           Nixon.Utils
+import           Test.Hspec
+import           Test.QuickCheck
+import           Test.QuickCheck.Instances.Text ()
 
 empty :: Monad m => a -> m (Selection Text)
 empty = const (pure EmptySelection)
+
+arbitraryTextOf :: (Char -> Bool) -> Gen Text
+arbitraryTextOf pred' = T.pack <$> listOf1 (arbitrary `suchThat` pred')
+
+-- | newtype for arbitrary whitespace
+newtype WsText = WsText { getWs :: Text } deriving (Show, Eq, Ord)
+instance Arbitrary WsText where
+  shrink (WsText t) = WsText <$> shrink t
+  arbitrary = WsText <$> arbitraryTextOf isSpace
+
+
+-- | newtype for Text without whitespace
+newtype NonWsText = NonWsText { getNonWs :: Text } deriving (Show, Eq, Ord)
+instance Arbitrary NonWsText where
+  shrink (NonWsText t) = NonWsText <$> shrink t
+  arbitrary = NonWsText <$> arbitraryTextOf (\c -> isPrint c && (not . isSpace) c)
 
 main :: IO ()
 main = hspec $ do
@@ -34,3 +55,11 @@ main = hspec $ do
           let part = Command [NestedPart [ShellPart "empty" empty]] mempty
           resolve_command project ("this is:" <> part)
         res `shouldBe` EmptySelection
+
+  describe "Utils" $
+    describe "takeToSpace" $ do
+      it "is empty with leading space" $
+        property $ \text -> takeToSpace (" " <> getWs text) == ""
+
+      it "reads until first space" $
+        property $ \pre ws post -> takeToSpace (getNonWs pre <> getWs ws <> post) == getNonWs pre
