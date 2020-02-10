@@ -20,11 +20,11 @@ import qualified Data.Map.Strict as Map
 import           Data.Maybe (fromMaybe)
 import           Turtle hiding (f, x, input, select)
 
-data SelectionType = Default | Alternate Int deriving Show
+data SelectionType = Default | Alternate Int deriving (Eq, Show)
 data Selection a = EmptySelection
                  | CanceledSelection
                  | Selection SelectionType a
-                 deriving Show
+                 deriving (Eq, Show)
 
 selection :: s -> Selection s
 selection = Selection Default

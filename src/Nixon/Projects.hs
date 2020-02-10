@@ -152,10 +152,11 @@ test_marker p (ProjectFunc marker) = marker p
 resolve_command :: Project -> Command -> Select (Selection Text)
 resolve_command project (Command parts opts) = go [] parts
   where
-    go is [] = pure $ Select.selection (T.unwords is)
+    go is [] = pure $ Select.selection (T.unwords (reverse is))
     go is (p:ps) = interpolate p >>= \case
       Selection _ i -> go (i:is) ps
-      selection -> pure selection
+      CanceledSelection -> pure CanceledSelection
+      EmptySelection    -> pure EmptySelection
 
     interpolate (TextPart t) = pure $ Select.selection t
     interpolate PathPart = pure $ Select.selection $ format fp $ project_path project
