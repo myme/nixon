@@ -1,10 +1,12 @@
 module Nixon.Types
   ( Env(..)
   , Nixon
+  , NixonError(..)
   , ask
   , runNixon
   ) where
 
+import           Control.Exception
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
 import           Data.Bool (bool)
@@ -25,6 +27,10 @@ data Env = Env { backend :: Backend
                , use_nix :: Maybe Bool
                , loglevel :: LogLevel
                }
+
+newtype NixonError = EmptyError Text deriving Show
+
+instance Exception NixonError
 
 get_backend :: Maybe Backend -> IO Backend
 get_backend backend = do

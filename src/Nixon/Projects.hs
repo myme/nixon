@@ -27,6 +27,7 @@ import           Nixon.Projects.Types (command_gui, command_options)
 import           Nixon.Projects.Types as Types
 import qualified Nixon.Select as Select
 import           Nixon.Select (Select)
+import           Nixon.Types
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           System.Wordexp

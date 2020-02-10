@@ -48,10 +48,6 @@ build_action opts = do
     ExitFailure _ -> putStrLn "Compilation failed!"
     ExitSuccess -> putStrLn "Compilation successful!"
 
-newtype NixonError = EmptyError Text deriving Show
-
-instance Exception NixonError
-
 fail_empty :: (MonadIO m) => Text -> m (Maybe a) -> m a
 fail_empty err action = action >>= \case
   Nothing -> liftIO (throwIO $ EmptyError err)
