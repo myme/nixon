@@ -12,48 +12,47 @@ import           Nixon.Nix
 import           Nixon.Projects
 import           Nixon.Projects.Types
 import qualified Nixon.Select as Select
+import           Nixon.Select (Candidate)
 import           Nixon.Utils
 import           Prelude hiding (FilePath)
 import           Turtle hiding (text)
 
+candidate_lines :: Line -> Candidate
+candidate_lines = Select.Identity . lineToText
+
 -- | Find NPM scripts from a project package.json file
 npm_scripts :: Command
 npm_scripts = Command [ShellPart "script" scripts] mempty
-  -- TODO: Do not use "default_selection", but cancel the operation/command
-  where scripts project = Select.select $ do
-          content <- liftIO $ runMaybeT $ do
-            package <- MaybeT $ find_dominating_file (project_path project) "package.json"
-            MaybeT $ decodeFileStrict (T.unpack $ format fp package)
-          let keys = do
-                map' <- parseMaybe parse_script =<< content
-                pure (Map.keys (map' :: Map.HashMap Text Value))
-          select $ Select.Identity <$> fromMaybe [] keys
-        parse_script = withObject "package.json" (.: "scripts")
+  where
+    parse_script = withObject "package.json" (.: "scripts")
+    scripts project = Select.select $ do
+      content <- liftIO $ runMaybeT $ do
+        package <- MaybeT $ find_dominating_file (project_path project) "package.json"
+        MaybeT $ decodeFileStrict (T.unpack $ format fp package)
+      let keys = do
+            map' <- parseMaybe parse_script =<< content
+            pure (Map.keys (map' :: Map.HashMap Text Value))
+      select $ Select.Identity <$> fromMaybe [] keys
 
 -- | Placeholder for a git revision
 revision :: Command
 revision = Command [ShellPart "revision" revisions] mempty
-  where revisions project = do
-          selection <- Select.select $ do
-            pushd (project_path project)
-            line <- inshell "git log --oneline --color" mempty
-            pure (Select.Identity (lineToText line))
-          -- TODO: Do not use "default_selection", but cancel the operation/command
-          pure (T.takeWhile (/= ' ') <$> selection)
+  where read_to_space = (fmap (T.takeWhile (/= ' ')))
+        revisions project = fmap read_to_space $ Select.select $ do
+          pushd (project_path project)
+          candidate_lines <$> inshell "git log --oneline --color" mempty
 
 rg_files :: Command
 rg_files = Command [ShellPart "filename" files] mempty
   where files project = Select.select $ do
           pushd (project_path project)
-          text <- lineToText <$> inshell "rg --files" mempty
-          return (Select.Identity text)
+          candidate_lines <$> inshell "rg --files" mempty
 
 git_files :: Command
 git_files = Command [ShellPart "filename" files] mempty
   where files project = Select.select $ do
           pushd (project_path project)
-          text <- lineToText <$> inshell "git ls-files" mempty
-          return (Select.Identity text)
+          candidate_lines <$> inshell "git ls-files" mempty
 
 -- TODO: Add support for local overrides with an .nixon project file
 default_projects :: [ProjectType]
