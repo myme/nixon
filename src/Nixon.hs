@@ -84,6 +84,7 @@ run_cmd :: (Maybe Text -> Project -> IO (Maybe Command))
 run_cmd find_command project opts selector = with_local_config project $ do
   cmd <- liftIO $ fail_empty "No command selected." $ find_command (Options.command opts) project
   cmd' <- maybe_wrap_cmd project cmd
+  -- TODO: Always edit command before executing?
   log_info (format ("Running command '"%w%"'") cmd')
   liftIO $ Select.runSelect selector $ project_exec cmd' project
 

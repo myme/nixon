@@ -155,6 +155,7 @@ project_history_file = (</> ".nixon_history")
 
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?
+-- TODO: Switch to Select (Maybe Command)
 -- | Find commands applicable to a project
 fzf_project_command :: Maybe Text -> Project -> IO (Maybe Command)
 fzf_project_command query project = do
