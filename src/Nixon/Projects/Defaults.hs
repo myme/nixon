@@ -42,7 +42,6 @@ revision = Command [ShellPart "revision" revisions] mempty
           pure (T.takeWhile (/= ' ') <$> selection)
 
 -- TODO: Add support for local overrides with an .nixon project file
--- TODO: List descriptions
 default_projects :: [ProjectType]
 default_projects =
   [proj ["cabal.project"] "Cabal new-style project"
