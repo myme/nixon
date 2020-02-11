@@ -1,6 +1,7 @@
 module Nixon.Rofi
   ( rofi
   , rofi_format_project_name
+  , rofi_exact
   , rofi_markup
   , rofi_msg
   , rofi_projects
@@ -10,13 +11,15 @@ module Nixon.Rofi
   ) where
 
 import           Control.Arrow (second)
+import           Data.Bool (bool)
 import qualified Data.Map as Map
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Nixon.Process
 import           Nixon.Projects
 import           Nixon.Projects.Types (show_command)
-import qualified Nixon.Select as Select
 import           Nixon.Select (Candidate, Selection(..), SelectionType(..))
+import qualified Nixon.Select as Select
 import           Nixon.Utils (toLines)
 import           Prelude hiding (FilePath)
 import qualified Turtle as Tu
@@ -24,25 +27,31 @@ import           Turtle hiding (arg, decimal, s, d, f, x, shell)
 
 -- | Data type for command line options to rofi
 data RofiOpts = RofiOpts
-  {  _msg :: Maybe Text
+  { _exact :: Maybe Bool
+  , _msg :: Maybe Text
   , _markup :: Bool
   , _prompt :: Maybe Text
   , _query :: Maybe Text
-  }
+  } deriving Show
 
 instance Semigroup RofiOpts where
-  left <> right = RofiOpts { _markup = _markup right || _markup left
+  left <> right = RofiOpts { _exact = _exact right <|> _exact left
+                           , _markup = _markup right || _markup left
                            , _msg = _msg right <|> _msg left
                            , _prompt = _prompt right <|> _prompt left
                            , _query = _query right <|> _query left
                            }
 
 instance Monoid RofiOpts where
-  mempty = RofiOpts { _markup = False
+  mempty = RofiOpts { _exact = Nothing
+                    , _markup = False
                     , _msg = Nothing
                     , _prompt = Nothing
                     , _query = Nothing
                     }
+
+rofi_exact :: Bool -> RofiOpts
+rofi_exact exact = mempty { _exact = Just exact }
 
 rofi_markup :: RofiOpts
 rofi_markup = mempty { _markup = True }
@@ -66,8 +75,9 @@ data RofiResult = RofiCancel
 -- | Launch rofi with the given options and candidates
 rofi :: RofiOpts -> Shell Candidate -> IO (Selection Text)
 rofi opts candidates = do
-  let args = "-dmenu" : "-matching" : "fuzzy" : build_args
-        [ flag "-markup-rows" (_markup opts)
+  let args = "-dmenu" : build_args
+        [ arg_fmt "-matching" (bool "fuzzy" "normal" . fromMaybe False) (_exact opts)
+        , flag "-markup-rows" (_markup opts)
         , arg "-mesg" =<< _msg opts
         , arg "-p" =<< _prompt opts
         , arg "-filter" =<< _query opts
@@ -93,22 +103,22 @@ rofi_format_project_name project = do
   pure $ fmt name_padded dir
 
 -- | Launch rofi with a list of projects as candidates
-rofi_projects :: Maybe Text -> [Project] -> IO (Maybe Project)
-rofi_projects query projects = do
-  let opts =
-        rofi_prompt "Select project" <>
-        rofi_markup <>
-        maybe mempty rofi_query query
+rofi_projects :: RofiOpts -> Maybe Text -> [Project] -> IO (Maybe Project)
+rofi_projects opts query projects = do
+  let opts' = opts
+        <> rofi_prompt "Select project"
+        <> rofi_markup
+        <> maybe mempty rofi_query query
   candidates <- traverse rofi_format_project_name projects
   let map' = Map.fromList (zip candidates projects)
-  rofi opts (Select.Identity <$> select candidates) >>= pure . \case
+  rofi opts' (Select.Identity <$> select candidates) >>= pure . \case
     Selection _ key -> Map.lookup key map'
     _ -> Nothing
 
-rofi_project_command :: Maybe Text -> Project -> IO (Maybe Command)
-rofi_project_command query project = do
+rofi_project_command :: RofiOpts -> Maybe Text -> Project -> IO (Maybe Command)
+rofi_project_command opts query project = do
   let commands = Select.build_map show_command $ find_project_commands project
-      opts = rofi_prompt "Select command" <> maybe mempty rofi_query query
-  rofi opts (Select.Identity <$> select (Map.keys commands)) >>= pure . \case
+      opts' = opts <> rofi_prompt "Select command" <> maybe mempty rofi_query query
+  rofi opts' (Select.Identity <$> select (Map.keys commands)) >>= pure . \case
     Selection _ txt -> Map.lookup txt commands
     _ -> Nothing
