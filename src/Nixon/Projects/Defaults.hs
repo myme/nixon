@@ -6,7 +6,6 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Aeson.Types
 import qualified Data.HashMap.Strict as Map
-import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Nixon.Nix
 import           Nixon.Projects
@@ -29,10 +28,10 @@ npm_scripts = Command [ShellPart "script" scripts] mempty
       content <- liftIO $ runMaybeT $ do
         package <- MaybeT $ find_dominating_file (project_path project) "package.json"
         MaybeT $ decodeFileStrict (T.unpack $ format fp package)
-      let keys = do
+      let elems = do
             map' <- parseMaybe parse_script =<< content
-            pure (Map.keys (map' :: Map.HashMap Text Value))
-      select $ Select.Identity <$> fromMaybe [] keys
+            pure (Map.toList (map' :: Map.HashMap Text Text))
+      select $ maybe [] (map $ \(k, v) -> Select.WithTitle (format (s%" - "%s) k v) v) elems
 
 -- | Placeholder for a git revision
 revision :: Command
