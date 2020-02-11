@@ -22,14 +22,16 @@ import           System.IO.Error
 import           Turtle hiding (err)
 
 data Config = Config
-  { source_dirs :: [FilePath]
+  { exact_match :: Maybe Bool
+  , source_dirs :: [FilePath]
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
   } deriving (Generic, Show)
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \v -> Config
-    <$> (maybe [] (fmap fromText) <$> v .:? "source_dirs")
+    <$> v .:? "exact_match"
+    <*> (maybe [] (fmap fromText) <$> v .:? "source_dirs")
     <*> v .:? "use_direnv"
     <*> v .:? "use_nix"
 

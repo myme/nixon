@@ -14,6 +14,7 @@ data LogLevel = LogDebug | LogInfo | LogWarning | LogError
   deriving (Eq, Ord, Show)
 
 data Config = Config { backend :: Maybe Backend
+                     , exact_match :: Maybe Bool
                      , project_types :: [ProjectType]
                      , source_dirs :: [FilePath]
                      , use_direnv :: Maybe Bool

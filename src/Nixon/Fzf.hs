@@ -1,6 +1,7 @@
 module Nixon.Fzf
   ( fzf
   , fzf_border
+  , fzf_exact
   , fzf_header
   , fzf_height
   , fzf_format_project_name
@@ -33,6 +34,7 @@ import           Turtle hiding (arg, header, readline, sort, shell, f, x)
 
 data FzfOpts = FzfOpts
   { _border :: Bool
+  , _exact :: Maybe Bool
   , _header :: Maybe Text
   , _height :: Maybe Integer
   , _query :: Maybe Text
@@ -50,6 +52,7 @@ data FieldIndex = FieldIndex Integer
 
 instance Semigroup FzfOpts where
   left <> right = FzfOpts { _border = _border right || _border left
+                          , _exact = _exact right <|> _exact left
                           , _header = _header right <|> _header left
                           , _height = _height right <|> _height left
                           , _query = _query right <|> _query left
@@ -61,6 +64,7 @@ instance Semigroup FzfOpts where
 
 instance Monoid FzfOpts where
   mempty = FzfOpts { _border = False
+                   , _exact = Nothing
                    , _header = Nothing
                    , _height = Nothing
                    , _query = Nothing
@@ -72,6 +76,9 @@ instance Monoid FzfOpts where
 
 fzf_border :: FzfOpts
 fzf_border = mempty { _border = True }
+
+fzf_exact :: Bool -> FzfOpts
+fzf_exact enable = mempty { _exact = Just enable }
 
 fzf_header :: Text -> FzfOpts
 fzf_header header = mempty { _header = Just header }
@@ -107,6 +114,7 @@ fzf_raw opts candidates = do
         Just filter -> ["--filter", filter]
         Nothing -> "-1" : "--expect=alt-enter" : "--ansi" : build_args
           [ flag "--border" (_border opts)
+          , flag "--exact" =<< _exact opts
           , arg "--header" =<< _header opts
           , arg "--height" =<< format (d%"%") <$> _height opts
           , arg "--query" =<< _query opts
@@ -152,15 +160,16 @@ fzf_format_project_name project = do
   pure (format fp path, project)
 
 -- | Find projects
-fzf_projects :: Maybe Text -> [Project] -> IO (Maybe Project)
-fzf_projects query projects = do
+fzf_projects :: FzfOpts -> Maybe Text -> [Project] -> IO (Maybe Project)
+fzf_projects opts query projects = do
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
-  let opts = fzf_header "Select project"
+  let opts' = opts
+        <> fzf_header "Select project"
         <> fzf_border
         -- <> fzf_height 40
         <> maybe mempty fzf_query query
         -- <> fzf_preview "ls $(eval echo {})"
-  fzf opts (Select.Identity <$> (select . sort $ Map.keys candidates)) >>= pure . \case
+  fzf opts' (Select.Identity <$> (select . sort $ Map.keys candidates)) >>= pure . \case
     Selection _ out -> Map.lookup out candidates
     _ -> Nothing
 
@@ -170,16 +179,16 @@ project_history_file = (</> ".nixon_history")
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?
 -- | Find commands applicable to a project
-fzf_project_command :: Maybe Text -> Project -> IO (Maybe Command)
-fzf_project_command query project = do
+fzf_project_command :: FzfOpts -> Maybe Text -> Project -> IO (Maybe Command)
+fzf_project_command opts query project = do
   let path = project_path project
       history_file = T.unpack $ format fp $ project_history_file path
   history <- map fromString . historyLines <$> readHistory history_file
   let commands = map (show_command &&& id) $ (++ history) $ find_project_commands project
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
-      opts = fzf_header header <> maybe mempty fzf_query query <> fzf_no_sort
+      opts' = opts <> fzf_header header <> maybe mempty fzf_query query <> fzf_no_sort
       input' = Select.Identity <$> select (fst <$> commands)
-  fmap (`lookup` commands) <$> fzf opts input' >>= \case
+  fmap (`lookup` commands) <$> fzf opts' input' >>= \case
     Selection Default cmd -> pure cmd
     Selection (Alternate _) cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)

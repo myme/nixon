@@ -91,9 +91,10 @@ project_action projects opts
   | otherwise = do
       env <- ask
       let ptypes = project_types env
+          fzf_opts = maybe mempty fzf_exact (exact_match env)
 
           (find_project, find_command, selector) = case backend env of
-            Fzf -> (fzf_projects, fzf_project_command, fzf_with_edit mempty)
+            Fzf -> (fzf_projects fzf_opts, fzf_project_command fzf_opts, fzf_with_edit fzf_opts)
             Rofi -> (rofi_projects, rofi_project_command, rofi mempty)
 
           -- TODO: Generalize rofi/fzf_projects and move this to Nixon.Projects using `select`
@@ -112,8 +113,9 @@ run_action :: ProjectOpts -> Nixon ()
 run_action opts = do
   env <- ask
   let ptypes = project_types env
+      fzf_opts = maybe mempty fzf_exact (exact_match env)
       (find_command, selector) = case backend env of
-        Fzf -> (fzf_project_command, fzf_with_edit mempty)
+        Fzf -> (fzf_project_command fzf_opts, fzf_with_edit fzf_opts)
         Rofi -> (rofi_project_command, rofi mempty)
   project <- liftIO (find_in_project_or_default ptypes =<< pwd)
   run_cmd find_command project opts selector
@@ -149,6 +151,7 @@ nixon_with_config user_config = do
 default_config :: Config
 default_config = Config.Config
   { Config.backend = Nothing
+  , Config.exact_match = Nothing
   , Config.project_types = default_projects
   , Config.source_dirs = []
   , Config.use_direnv = Nothing

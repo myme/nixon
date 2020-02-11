@@ -21,6 +21,7 @@ import qualified System.IO as IO
 import           Turtle hiding (env)
 
 data Env = Env { backend :: Backend
+               , exact_match :: Maybe Bool
                , project_types :: [ProjectType]
                , source_dirs :: [FilePath]
                , use_direnv :: Maybe Bool
@@ -43,6 +44,7 @@ build_env opts config = do
   backend <- get_backend (Config.backend config <|> Options.backend opts)
   pure Env
     { backend
+    , exact_match =  Options.exact_match opts <|> Config.exact_match config
     , project_types = Config.project_types config
     , source_dirs = Config.source_dirs config ++ Options.source_dirs opts
     , use_direnv =  Options.use_direnv opts <|> Config.use_direnv config

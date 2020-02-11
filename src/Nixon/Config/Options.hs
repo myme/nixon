@@ -34,6 +34,7 @@ import           Turtle hiding (err, select)
 data Options = Options
   { backend :: Maybe Backend
     -- , backend_args :: [Text]
+  , exact_match :: Maybe Bool
   , source_dirs :: [FilePath]
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
@@ -62,6 +63,7 @@ data ProjectOpts = ProjectOpts
 default_options :: Options
 default_options = Options
   { backend = Nothing
+  , exact_match = Nothing
   , source_dirs = []
   , use_direnv = Nothing
   , use_nix = Nothing
@@ -88,6 +90,7 @@ maybeSwitch long short help = Opts.flag Nothing (Just True) (
 parser :: Parser Options
 parser = Options
   <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
+  <*> maybeSwitch "exact" 'e' "Enable exact match"
   <*> many (optPath "path" 'p' "Project directory")
   <*> maybeSwitch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
   <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
@@ -142,7 +145,8 @@ parse_args = do
     Left EmptyFile -> pure $ Right opts
     Left (ParseError err) -> pure $ Left err
     Right json -> pure $ Right opts
-      { source_dirs = JSON.source_dirs json ++ source_dirs opts
+      { exact_match = exact_match opts <|> JSON.exact_match json
+      , source_dirs = JSON.source_dirs json ++ source_dirs opts
       , use_direnv = use_direnv opts <|> JSON.use_direnv json
       , use_nix = use_nix opts <|> JSON.use_nix json
       }
