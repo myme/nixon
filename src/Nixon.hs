@@ -72,6 +72,7 @@ with_local_config project action =
       local update_env action
 
 -- | Find and run a command in a project.
+-- TODO: Print command before running it (add -q|--quiet)
 run_cmd :: (Maybe Text -> Project -> IO (Maybe Command))
              -> Project
              -> ProjectOpts
