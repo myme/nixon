@@ -31,7 +31,7 @@ npm_scripts = Command [ShellPart "script" scripts] mempty
       let elems = do
             map' <- parseMaybe parse_script =<< content
             pure (Map.toList (map' :: Map.HashMap Text Text))
-      select $ maybe [] (map $ \(k, v) -> Select.WithTitle (format (s%" - "%s) k v) v) elems
+      select $ maybe [] (map $ \(k, v) -> Select.WithTitle (format (s%" - "%s) k v) k) elems
 
 -- | Placeholder for a git revision
 revision :: Command
