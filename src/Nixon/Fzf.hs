@@ -1,5 +1,6 @@
 module Nixon.Fzf
-  ( fzf
+  ( FzfOpts
+  , fzf
   , fzf_border
   , fzf_exact
   , fzf_header

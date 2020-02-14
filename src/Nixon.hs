@@ -20,6 +20,7 @@ import           Nixon.Logging
 import           Nixon.Nix
 import           Nixon.Projects hiding (project_types)
 import           Nixon.Projects.Defaults
+import           Nixon.Projects.Types (ProjectType)
 import           Nixon.Rofi
 import qualified Nixon.Select as Select
 import           Nixon.Select (Selection(..), Selector)
@@ -85,22 +86,29 @@ run_cmd find_command project opts selector = with_local_config project $ do
   log_info (format ("Running command '"%w%"'") cmd')
   liftIO $ Select.runSelect selector $ project_exec cmd' project
 
+type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
+type CommandSelector = Maybe Text -> Project -> IO (Maybe Command)
+type GenericSelector = Shell Select.Candidate-> IO (Selection Text)
+
+get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, GenericSelector)
+get_selectors = do
+  env <- ask
+  let ptypes = project_types env
+      fzf_opts = maybe mempty fzf_exact (exact_match env)
+      rofi_opts = maybe mempty rofi_exact (exact_match env)
+  pure $ case backend env of
+    Fzf -> (ptypes, fzf_projects fzf_opts, fzf_project_command fzf_opts, fzf_with_edit fzf_opts)
+    Rofi -> (ptypes, rofi_projects rofi_opts, rofi_project_command rofi_opts, rofi rofi_opts)
+
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
 project_action projects opts
   | Options.list opts = liftIO $ Nixon.list projects (Options.project opts)
   | otherwise = do
-      env <- ask
-      let ptypes = project_types env
-          fzf_opts = maybe mempty fzf_exact (exact_match env)
-          rofi_opts = maybe mempty rofi_exact (exact_match env)
+      (ptypes, find_project, find_command, selector) <- get_selectors
 
-          (find_project, find_command, selector) = case backend env of
-            Fzf -> (fzf_projects fzf_opts, fzf_project_command fzf_opts, fzf_with_edit fzf_opts)
-            Rofi -> (rofi_projects rofi_opts, rofi_project_command rofi_opts, rofi rofi_opts)
-
-          -- TODO: Generalize rofi/fzf_projects and move this to Nixon.Projects using `select`
-          find_project' (Just ".") = runMaybeT
+      -- TODO: Generalize rofi/fzf_projects and move this to Nixon.Projects using `select`
+      let find_project' (Just ".") = runMaybeT
              $  MaybeT (find_in_project ptypes =<< pwd)
             <|> MaybeT (find_project Nothing projects)
           find_project' query = find_project query projects
@@ -113,13 +121,7 @@ project_action projects opts
 -- | Run a command from current directory
 run_action :: ProjectOpts -> Nixon ()
 run_action opts = do
-  env <- ask
-  let ptypes = project_types env
-      fzf_opts = maybe mempty fzf_exact (exact_match env)
-      rofi_opts = maybe mempty rofi_exact (exact_match env)
-      (find_command, selector) = case backend env of
-        Fzf -> (fzf_project_command fzf_opts, fzf_with_edit fzf_opts)
-        Rofi -> (rofi_project_command rofi_opts, rofi rofi_opts)
+  (ptypes, __project, find_command, selector) <- get_selectors
   project <- liftIO (find_in_project_or_default ptypes =<< pwd)
   run_cmd find_command project opts selector
 
