@@ -190,8 +190,7 @@ fzf_project_command opts query project = do
       opts' = opts <> fzf_header header <> maybe mempty fzf_query query <> fzf_no_sort
       input' = Select.Identity <$> select (fst <$> commands)
   fmap (`lookup` commands) <$> fzf opts' input' >>= \case
-    Selection Default cmd -> pure cmd
-    Selection (Alternate _) cmd -> runMaybeT $ do
+    Selection Default cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
       resolved <- liftIO $ Select.runSelect (fzf_with_edit mempty) (resolve_command project cmd')
       case resolved of
@@ -199,6 +198,7 @@ fzf_project_command opts query project = do
           edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection (Just path) selection)
           pure $ edited { command_options = command_options cmd' }
         _ -> MaybeT (pure Nothing)
+    Selection (Alternate _) cmd -> pure cmd
     _ -> pure Nothing
 
 -- | Use readline to manipulate/change a fzf selection
