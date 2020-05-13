@@ -20,7 +20,7 @@ import           Nixon.Logging
 import           Nixon.Nix
 import           Nixon.Projects hiding (project_types)
 import           Nixon.Projects.Defaults
-import           Nixon.Projects.Types (ProjectType)
+import           Nixon.Projects.Types (ProjectType, show_command)
 import           Nixon.Rofi
 import qualified Nixon.Select as Select
 import           Nixon.Select (Selection(..), Selector)
@@ -74,20 +74,23 @@ with_local_config project action =
 
 -- | Find and run a command in a project.
 -- TODO: Print command before running it (add -q|--quiet)
-run_cmd :: (Maybe Text -> Project -> IO (Maybe Command))
+run_cmd :: CommandSelector
              -> Project
              -> ProjectOpts
              -> Selector
              -> Nixon ()
 run_cmd find_command project opts selector = with_local_config project $ do
-  cmd <- liftIO $ fail_empty "No command selected." $ find_command (Options.command opts) project
-  cmd' <- maybe_wrap_cmd project cmd
-  -- TODO: Always edit command before executing?
-  log_info (format ("Running command '"%w%"'") cmd')
-  liftIO $ Select.runSelect selector $ project_exec cmd' project
+  cmd <- liftIO $ fail_empty "No command selected." $ find_command opts project
+  if Options.select opts
+    then liftIO (T.putStrLn $ show_command cmd)
+    else do
+      cmd' <- maybe_wrap_cmd project cmd
+      -- TODO: Always edit command before executing?
+      log_info (format ("Running command '"%w%"'") cmd')
+      liftIO $ Select.runSelect selector $ project_exec cmd' project
 
 type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
-type CommandSelector = Maybe Text -> Project -> IO (Maybe Command)
+type CommandSelector = ProjectOpts -> Project -> IO (Maybe Command)
 type GenericSelector = Shell Select.Candidate-> IO (Selection Text)
 
 get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, GenericSelector)

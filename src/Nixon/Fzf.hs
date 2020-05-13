@@ -22,6 +22,8 @@ import           Data.List (sort)
 import qualified Data.Map as Map
 import           Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
+import           Nixon.Config.Options (ProjectOpts)
+import qualified Nixon.Config.Options as Options
 import           Nixon.Process
 import           Nixon.Projects
 import           Nixon.Projects.Types hiding (path)
@@ -180,23 +182,25 @@ project_history_file = (</> ".nixon_history")
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?
 -- | Find commands applicable to a project
-fzf_project_command :: FzfOpts -> Maybe Text -> Project -> IO (Maybe Command)
-fzf_project_command opts query project = do
+fzf_project_command :: FzfOpts -> ProjectOpts -> Project -> IO (Maybe Command)
+fzf_project_command opts popts project = do
   let path = project_path project
       history_file = T.unpack $ format fp $ project_history_file path
   history <- map fromString . historyLines <$> readHistory history_file
   let commands = map (show_command &&& id) $ (++ history) $ find_project_commands project
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
-      opts' = opts <> fzf_header header <> maybe mempty fzf_query query <> fzf_no_sort
+      opts' = opts <> fzf_header header <> maybe mempty fzf_query (Options.command popts) <> fzf_no_sort
       input' = Select.Identity <$> select (fst <$> commands)
   fmap (`lookup` commands) <$> fzf opts' input' >>= \case
     Selection Default cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
       resolved <- liftIO $ Select.runSelect (fzf_with_edit mempty) (resolve_command project cmd')
       case resolved of
-        Selection _ selection -> do
-          edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection (Just path) selection)
-          pure $ edited { command_options = command_options cmd' }
+        Selection _ selection
+          | Options.select popts -> pure (fromString $ T.unpack selection)
+          | otherwise -> do
+            edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection (Just path) selection)
+            pure $ edited { command_options = command_options cmd' }
         _ -> MaybeT (pure Nothing)
     Selection (Alternate _) cmd -> pure cmd
     _ -> pure Nothing

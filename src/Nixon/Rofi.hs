@@ -15,6 +15,8 @@ import           Data.Bool (bool)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
+import           Nixon.Config.Options (ProjectOpts)
+import qualified Nixon.Config.Options as Options
 import           Nixon.Process
 import           Nixon.Projects
 import           Nixon.Projects.Types (show_command)
@@ -115,10 +117,10 @@ rofi_projects opts query projects = do
     Selection _ key -> Map.lookup key map'
     _ -> Nothing
 
-rofi_project_command :: RofiOpts -> Maybe Text -> Project -> IO (Maybe Command)
-rofi_project_command opts query project = do
+rofi_project_command :: RofiOpts -> ProjectOpts -> Project -> IO (Maybe Command)
+rofi_project_command opts popts project = do
   let commands = Select.build_map show_command $ find_project_commands project
-      opts' = opts <> rofi_prompt "Select command" <> maybe mempty rofi_query query
+      opts' = opts <> rofi_prompt "Select command" <> maybe mempty rofi_query (Options.command popts)
   rofi opts' (Select.Identity <$> select (Map.keys commands)) >>= pure . \case
     Selection _ txt -> Map.lookup txt commands
     _ -> Nothing
