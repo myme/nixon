@@ -1,8 +1,8 @@
 let
   nixpkgs = import (builtins.fetchGit {
     url = "https://github.com/NixOS/nixpkgs-channels";
-    ref = "nixos-19.09";
-    rev = "2de9367299f325c2b2021a44c2f63c810f8ad023";
+    ref = "nixos-20.03";
+    rev = "5adf2a6c11646898742b0c08f7e94101620ba707";
   });
 
   koi = import (builtins.fetchGit {

@@ -23,7 +23,7 @@ import qualified Nixon.Select as Select
 import           Nixon.Utils (toLines)
 import           Prelude hiding (FilePath)
 import qualified Turtle as Tu
-import           Turtle hiding (arg, decimal, s, d, f, x, shell)
+import           Turtle hiding (arg, decimal, s, d, f, x, shell, toLines)
 
 -- | Data type for command line options to rofi
 data RofiOpts = RofiOpts

@@ -31,7 +31,7 @@ import           Nixon.Utils
 import           Prelude hiding (FilePath, filter)
 import           System.Console.Haskeline
 import           System.Console.Haskeline.History (historyLines, readHistory)
-import           Turtle hiding (arg, header, readline, sort, shell, f, x)
+import           Turtle hiding (arg, header, readline, sort, shell, toLines, f, x)
 
 data FzfOpts = FzfOpts
   { _border :: Bool

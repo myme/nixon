@@ -9,7 +9,7 @@ import           Data.Char (isSpace)
 import           Data.List.NonEmpty (toList)
 import qualified Data.Text as T
 import           Prelude hiding (FilePath)
-import           Turtle
+import           Turtle hiding (toLines)
 
 -- | Locate a file going up the filesystem hierarchy
 find_dominating_file :: FilePath -> FilePath -> IO (Maybe FilePath)
