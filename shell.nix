@@ -1,5 +1,5 @@
 {
-  pkgs ? (import ./nixpkgs.nix).nixpkgs { overlays = []; },
+  pkgs ? (import ./nixpkgs.nix).nixpkgs {},
   haskellPackages ? pkgs.haskellPackages,
 }:
 
@@ -7,15 +7,13 @@ let
   drv = (import ./default.nix) {
     inherit pkgs haskellPackages;
   };
-  koi = (import ./nixpkgs.nix).koi { overlays = []; };
 
 in haskellPackages.shellFor {
   packages = _: [ drv ];
   buildInputs = (with pkgs; [
+    cabal-install
     cabal2nix
     hlint
-  ]) ++ (with koi; [
-    cabal-install
   ]) ++ (with haskellPackages; [
     ghcid
   ]);
