@@ -32,7 +32,6 @@ import qualified Nixon.Select as Select
 import           Nixon.Utils
 import           Prelude hiding (FilePath, filter)
 import           System.Console.Haskeline
-import           System.Console.Haskeline.History (historyLines, readHistory)
 import           Turtle hiding (arg, header, readline, sort, shell, toLines, f, x)
 
 data FzfOpts = FzfOpts
@@ -152,7 +151,7 @@ fzf opts candidates = do
 
 fzf_with_edit :: FzfOpts -> Shell Candidate -> IO (Selection Text)
 fzf_with_edit opts candidates = fzf opts candidates >>= \case
-  Selection (Alternate idx) selection -> fzf_edit_selection Nothing selection >>= \case
+  Selection (Alternate idx) selection -> fzf_edit_selection selection >>= \case
     Just selection' -> pure $ Selection (Alternate idx) selection'
     Nothing -> pure EmptySelection
   x -> pure x
@@ -176,18 +175,12 @@ fzf_projects opts query projects = do
     Selection _ out -> Map.lookup out candidates
     _ -> Nothing
 
-project_history_file :: FilePath -> FilePath
-project_history_file = (</> ".nixon_history")
-
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?
 -- | Find commands applicable to a project
 fzf_project_command :: FzfOpts -> ProjectOpts -> Project -> IO (Maybe Command)
 fzf_project_command opts popts project = do
-  let path = project_path project
-      history_file = T.unpack $ format fp $ project_history_file path
-  history <- map fromString . historyLines <$> readHistory history_file
-  let commands = map (show_command &&& id) $ (++ history) $ find_project_commands project
+  let commands = map (show_command &&& id) $ find_project_commands project
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
       opts' = opts <> fzf_header header <> maybe mempty fzf_query (Options.command popts) <> fzf_no_sort
       input' = Select.Identity <$> select (fst <$> commands)
@@ -199,19 +192,16 @@ fzf_project_command opts popts project = do
         Selection _ selection
           | Options.select popts -> pure (fromString $ T.unpack selection)
           | otherwise -> do
-            edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection (Just path) selection)
+            edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection selection)
             pure $ edited { command_options = command_options cmd' }
         _ -> MaybeT (pure Nothing)
     Selection (Alternate _) cmd -> pure cmd
     _ -> pure Nothing
 
 -- | Use readline to manipulate/change a fzf selection
-fzf_edit_selection :: Maybe FilePath -> Text -> IO (Maybe Text)
-fzf_edit_selection path selection = runInputT settings $ do
+fzf_edit_selection :: Text -> IO (Maybe Text)
+fzf_edit_selection selection = runInputT defaultSettings $ do
   line <- getInputLineWithInitial "> " (T.unpack selection , "")
   pure $ case line of
     Just "" -> Nothing
     line'   -> T.pack <$> line'
-  where
-    settings = defaultSettings { historyFile = historyFile }
-    historyFile = T.unpack . format fp . project_history_file <$> path
