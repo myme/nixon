@@ -5,11 +5,12 @@
 
 let
   gitignore = pkgs.nix-gitignore.gitignoreSourcePure [ ./.gitignore ];
+  src = gitignore ./.;
 
 in haskellPackages.mkDerivation {
+  inherit src;
   pname = "nixon";
   version = "0.1.0.0";
-  src = (gitignore ./.);
   isLibrary = true;
   isExecutable = true;
   executableHaskellDepends = with haskellPackages; [
@@ -39,4 +40,8 @@ in haskellPackages.mkDerivation {
     hspec
   ];
   license = pkgs.stdenv.lib.licenses.mit;
+  postInstall = ''
+    mkdir -p $out/share/zsh/site-functions
+    install ${src}/extra/nixon-widget.zsh $out/share/zsh/site-functions/_nixon_widget
+  '';
 }
