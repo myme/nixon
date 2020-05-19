@@ -1,5 +1,5 @@
 {
-  pkgs ? (import ./nixpkgs.nix).nixpkgs {},
+  pkgs ? import ./nixpkgs.nix {},
   haskellPackages ? pkgs.haskellPackages,
 }:
 
