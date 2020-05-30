@@ -18,8 +18,8 @@ import qualified Data.Text as T
 import           Nixon.Config.Options (ProjectOpts)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Process
-import           Nixon.Projects
-import           Nixon.Projects.Types (show_command)
+import           Nixon.Project
+import           Nixon.Project.Types (show_command)
 import           Nixon.Select (Candidate, Selection(..), SelectionType(..))
 import qualified Nixon.Select as Select
 import           Nixon.Utils (toLines)

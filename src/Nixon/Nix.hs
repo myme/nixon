@@ -11,8 +11,8 @@ import Control.Monad.Trans.Maybe
 import Data.Maybe (listToMaybe)
 import Nixon.Types
 import Nixon.Process
-import Nixon.Projects
-import Nixon.Projects.Types hiding (dir)
+import Nixon.Project
+import Nixon.Project.Types hiding (dir)
 import Nixon.Utils
 import Prelude hiding (FilePath)
 import Turtle hiding (arg)

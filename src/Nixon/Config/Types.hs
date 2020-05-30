@@ -4,7 +4,7 @@ module Nixon.Config.Types
   , Config(..)
   ) where
 
-import Nixon.Projects.Types
+import Nixon.Project.Types
 import Prelude hiding (FilePath)
 import Turtle (FilePath)
 

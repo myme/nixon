@@ -25,8 +25,8 @@ import qualified Data.Text as T
 import           Nixon.Config.Options (ProjectOpts)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Process
-import           Nixon.Projects
-import           Nixon.Projects.Types hiding (path)
+import           Nixon.Project
+import           Nixon.Project.Types hiding (path)
 import           Nixon.Select (Candidate, Selection(..), SelectionType(..))
 import qualified Nixon.Select as Select
 import           Nixon.Utils

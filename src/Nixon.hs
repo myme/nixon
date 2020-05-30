@@ -18,9 +18,9 @@ import           Nixon.Direnv
 import           Nixon.Fzf
 import           Nixon.Logging
 import           Nixon.Nix
-import           Nixon.Projects hiding (project_types)
-import           Nixon.Projects.Defaults
-import           Nixon.Projects.Types (ProjectType, show_command)
+import           Nixon.Project hiding (project_types)
+import           Nixon.Project.Defaults
+import           Nixon.Project.Types (ProjectType, show_command)
 import           Nixon.Rofi
 import qualified Nixon.Select as Select
 import           Nixon.Select (Selection(..), Selector)
@@ -110,7 +110,7 @@ project_action projects opts
   | otherwise = do
       (ptypes, find_project, find_command, selector) <- get_selectors
 
-      -- TODO: Generalize rofi/fzf_projects and move this to Nixon.Projects using `select`
+      -- TODO: Generalize rofi/fzf_projects and move this to Nixon.Project using `select`
       let find_project' (Just ".") = runMaybeT
              $  MaybeT (find_in_project ptypes =<< pwd)
             <|> MaybeT (find_project Nothing projects)

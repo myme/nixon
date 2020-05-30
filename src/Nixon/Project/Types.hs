@@ -1,4 +1,4 @@
-module Nixon.Projects.Types
+module Nixon.Project.Types
   ( Part (..)
   , Project (..)
   , ProjectType (..)

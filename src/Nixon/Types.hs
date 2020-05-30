@@ -15,7 +15,7 @@ import           Nixon.Config.Options (Options)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Config.Types (Backend(..), LogLevel, Config)
 import qualified Nixon.Config.Types as Config
-import           Nixon.Projects.Types (ProjectType)
+import           Nixon.Project.Types (ProjectType)
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           Turtle hiding (env)

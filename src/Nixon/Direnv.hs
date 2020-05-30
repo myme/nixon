@@ -7,8 +7,8 @@ import           Control.Monad.Trans.Maybe
 import           Data.List (elemIndex)
 import qualified Data.Text as T
 import           Nixon.Types
-import           Nixon.Projects
-import           Nixon.Projects.Types
+import           Nixon.Project
+import           Nixon.Project.Types
 import           Nixon.Utils
 import           Prelude hiding (FilePath)
 import           Turtle hiding (find, root)

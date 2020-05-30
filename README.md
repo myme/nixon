@@ -25,8 +25,8 @@ The `build` sub-command allows building nixon with a custom configuration:
 
 import Nixon
 import Nixon.Config as Config
-import Nixon.Projects.Defaults
-import Nixon.Projects.Types
+import Nixon.Project.Defaults
+import Nixon.Project.Types
 
 main :: IO ()
 main = nixon_with_config config

@@ -3,8 +3,8 @@ module Main where
 import           Data.Char (isSpace, isPrint)
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Nixon.Projects
-import           Nixon.Projects.Types
+import           Nixon.Project
+import           Nixon.Project.Types
 import           Nixon.Select
 import           Nixon.Utils
 import           Test.Hspec
@@ -32,7 +32,7 @@ instance Arbitrary NonWsText where
 
 main :: IO ()
 main = hspec $ do
-  describe "Projects" $
+  describe "Project" $
     describe "resolve_command" $ do
       let project = from_path "/foo/bar/baz"
 

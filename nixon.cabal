@@ -39,9 +39,9 @@ library
                      , Nixon.Logging
                      , Nixon.Nix
                      , Nixon.Process
-                     , Nixon.Projects
-                     , Nixon.Projects.Defaults
-                     , Nixon.Projects.Types
+                     , Nixon.Project
+                     , Nixon.Project.Defaults
+                     , Nixon.Project.Types
                      , Nixon.Rofi
                      , Nixon.Select
                      , Nixon.Types
@@ -80,9 +80,9 @@ executable nixon
                      , Nixon.Logging
                      , Nixon.Nix
                      , Nixon.Process
-                     , Nixon.Projects
-                     , Nixon.Projects.Defaults
-                     , Nixon.Projects.Types
+                     , Nixon.Project
+                     , Nixon.Project.Defaults
+                     , Nixon.Project.Types
                      , Nixon.Rofi
                      , Nixon.Select
                      , Nixon.Types

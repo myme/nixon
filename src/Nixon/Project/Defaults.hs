@@ -1,4 +1,4 @@
-module Nixon.Projects.Defaults
+module Nixon.Project.Defaults
   ( default_projects
   ) where
 
@@ -8,8 +8,8 @@ import           Data.Aeson.Types
 import qualified Data.HashMap.Strict as Map
 import qualified Data.Text as T
 import           Nixon.Nix
-import           Nixon.Projects
-import           Nixon.Projects.Types
+import           Nixon.Project
+import           Nixon.Project.Types
 import qualified Nixon.Select as Select
 import           Nixon.Select (Candidate)
 import           Nixon.Utils

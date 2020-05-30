@@ -1,4 +1,4 @@
-module Nixon.Projects
+module Nixon.Project
   ( Project (..)
   , Command
   , find_in_project
@@ -24,8 +24,8 @@ import           Data.Maybe (fromMaybe)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
 import           Nixon.Process
-import           Nixon.Projects.Types (command_gui, command_options)
-import           Nixon.Projects.Types as Types
+import           Nixon.Project.Types (command_gui, command_options)
+import           Nixon.Project.Types as Types
 import           Nixon.Select (Select, Selection(..))
 import qualified Nixon.Select as Select
 import           Nixon.Types
