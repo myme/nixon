@@ -4,14 +4,12 @@ module Nixon.Config.Types
   , Config(..)
   ) where
 
+import Nixon.Logging
 import Nixon.Project.Types
 import Prelude hiding (FilePath)
 import Turtle (FilePath)
 
 data Backend = Fzf | Rofi deriving Show
-
-data LogLevel = LogDebug | LogInfo | LogWarning | LogError
-  deriving (Eq, Ord, Show)
 
 data Config = Config { backend :: Maybe Backend
                      , exact_match :: Maybe Bool

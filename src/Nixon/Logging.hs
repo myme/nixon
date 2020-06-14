@@ -1,38 +1,42 @@
 module Nixon.Logging
-  ( log
+  ( LogLevel(..)
+  , HasLogging(..)
+  , log
   , log_debug
   , log_error
   , log_info
   , log_warn
-  , printErr
   ) where
 
-import           Control.Monad
-import           Control.Monad.IO.Class
-import           Data.Text
-import qualified Data.Text.IO as T
-import           Nixon.Types
-import           Nixon.Config.Types (LogLevel(..))
-import           Prelude hiding (log)
-import qualified System.IO as IO
+import Control.Monad
+import Data.Text
+import Nixon.Utils
+import Prelude hiding (log)
 
--- | Print a text message to stderr
-printErr :: (MonadIO m) => Text -> m ()
-printErr = liftIO . T.hPutStrLn IO.stderr
+data LogLevel = LogDebug | LogInfo | LogWarning | LogError
+  deriving (Eq, Ord, Show)
 
-log :: LogLevel -> Text -> Nixon ()
+class Monad m => HasLogging m where
+  loglevel :: m LogLevel
+  logout :: Text -> m ()
+
+instance HasLogging IO where
+  loglevel = return LogInfo
+  logout = printErr
+
+log :: HasLogging m => LogLevel -> Text -> m ()
 log level msg = do
-  should_log <- (level >=) . loglevel <$> ask
-  when should_log $ printErr msg
+  should_log <- (level >=) <$> loglevel
+  when should_log $ logout msg
 
-log_debug :: Text -> Nixon ()
+log_debug :: HasLogging m => Text -> m ()
 log_debug = log LogDebug
 
-log_info :: Text -> Nixon ()
+log_info :: HasLogging m => Text -> m ()
 log_info = log LogInfo
 
-log_warn :: Text -> Nixon ()
+log_warn :: HasLogging m => Text -> m ()
 log_warn = log LogWarning
 
-log_error :: Text -> Nixon ()
+log_error :: HasLogging m => Text -> m ()
 log_error = log LogError

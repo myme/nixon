@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module Nixon.Types
   ( Env(..)
   , Nixon
@@ -13,9 +15,12 @@ import           Data.Bool (bool)
 import           Data.Maybe (fromMaybe)
 import           Nixon.Config.Options (Options)
 import qualified Nixon.Config.Options as Options
-import           Nixon.Config.Types (Backend(..), LogLevel, Config)
+import           Nixon.Config.Types (Backend(..), Config)
 import qualified Nixon.Config.Types as Config
+import           Nixon.Logging (HasLogging, LogLevel(..))
+import qualified Nixon.Logging as Logging
 import           Nixon.Project.Types (ProjectType)
+import           Nixon.Utils
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           Turtle hiding (env)
@@ -53,6 +58,10 @@ build_env opts config = do
     }
 
 type Nixon = ReaderT Env IO
+
+instance HasLogging Nixon where
+  loglevel = loglevel <$> ask
+  logout = printErr
 
 runNixon :: MonadIO m => Options -> Config -> ReaderT Env m a -> m a
 runNixon opts config action = do

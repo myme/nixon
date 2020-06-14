@@ -1,5 +1,6 @@
 module Nixon.Utils
  ( find_dominating_file
+ , printErr
  , shell_to_list
  , toLines
  , takeToSpace
@@ -8,7 +9,9 @@ module Nixon.Utils
 import           Data.Char (isSpace)
 import           Data.List.NonEmpty (toList)
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import           Prelude hiding (FilePath)
+import qualified System.IO as IO
 import           Turtle hiding (toLines)
 
 -- | Locate a file going up the filesystem hierarchy
@@ -20,6 +23,10 @@ find_dominating_file path' name = do
     True -> pure $ Just candidate
     False | is_root -> pure Nothing
           | otherwise -> find_dominating_file (parent path') name
+
+-- | Print a text message to stderr
+printErr :: (MonadIO m) => Text -> m ()
+printErr = liftIO . T.hPutStrLn IO.stderr
 
 -- | Convert a Shell of as to [a]
 shell_to_list :: MonadIO m => Shell a -> m [a]

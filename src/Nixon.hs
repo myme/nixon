@@ -26,17 +26,17 @@ import qualified Nixon.Select as Select
 import           Nixon.Select (Selection(..), Selector)
 import           Nixon.Types
 import           Prelude hiding (FilePath, log)
-import           Turtle hiding (decimal, env, err, find, shell, x)
+import           Turtle hiding (decimal, die, env, err, find, shell, x)
 
 -- | List projects, filtering if a filter is specified.
-list :: [Project] -> Maybe Text -> IO ()
+list :: [Project] -> Maybe Text -> Nixon ()
 list projects query = do
   let fmt_line = fmap (Select.Identity . format fp)
-  paths <- fmt_line <$> traverse (implode_home . project_path) projects
+  paths <- liftIO $ fmt_line <$> traverse (implode_home . project_path) projects
   let fzf_opts = fzf_filter $ fromMaybe "" query
-  fzf fzf_opts (Turtle.select paths) >>= \case
-    Selection _ matching -> T.putStr matching
-    _ -> printErr "No projects."
+  liftIO (fzf fzf_opts (Turtle.select paths)) >>= \case
+    Selection _ matching -> liftIO $ T.putStr matching
+    _ -> log_error "No projects."
 
 -- | Wrap GHC to build nixon with a custom config.
 build_action :: BuildOpts -> IO ()
@@ -106,7 +106,7 @@ get_selectors = do
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
 project_action projects opts
-  | Options.list opts = liftIO $ Nixon.list projects (Options.project opts)
+  | Options.list opts = Nixon.list projects (Options.project opts)
   | otherwise = do
       (ptypes, find_project, find_command, selector) <- get_selectors
 
@@ -136,7 +136,7 @@ run_action opts = do
 -- showing the progress of starting the environment.
 nixon_with_config :: Config -> IO ()
 nixon_with_config user_config = do
-  opts <- either print_error pure =<< Options.parse_args
+  opts <- either die pure =<< Options.parse_args
   err <- try $ runNixon opts user_config $ case Options.sub_command opts of
     BuildCommand build_opts -> do
       log_info "Running <build> command"
@@ -152,9 +152,9 @@ nixon_with_config user_config = do
       log_info "Running <run> command"
       run_action run_opts
   case err of
-    Left (EmptyError msg) -> print_error msg
+    Left (EmptyError msg) -> die msg
     Right _ -> pure ()
-  where print_error err = printErr err >> exit (ExitFailure 1)
+  where die err = log_error err >> exit (ExitFailure 1)
 
 default_config :: Config
 default_config = Config.Config
