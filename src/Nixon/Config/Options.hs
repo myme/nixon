@@ -123,7 +123,7 @@ project_parser = ProjectOpts
   <$> optional (argText "project" "Project to jump into")
   <*> optional (argText "command" "Command to run")
   <*> switch "list" 'l' "List projects"
-  <*> switch "select" 's' "Select a project and output on stdout"
+  <*> switch "select" 's' "Select a project or command and output on stdout"
 
 merge_opts :: ProjectOpts -> ProjectOpts -> ProjectOpts
 merge_opts secondary primary = ProjectOpts
