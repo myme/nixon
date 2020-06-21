@@ -14,7 +14,7 @@ import Nixon.Utils
 import Prelude hiding (log)
 
 data LogLevel = LogDebug | LogInfo | LogWarning | LogError
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Bounded, Enum)
 
 class Monad m => HasLogging m where
   loglevel :: m LogLevel

@@ -10,6 +10,7 @@ import           Nixon.Utils
 import           Test.Hspec
 import           Test.QuickCheck
 import           Test.QuickCheck.Instances.Text ()
+import           Text.Nixon.Logging
 
 empty :: Monad m => a -> m (Selection Text)
 empty = const (pure EmptySelection)
@@ -32,6 +33,7 @@ instance Arbitrary NonWsText where
 
 main :: IO ()
 main = hspec $ do
+  describe "Logging" logging
   describe "Project" $
     describe "resolve_command" $ do
       let project = from_path "/foo/bar/baz"
