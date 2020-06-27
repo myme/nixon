@@ -134,7 +134,7 @@ merge_opts secondary primary = ProjectOpts
   }
 
 -- | Read configuration from config file and command line arguments
-parse_args :: IO (Either Text Options)
+parse_args :: MonadIO m => m (Either Text Options)
 parse_args = do
   opts <- Turtle.options "Launch project environment" parser
   config_path <- maybe JSON.default_path pure (config opts)

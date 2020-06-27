@@ -15,7 +15,7 @@ import qualified System.IO as IO
 import           Turtle hiding (toLines)
 
 -- | Locate a file going up the filesystem hierarchy
-find_dominating_file :: FilePath -> FilePath -> IO (Maybe FilePath)
+find_dominating_file :: MonadIO m => FilePath -> FilePath -> m (Maybe FilePath)
 find_dominating_file path' name = do
   let candidate = path' </> name
       is_root = parent path' == root path'

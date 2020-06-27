@@ -39,13 +39,13 @@ list projects query = do
     _ -> log_error "No projects."
 
 -- | Wrap GHC to build nixon with a custom config.
-build_action :: BuildOpts -> IO ()
+build_action :: MonadIO m => BuildOpts -> m ()
 build_action opts = do
   let infile = format fp (Options.infile opts)
       outfile = format fp (Options.outfile opts)
       args = ["-Wall", "-threaded", "-rtsopts", "-with-rtsopts=-N", "-o", outfile, infile]
   code <- proc "ghc" args mempty
-  case code of
+  liftIO $ case code of
     ExitFailure _ -> putStrLn "Compilation failed!"
     ExitSuccess -> putStrLn "Compilation successful!"
 
@@ -134,10 +134,10 @@ run_action opts = do
 -- TODO: Pingbot integration?
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
-nixon_with_config :: Config -> IO ()
+nixon_with_config :: MonadIO m => Config -> m ()
 nixon_with_config user_config = do
   opts <- either die pure =<< Options.parse_args
-  err <- try $ runNixon opts user_config $ case Options.sub_command opts of
+  err <- liftIO $ try $ runNixon opts user_config $ case Options.sub_command opts of
     BuildCommand build_opts -> do
       log_info "Running <build> command"
       liftIO (build_action build_opts)
@@ -154,7 +154,7 @@ nixon_with_config user_config = do
   case err of
     Left (EmptyError msg) -> die msg
     Right _ -> pure ()
-  where die err = log_error err >> exit (ExitFailure 1)
+  where die err = liftIO $ log_error err >> exit (ExitFailure 1)
 
 default_config :: Config
 default_config = Config.Config
@@ -168,5 +168,5 @@ default_config = Config.Config
   }
 
 -- | Nixon with default configuration
-nixon :: IO ()
+nixon :: MonadIO m => m ()
 nixon = nixon_with_config default_config

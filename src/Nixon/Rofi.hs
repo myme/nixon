@@ -75,7 +75,7 @@ data RofiResult = RofiCancel
                 deriving (Eq, Show)
 
 -- | Launch rofi with the given options and candidates
-rofi :: RofiOpts -> Shell Candidate -> IO (Selection Text)
+rofi :: MonadIO m => RofiOpts -> Shell Candidate -> m (Selection Text)
 rofi opts candidates = do
   let args = "-dmenu" : build_args
         [ arg_fmt "-matching" (bool "fuzzy" "normal" . fromMaybe False) (_exact opts)
@@ -93,7 +93,7 @@ rofi opts candidates = do
     _ -> undefined
 
 -- | Format project names suited to rofi selection list
-rofi_format_project_name :: Project -> IO Text
+rofi_format_project_name :: MonadIO m => Project -> m Text
 rofi_format_project_name project = do
   path <- implode_home (project_dir project)
   let
@@ -105,7 +105,7 @@ rofi_format_project_name project = do
   pure $ fmt name_padded dir
 
 -- | Launch rofi with a list of projects as candidates
-rofi_projects :: RofiOpts -> Maybe Text -> [Project] -> IO (Maybe Project)
+rofi_projects :: MonadIO m => RofiOpts -> Maybe Text -> [Project] -> m (Maybe Project)
 rofi_projects opts query projects = do
   let opts' = opts
         <> rofi_prompt "Select project"
@@ -117,7 +117,7 @@ rofi_projects opts query projects = do
     Selection _ key -> Map.lookup key map'
     _ -> Nothing
 
-rofi_project_command :: RofiOpts -> ProjectOpts -> Project -> IO (Maybe Command)
+rofi_project_command :: MonadIO m => RofiOpts -> ProjectOpts -> Project -> m (Maybe Command)
 rofi_project_command opts popts project = do
   let commands = Select.build_map show_command $ find_project_commands project
       opts' = opts <> rofi_prompt "Select command" <> maybe mempty rofi_query (Options.command popts)

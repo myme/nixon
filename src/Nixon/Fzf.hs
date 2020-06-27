@@ -110,7 +110,7 @@ format_field_index (FieldFrom idx) = format (d%"..") idx
 format_field_index (FieldRange start stop) = format (d%".."%d) start stop
 format_field_index AllFields = ".."
 
-fzf_raw :: FzfOpts -> Shell Line -> IO (Selection Text)
+fzf_raw :: MonadIO m => FzfOpts -> Shell Line -> m (Selection Text)
 fzf_raw opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
@@ -136,7 +136,7 @@ fzf_raw opts candidates = do
         ["alt-enter", selection] -> Selection (Alternate 0) selection
         _ -> undefined
 
-fzf :: FzfOpts -> Shell Candidate -> IO (Selection Text)
+fzf :: MonadIO m => FzfOpts -> Shell Candidate -> m (Selection Text)
 fzf opts candidates = do
   let mkidx = zip (map (T.pack . show) [1 :: Int ..])
       mkout = map (uncurry (format (s%" "%s)) . second Select.candidate_title)
@@ -149,20 +149,20 @@ fzf opts candidates = do
     CanceledSelection -> CanceledSelection
     EmptySelection -> EmptySelection
 
-fzf_with_edit :: FzfOpts -> Shell Candidate -> IO (Selection Text)
+fzf_with_edit :: (MonadIO m, MonadException m) => FzfOpts -> Shell Candidate -> m (Selection Text)
 fzf_with_edit opts candidates = fzf opts candidates >>= \case
   Selection (Alternate idx) selection -> fzf_edit_selection selection >>= \case
     Just selection' -> pure $ Selection (Alternate idx) selection'
     Nothing -> pure EmptySelection
   x -> pure x
 
-fzf_format_project_name :: Project -> IO (Text, Project)
+fzf_format_project_name :: MonadIO m => Project -> m (Text, Project)
 fzf_format_project_name project = do
   path <- implode_home (project_path project)
   pure (format fp path, project)
 
 -- | Find projects
-fzf_projects :: FzfOpts -> Maybe Text -> [Project] -> IO (Maybe Project)
+fzf_projects :: MonadIO m => FzfOpts -> Maybe Text -> [Project] -> m (Maybe Project)
 fzf_projects opts query projects = do
   candidates <- Map.fromList <$> traverse fzf_format_project_name projects
   let opts' = opts
@@ -178,7 +178,7 @@ fzf_projects opts query projects = do
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?
 -- | Find commands applicable to a project
-fzf_project_command :: FzfOpts -> ProjectOpts -> Project -> IO (Maybe Command)
+fzf_project_command :: (MonadIO m, MonadException m) => FzfOpts -> ProjectOpts -> Project -> m (Maybe Command)
 fzf_project_command opts popts project = do
   let commands = map (show_command &&& id) $ find_project_commands project
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
@@ -199,7 +199,7 @@ fzf_project_command opts popts project = do
     _ -> pure Nothing
 
 -- | Use readline to manipulate/change a fzf selection
-fzf_edit_selection :: Text -> IO (Maybe Text)
+fzf_edit_selection :: (MonadIO m, MonadException m) => Text -> m (Maybe Text)
 fzf_edit_selection selection = runInputT defaultSettings $ do
   line <- getInputLineWithInitial "> " (T.unpack selection , "")
   pure $ case line of

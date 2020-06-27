@@ -38,7 +38,7 @@ mkproject :: FilePath -> Project
 mkproject path' = Project (filename path') (parent path') []
 
 -- | Replace the value of $HOME in a path with "~"
-implode_home :: FilePath -> IO FilePath
+implode_home :: MonadIO m => FilePath -> m FilePath
 implode_home path' = do
   home' <- home
   pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')
