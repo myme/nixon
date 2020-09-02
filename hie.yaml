@@ -1,4 +1,6 @@
 cradle:
     multi:
-        - path: "."
-          config: {cradle: {cabal: {component: "lib:nixon"}}}
+        - path: "./app"
+          config: {cradle: {cabal: {component: "nixon:exe:nixon"}}}
+        - path: "./src"
+          config: {cradle: {cabal: {component: "nixon:lib:nixon"}}}
