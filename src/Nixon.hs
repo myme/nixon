@@ -9,6 +9,7 @@ import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Reader
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
+import           Nixon.Command
 import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Options (Backend(..), ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
@@ -20,10 +21,10 @@ import           Nixon.Logging
 import           Nixon.Nix
 import           Nixon.Project hiding (project_types)
 import           Nixon.Project.Defaults
-import           Nixon.Project.Types (ProjectType, show_command)
+import           Nixon.Project.Types (ProjectType)
 import           Nixon.Rofi
-import qualified Nixon.Select as Select
 import           Nixon.Select (Selection(..), Selector)
+import qualified Nixon.Select as Select
 import           Nixon.Types
 import           Prelude hiding (FilePath, log)
 import           Turtle hiding (decimal, die, env, err, find, shell, x)

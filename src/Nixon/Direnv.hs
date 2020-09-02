@@ -6,9 +6,9 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           Data.List (elemIndex)
 import qualified Data.Text as T
+import           Nixon.Command
 import           Nixon.Types
 import           Nixon.Project
-import           Nixon.Project.Types
 import           Nixon.Utils
 import           Prelude hiding (FilePath)
 import           Turtle hiding (find, root)

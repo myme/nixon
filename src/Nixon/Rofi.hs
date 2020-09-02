@@ -15,11 +15,11 @@ import           Data.Bool (bool)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
+import           Nixon.Command (show_command)
 import           Nixon.Config.Options (ProjectOpts)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Process
 import           Nixon.Project
-import           Nixon.Project.Types (show_command)
 import           Nixon.Select (Candidate, Selection(..), SelectionType(..))
 import qualified Nixon.Select as Select
 import           Nixon.Utils (toLines)

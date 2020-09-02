@@ -23,8 +23,9 @@ import           Data.List (sortBy)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
+import           Nixon.Command (Command(..), Part(..), command_gui, command_options)
+import           Nixon.Command.Defaults (default_commands)
 import           Nixon.Process
-import           Nixon.Project.Types (command_gui, command_options)
 import           Nixon.Project.Types as Types
 import           Nixon.Select (Select, Selection(..))
 import qualified Nixon.Select as Select
@@ -101,7 +102,8 @@ find_projects max_depth project_types source_dirs
       Just project -> pure project
 
 find_project_commands :: Project -> [Command]
-find_project_commands project = concatMap project_commands (Types.project_types project)
+find_project_commands project = concatMap match_commands (Types.project_types project)
+  where match_commands p = fromMaybe [] $ lookup (Types.project_id p) default_commands
 
 expand_path :: FilePath -> IO [FilePath]
 expand_path path' = do

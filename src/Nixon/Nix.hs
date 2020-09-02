@@ -9,10 +9,9 @@ module Nixon.Nix
 import Control.Monad (filterM)
 import Control.Monad.Trans.Maybe
 import Data.Maybe (listToMaybe)
+import Nixon.Command hiding (dir)
 import Nixon.Types
 import Nixon.Process
-import Nixon.Project
-import Nixon.Project.Types hiding (dir)
 import Nixon.Utils
 import Prelude hiding (FilePath)
 import Turtle hiding (arg)
