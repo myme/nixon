@@ -10,7 +10,7 @@ import           Control.Monad.Trans.Reader
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
 import qualified Nixon.Config.JSON as JSON
-import           Nixon.Config.Options (Backend(..), BuildOpts, ProjectOpts, SubCommand(..))
+import           Nixon.Config.Options (Backend(..), ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
 import           Nixon.Config.Types (Config, LogLevel(..))
 import qualified Nixon.Config.Types as Config
@@ -37,17 +37,6 @@ list projects query = do
   liftIO (fzf fzf_opts (Turtle.select paths)) >>= \case
     Selection _ matching -> liftIO $ T.putStr matching
     _ -> log_error "No projects."
-
--- | Wrap GHC to build nixon with a custom config.
-build_action :: MonadIO m => BuildOpts -> m ()
-build_action opts = do
-  let infile = format fp (Options.infile opts)
-      outfile = format fp (Options.outfile opts)
-      args = ["-Wall", "-threaded", "-rtsopts", "-with-rtsopts=-N", "-o", outfile, infile]
-  code <- proc "ghc" args mempty
-  liftIO $ case code of
-    ExitFailure _ -> putStrLn "Compilation failed!"
-    ExitSuccess -> putStrLn "Compilation successful!"
 
 fail_empty :: (MonadIO m) => Text -> m (Maybe a) -> m a
 fail_empty err action = action >>= \case
@@ -138,9 +127,6 @@ nixon_with_config :: MonadIO m => Config -> m ()
 nixon_with_config user_config = do
   opts <- either die pure =<< Options.parse_args
   err <- liftIO $ try $ runNixon opts user_config $ case Options.sub_command opts of
-    BuildCommand build_opts -> do
-      log_info "Running <build> command"
-      liftIO (build_action build_opts)
     ProjectCommand project_opts -> do
       log_info "Running <project> command"
       env <- ask

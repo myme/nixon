@@ -3,14 +3,12 @@ module Nixon.Config.Options
   , LogLevel(..)
   , Options(..)
   , SubCommand(..)
-  , BuildOpts(..)
   , ProjectOpts(..)
   , default_options
   , merge_opts
   , parse_args
   ) where
 
-import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nixon.Config.JSON (JSONError(..))
@@ -43,15 +41,9 @@ data Options = Options
   , sub_command :: SubCommand
   } deriving Show
 
-data SubCommand = BuildCommand BuildOpts
-                | ProjectCommand ProjectOpts
+data SubCommand = ProjectCommand ProjectOpts
                 | RunCommand ProjectOpts
                 deriving Show
-
-data BuildOpts = BuildOpts
-  { infile :: FilePath
-  , outfile :: FilePath
-  } deriving Show
 
 data ProjectOpts = ProjectOpts
   { project :: Maybe Text
@@ -96,8 +88,7 @@ parser = Options
   <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
   <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
   <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/nixon)")
-  <*> ( BuildCommand <$> subcommand "build" "Build custom nixon" build_parser <|>
-        ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
+  <*> ( ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
         RunCommand <$> subcommand "run" "Run command" project_parser <|>
         ProjectCommand <$> project_parser)
   where
@@ -112,11 +103,6 @@ parser = Options
       ,("warn", LogWarning)
       ,("error", LogError)
       ]
-
-build_parser :: Parser BuildOpts
-build_parser = BuildOpts
-  <$> (fromMaybe "nixon.hs" <$> optional (argPath "infile" "Input file (default: nixon.hs)"))
-  <*> (fromMaybe "nixon"    <$> optional (argPath "outfile" "Output file (default: nixon)"))
 
 project_parser :: Parser ProjectOpts
 project_parser = ProjectOpts
