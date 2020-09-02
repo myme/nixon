@@ -1,6 +1,14 @@
 cradle:
-    multi:
-        - path: "./app"
-          config: {cradle: {cabal: {component: "nixon:exe:nixon"}}}
-        - path: "./src"
-          config: {cradle: {cabal: {component: "nixon:lib:nixon"}}}
+  multi:
+    - path: "./Setup.hs"
+      config: { cradle: { none:  } }
+    - path: "./"
+      config:
+        cradle:
+          cabal:
+              - path: "./app"
+                component: "nixon:exe:nixon"
+              - path: "./src"
+                component: "nixon:lib:nixon"
+              - path: "./test"
+                component: "nixon:test:nixon-test"

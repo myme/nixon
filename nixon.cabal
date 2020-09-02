@@ -70,42 +70,12 @@ library
                      , TupleSections
   ghc-options:         -Wall
 
+
 executable nixon
   main-is:             Main.hs
-  -- other-modules:       Nixon
-  --                    , Nixon.Config.JSON
-  --                    , Nixon.Config.Options
-  --                    , Nixon.Config.Types
-  --                    , Nixon.Direnv
-  --                    , Nixon.Fzf
-  --                    , Nixon.Logging
-  --                    , Nixon.Nix
-  --                    , Nixon.Process
-  --                    , Nixon.Project
-  --                    , Nixon.Project.Defaults
-  --                    , Nixon.Project.Types
-  --                    , Nixon.Rofi
-  --                    , Nixon.Select
-  --                    , Nixon.Types
-  --                    , Nixon.Utils
   hs-source-dirs:      app
   build-depends:       base >=4.12
-                     -- , aeson
-                     -- , bytestring
-                     -- , containers
-                     -- , directory
-                     -- , foldl
-                     -- , haskeline
                      , nixon
-                     -- , optparse-applicative
-                     -- , process
-                     -- , strip-ansi-escape
-                     -- , text
-                     -- , transformers
-                     -- , turtle
-                     -- , unix
-                     -- , unordered-containers
-                     -- , wordexp
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings
                      , GeneralizedNewtypeDeriving
