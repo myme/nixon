@@ -1,4 +1,4 @@
-module Text.Nixon.Logging (logging) where
+module Test.Nixon.Logging (logging) where
 
 import Control.Monad.Trans.RWS
 import Data.Text

@@ -3,14 +3,15 @@ module Main where
 import           Data.Char (isSpace, isPrint)
 import           Data.Text (Text)
 import qualified Data.Text as T
+import           Nixon.Command ( Command(..), Part(..), path, shell)
 import           Nixon.Project
 import           Nixon.Project.Types
 import           Nixon.Select
 import           Nixon.Utils
 import           Test.Hspec
+import           Test.Nixon.Logging
 import           Test.QuickCheck
 import           Test.QuickCheck.Instances.Text ()
-import           Text.Nixon.Logging
 
 empty :: Monad m => a -> m (Selection Text)
 empty = const (pure EmptySelection)
