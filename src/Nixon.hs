@@ -10,6 +10,7 @@ import           Control.Monad.Trans.Reader
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
 import           Nixon.Command
+import           Nixon.Command.Defaults (default_commands)
 import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Options (Backend(..), ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
@@ -20,8 +21,9 @@ import           Nixon.Fzf
 import           Nixon.Logging
 import           Nixon.Nix
 import           Nixon.Project hiding (project_types)
+import qualified Nixon.Project as P
 import           Nixon.Project.Defaults
-import           Nixon.Project.Types (ProjectType)
+import           Nixon.Project.Types (ProjectType, project_id)
 import           Nixon.Rofi
 import           Nixon.Select (Selection(..), Selector)
 import qualified Nixon.Select as Select
@@ -70,8 +72,9 @@ run_cmd :: CommandSelector
              -> ProjectOpts
              -> Selector
              -> Nixon ()
-run_cmd find_command project opts selector = with_local_config project $ do
-  cmd <- liftIO $ fail_empty "No command selected." $ find_command opts project
+run_cmd select_command project opts selector = with_local_config project $ do
+  cmds <- filter_elems (map project_id $ P.project_types project) . commands <$> ask
+  cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
   if Options.select opts
     then liftIO (T.putStrLn $ show_command cmd)
     else do
@@ -81,7 +84,7 @@ run_cmd find_command project opts selector = with_local_config project $ do
       liftIO $ Select.runSelect selector $ project_exec cmd' project
 
 type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
-type CommandSelector = ProjectOpts -> Project -> IO (Maybe Command)
+type CommandSelector = Project -> ProjectOpts -> [Command] -> IO (Maybe Command)
 type GenericSelector = Shell Select.Candidate-> IO (Selection Text)
 
 get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, GenericSelector)
@@ -92,7 +95,7 @@ get_selectors = do
       rofi_opts = maybe mempty rofi_exact (exact_match env)
   pure $ case backend env of
     Fzf -> (ptypes, fzf_projects fzf_opts, fzf_project_command fzf_opts, fzf_with_edit fzf_opts)
-    Rofi -> (ptypes, rofi_projects rofi_opts, rofi_project_command rofi_opts, rofi rofi_opts)
+    Rofi -> (ptypes, rofi_projects rofi_opts, \_ -> rofi_project_command rofi_opts, rofi rofi_opts)
 
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
@@ -115,7 +118,7 @@ project_action projects opts
 -- | Run a command from current directory
 run_action :: ProjectOpts -> Nixon ()
 run_action opts = do
-  (ptypes, __project, find_command, selector) <- get_selectors
+  (ptypes, _project, find_command, selector) <- get_selectors
   project <- liftIO (find_in_project_or_default ptypes =<< pwd)
   run_cmd find_command project opts selector
 
@@ -149,6 +152,7 @@ default_config = Config.Config
   { Config.backend = Nothing
   , Config.exact_match = Nothing
   , Config.project_types = default_projects
+  , Config.commands = default_commands
   , Config.source_dirs = []
   , Config.use_direnv = Nothing
   , Config.use_nix = Nothing

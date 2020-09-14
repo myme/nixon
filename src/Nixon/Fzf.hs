@@ -178,13 +178,13 @@ fzf_projects opts query projects = do
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?
 -- | Find commands applicable to a project
-fzf_project_command :: (MonadIO m, MonadException m) => FzfOpts -> ProjectOpts -> Project -> m (Maybe Command)
-fzf_project_command opts popts project = do
-  let commands = map (show_command &&& id) $ find_project_commands project
+fzf_project_command :: (MonadIO m, MonadException m) => FzfOpts -> Project -> ProjectOpts -> [Command] -> m (Maybe Command)
+fzf_project_command opts project popts commands = do
+  let candidates = map (show_command &&& id) commands
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
       opts' = opts <> fzf_header header <> maybe mempty fzf_query (Options.command popts) <> fzf_no_sort
-      input' = Select.Identity <$> select (fst <$> commands)
-  fmap (`lookup` commands) <$> fzf opts' input' >>= \case
+      input' = Select.Identity <$> select (fst <$> candidates)
+  fmap (`lookup` candidates) <$> fzf opts' input' >>= \case
     Selection Default cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
       resolved <- liftIO $ Select.runSelect (fzf_with_edit mempty) (resolve_command project cmd')
