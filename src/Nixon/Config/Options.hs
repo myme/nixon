@@ -14,6 +14,7 @@ import qualified Data.Text as Text
 import           Nixon.Config.JSON (JSONError(..))
 import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Types hiding (Config(..))
+import           Nixon.Utils (implode_home)
 import           Prelude hiding (FilePath)
 import qualified Options.Applicative as Opts
 import           Turtle hiding (err, select)
@@ -79,15 +80,15 @@ maybeSwitch long short help = Opts.flag Nothing (Just True) (
                                   Opts.long ("no-" ++ Text.unpack long))
 
 -- TODO: Allow switching off "use_direnv" and "use_nix"
-parser :: Parser Options
-parser = Options
+parser :: FilePath -> Parser Options
+parser default_config = Options
   <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
   <*> maybeSwitch "exact" 'e' "Enable exact match"
   <*> many (optPath "path" 'p' "Project directory")
   <*> maybeSwitch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
   <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
   <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
-  <*> optional (optPath "config" 'C' "Path to configuration file (default: ~/.config/nixon)")
+  <*> optional (optPath "config" 'C' (config_help default_config))
   <*> ( ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
         RunCommand <$> subcommand "run" "Run command" project_parser <|>
         ProjectCommand <$> project_parser)
@@ -103,6 +104,7 @@ parser = Options
       ,("warn", LogWarning)
       ,("error", LogError)
       ]
+    config_help = fromString . Text.unpack . format ("Path to configuration file (default: "%fp%")")
 
 project_parser :: Parser ProjectOpts
 project_parser = ProjectOpts
@@ -122,7 +124,8 @@ merge_opts secondary primary = ProjectOpts
 -- | Read configuration from config file and command line arguments
 parse_args :: MonadIO m => m (Either Text Options)
 parse_args = do
-  opts <- Turtle.options "Launch project environment" parser
+  default_config <- implode_home =<< JSON.default_path
+  opts <- Turtle.options "Launch project environment" (parser default_config)
   config_path <- maybe JSON.default_path pure (config opts)
   JSON.read_config config_path >>= \case
     Left NoSuchFile -> case config opts of
