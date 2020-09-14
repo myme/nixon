@@ -26,6 +26,7 @@ import           Nixon.Rofi
 import           Nixon.Select (Selection(..), Selector)
 import qualified Nixon.Select as Select
 import           Nixon.Types
+import           Nixon.Utils
 import           Prelude hiding (FilePath, log)
 import           Turtle hiding (decimal, die, env, err, find, shell, x)
 

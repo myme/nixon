@@ -4,6 +4,7 @@ module Nixon.Utils
  , shell_to_list
  , toLines
  , takeToSpace
+ , implode_home
  ) where
 
 import           Data.Char (isSpace)
@@ -37,3 +38,8 @@ toLines = ((select . toList . textToLines) =<<)
 
 takeToSpace :: Text -> Text
 takeToSpace = T.takeWhile (not . isSpace)
+-- | Replace the value of $HOME in a path with "~"
+implode_home :: MonadIO m => FilePath -> m FilePath
+implode_home path' = do
+  home' <- home
+  pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')

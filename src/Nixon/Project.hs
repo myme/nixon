@@ -6,7 +6,6 @@ module Nixon.Project
   , find_projects
   , find_projects_by_name
   , find_project_commands
-  , implode_home
   , mkproject
   , parents
   , project_exec
@@ -37,12 +36,6 @@ import           Turtle hiding (f, find, sort, sortBy, text, toText)
 
 mkproject :: FilePath -> Project
 mkproject path' = Project (filename path') (parent path') []
-
--- | Replace the value of $HOME in a path with "~"
-implode_home :: MonadIO m => FilePath -> m FilePath
-implode_home path' = do
-  home' <- home
-  pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')
 
 parents :: FilePath -> [FilePath]
 parents path'

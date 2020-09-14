@@ -22,7 +22,7 @@ import           Nixon.Process
 import           Nixon.Project
 import           Nixon.Select (Candidate, Selection(..), SelectionType(..))
 import qualified Nixon.Select as Select
-import           Nixon.Utils (toLines)
+import           Nixon.Utils (implode_home, toLines)
 import           Prelude hiding (FilePath)
 import qualified Turtle as Tu
 import           Turtle hiding (arg, decimal, s, d, f, x, shell, toLines)
