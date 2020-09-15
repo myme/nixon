@@ -67,6 +67,12 @@ default_projects =
    ,"npm start" ! desc "NPM run"
    ,"npm test" ! desc "NPM test"
    ]
+  ,proj ["yarn.lock"] "Yarn project"
+   ["yarn run" <> npm_scripts ! desc "Run yarn scripts"
+   ,"yarn install" ! desc "Yarn install"
+   ,"yarn start" ! desc "Yarn run"
+   ,"yarn test" ! desc "Yarn test"
+   ]
   ,proj [ProjectOr $ map ProjectFile nix_files] "Nix project"
    ["nix-build" ! desc "Nix build"
    ,"nix-shell" ! desc "Nix shell"
