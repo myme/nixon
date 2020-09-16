@@ -41,6 +41,12 @@ in haskellPackages.mkDerivation {
   ];
   license = pkgs.stdenv.lib.licenses.mit;
   postInstall = ''
+    # Install widgets into share/nixon
+    mkdir -p $out/share/nixon
+    install ${src}/extra/nixon-widget.bash $out/share/nixon
+    install ${src}/extra/nixon-widget.zsh $out/share/nixon
+
+    # Install zsh widget into share/zsh/site-functions
     mkdir -p $out/share/zsh/site-functions
     install ${src}/extra/nixon-widget.zsh $out/share/zsh/site-functions/_nixon_widget
   '';
