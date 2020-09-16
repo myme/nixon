@@ -32,8 +32,8 @@ library
   hs-source-dirs:      src
   exposed-modules:     Nixon
                      , Nixon.Command
-                     , Nixon.Command.Defaults
                      , Nixon.Config.JSON
+                     , Nixon.Config.Markdown
                      , Nixon.Config.Options
                      , Nixon.Config.Types
                      , Nixon.Direnv
@@ -56,6 +56,8 @@ library
                      , foldl
                      , haskeline
                      , optparse-applicative
+                     , pandoc
+                     , pandoc-types
                      , process
                      , strip-ansi-escape
                      , text

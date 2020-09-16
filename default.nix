@@ -23,6 +23,8 @@ in haskellPackages.mkDerivation {
     haskeline
     optparse-applicative
     quickcheck-instances
+    pandoc
+    pandoc-types
     process
     strip-ansi-escape
     text
