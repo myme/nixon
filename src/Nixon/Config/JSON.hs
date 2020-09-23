@@ -4,6 +4,7 @@ module Nixon.Config.JSON
   ( Config(..)
   , JSONError(..)
   , default_path
+  , empty
   , find_local_config
   , read_config
   ) where
@@ -19,7 +20,7 @@ import           Nixon.Utils (find_dominating_file)
 import           Prelude hiding (FilePath)
 import           System.Directory (XdgDirectory(..), getXdgDirectory)
 import           System.IO.Error
-import           Turtle hiding (err)
+import           Turtle hiding (empty, err)
 
 data Config = Config
   { exact_match :: Maybe Bool
@@ -27,6 +28,13 @@ data Config = Config
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
   } deriving (Generic, Show)
+
+empty :: Config
+empty = Config { exact_match = Nothing
+               , source_dirs = []
+               , use_direnv = Nothing
+               , use_nix = Nothing
+               }
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \v -> Config
