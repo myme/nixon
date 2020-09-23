@@ -9,24 +9,18 @@ module Nixon.Project
   , parents
   , project_exec
   , project_path
-  , resolve_command
   , sort_projects
   ) where
 
-import           Control.Exception
 import qualified Control.Foldl as Fold
 import           Control.Monad (filterM)
 import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (isInfixOf)
-import qualified Data.Text as T
-import           Nixon.Command (Command(..), Part(..), command_gui, command_options)
+import           Nixon.Command (Command(..))
 import           Nixon.Process
 import           Nixon.Project.Types as Types
-import           Nixon.Select (Select, Selection(..))
-import qualified Nixon.Select as Select
-import           Nixon.Types
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           System.Wordexp
@@ -110,24 +104,19 @@ find_project_types path' project_types = testdir path' >>= \case
           [] -> pure True
           xs -> fmap and . traverse (test_marker path') $ xs
 
-project_exec :: Command -> Project -> Select ()
-project_exec cmd project = resolve_command project cmd >>= \case
-    Selection _ cmd' -> go cmd'
-    _ -> liftIO $ throwIO (EmptyError "Command placeholder expansion aborted.")
-  where
-    go cmd' = liftIO $ IO.hIsTerminalDevice IO.stdin >>= \case
-      True  -> run [cmd'] (Just $ project_path project)
-      False -> do
-        let is_gui = command_gui (command_options cmd)
-            path' = Just $ project_path project
-        if is_gui
-          then do
-            shell' <- fromMaybe "bash" <$> need "SHELL"
-            spawn (shell' : ["-c", cmd']) path'
-          else do
-            -- TODO: Add config for terminal
-            let terminal = "x-terminal-emulator"
-            spawn (terminal : ["-e", cmd']) path'
+project_exec :: Command -> Project -> IO ()
+project_exec cmd project = IO.hIsTerminalDevice IO.stdin >>= \case
+  True  -> run [cmdSrc cmd] (Just $ project_path project)
+  False -> do
+    let path' = Just $ project_path project
+    if cmdIsGui cmd
+      then do
+        shell' <- fromMaybe "bash" <$> need "SHELL"
+        spawn (shell' : ["-c", cmdSrc cmd]) path'
+      else do
+        -- TODO: Add config for terminal
+        let terminal = "x-terminal-emulator"
+        spawn (terminal : ["-e", cmdSrc cmd]) path'
 
 -- | Test that a marker is valid for a path
 test_marker :: FilePath -> ProjectMarker -> IO Bool
@@ -136,24 +125,3 @@ test_marker p (ProjectFile marker) = testfile (p </> marker)
 test_marker p (ProjectDir  marker) = testdir (p </> marker)
 test_marker p (ProjectOr   ms)     = or <$> mapM (test_marker p) ms
 test_marker p (ProjectFunc marker) = marker p
-
--- | Interpolate all command parts into a single text value.
-resolve_command :: Project -> Command -> Select (Selection Text)
-resolve_command project (Command parts opts) = go [] parts
-  where
-    go is [] = pure $ Select.selection (T.unwords (reverse is))
-    go is (p:ps) = interpolate p >>= \case
-      Selection _ i -> go (i:is) ps
-      CanceledSelection -> pure CanceledSelection
-      EmptySelection    -> pure EmptySelection
-
-    interpolate (TextPart t) = pure $ Select.selection t
-    interpolate PathPart = pure $ Select.selection $ format fp $ project_path project
-    interpolate DirPart = Select.select $ do
-      path' <- lstree (project_path project)
-      guard =<< testdir path'
-      return $ Select.Identity (format fp path')
-    interpolate (ShellPart _ f) = f project
-    interpolate (NestedPart ps) = do
-      nested <- resolve_command project (Command ps opts)
-      pure (format ("\""%s%"\"") <$> nested)

@@ -22,7 +22,7 @@ import           Data.List (sort)
 import qualified Data.Map as Map
 import           Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
-import           Nixon.Command (command_options, show_command)
+import           Nixon.Command (Command(..))
 import           Nixon.Config.Options (ProjectOpts)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Process
@@ -180,23 +180,25 @@ fzf_projects opts query projects = do
 -- | Find commands applicable to a project
 fzf_project_command :: (MonadIO m, MonadException m) => FzfOpts -> Project -> ProjectOpts -> [Command] -> m (Maybe Command)
 fzf_project_command opts project popts commands = do
-  let candidates = map (show_command &&& id) commands
+  let candidates = map (format_cmd &&& id) commands
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
       opts' = opts <> fzf_header header <> maybe mempty fzf_query (Options.command popts) <> fzf_no_sort
       input' = Select.Identity <$> select (fst <$> candidates)
   fmap (`lookup` candidates) <$> fzf opts' input' >>= \case
     Selection Default cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
-      resolved <- liftIO $ Select.runSelect (fzf_with_edit mempty) (resolve_command project cmd')
-      case resolved of
-        Selection _ selection
-          | Options.select popts -> pure (fromString $ T.unpack selection)
-          | otherwise -> do
-            edited <- fromString . T.unpack <$> MaybeT (fzf_edit_selection selection)
-            pure $ edited { command_options = command_options cmd' }
-        _ -> MaybeT (pure Nothing)
+      pure cmd'
+      -- resolved <- liftIO $ Select.runSelect (fzf_with_edit mempty) (resolve_command cmd')
+      -- case resolved of
+      --   Selection _ selection
+      --     | Options.select popts -> pure (cmd' { cmdSrc = selection })
+      --     | otherwise -> do
+      --       edited <- MaybeT (fzf_edit_selection selection)
+      --       pure $ cmd' { cmdSrc = edited }
+      --   _ -> MaybeT (pure Nothing)
     Selection (Alternate _) cmd -> pure cmd
     _ -> pure Nothing
+  where format_cmd cmd = format (s%" - "%s) (cmdName cmd) (cmdSrc cmd)
 
 -- | Use readline to manipulate/change a fzf selection
 fzf_edit_selection :: (MonadIO m, MonadException m) => Text -> m (Maybe Text)

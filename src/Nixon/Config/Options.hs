@@ -11,12 +11,13 @@ module Nixon.Config.Options
 
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Nixon.Config.JSON (JSONError(..))
+import           Nixon.Command
 import qualified Nixon.Config.JSON as JSON
+import qualified Nixon.Config.Markdown as MD
 import           Nixon.Config.Types hiding (Config(..))
 import           Nixon.Utils (implode_home)
-import           Prelude hiding (FilePath)
 import qualified Options.Applicative as Opts
+import           Prelude hiding (FilePath)
 import           Turtle hiding (err, select)
 
 -- TODO: Add CLI opt for outputting bash/zsh completion script.
@@ -39,6 +40,7 @@ data Options = Options
   , use_nix :: Maybe Bool
   , loglevel :: Maybe LogLevel
   , config :: Maybe FilePath
+  , commands :: [Command]
   , sub_command :: SubCommand
   } deriving Show
 
@@ -62,6 +64,7 @@ default_options = Options
   , use_nix = Nothing
   , loglevel = Just LogWarning
   , config = Nothing
+  , commands = []
   , sub_command = ProjectCommand ProjectOpts
     { project = Nothing
     , command = Nothing
@@ -89,6 +92,7 @@ parser default_config = Options
   <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
   <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
   <*> optional (optPath "config" 'C' (config_help default_config))
+  <*> pure []
   <*> ( ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
         RunCommand <$> subcommand "run" "Run command" project_parser <|>
         ProjectCommand <$> project_parser)
@@ -127,15 +131,10 @@ parse_args = do
   default_config <- implode_home =<< JSON.default_path
   opts <- Turtle.options "Launch project environment" (parser default_config)
   config_path <- maybe JSON.default_path pure (config opts)
-  JSON.read_config config_path >>= \case
-    Left NoSuchFile -> case config opts of
-      Nothing -> pure $ Right opts
-      Just p  -> pure $ Left (format ("No such file:"%fp) p)
-    Left EmptyFile -> pure $ Right opts
-    Left (ParseError err) -> pure $ Left err
-    Right json -> pure $ Right opts
-      { exact_match = exact_match opts <|> JSON.exact_match json
-      , source_dirs = JSON.source_dirs json ++ source_dirs opts
-      , use_direnv = use_direnv opts <|> JSON.use_direnv json
-      , use_nix = use_nix opts <|> JSON.use_nix json
+  liftIO $ MD.readMarkdown config_path >>= \(cfg, cmds) -> pure $ Right opts
+      { exact_match = exact_match opts <|> JSON.exact_match cfg
+      , source_dirs = JSON.source_dirs cfg ++ source_dirs opts
+      , use_direnv = use_direnv opts <|> JSON.use_direnv cfg
+      , use_nix = use_nix opts <|> JSON.use_nix cfg
+      , commands = cmds
       }

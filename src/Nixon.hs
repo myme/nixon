@@ -10,7 +10,6 @@ import           Control.Monad.Trans.Reader
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text.IO as T
 import           Nixon.Command
-import           Nixon.Command.Defaults (default_commands)
 import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Options (Backend(..), ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
@@ -31,6 +30,7 @@ import           Nixon.Types
 import           Nixon.Utils
 import           Prelude hiding (FilePath, log)
 import           Turtle hiding (decimal, die, env, err, find, shell, x)
+import Data.List (intersect)
 
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Maybe Text -> Nixon ()
@@ -73,15 +73,24 @@ run_cmd :: CommandSelector
              -> Selector
              -> Nixon ()
 run_cmd select_command project opts selector = with_local_config project $ do
-  cmds <- filter_elems (map project_id $ P.project_types project) . commands <$> ask
+  let ptypes = map project_id $ P.project_types project
+      filter_cmd cmd = let ctypes = cmdProjectTypes cmd
+                       in null ctypes || (not $ null $ intersect ptypes ctypes)
+  cmds <- filter filter_cmd . commands <$> ask
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
   if Options.select opts
-    then liftIO (T.putStrLn $ show_command cmd)
+    then liftIO (T.putStrLn $ cmdSrc cmd)
     else do
       cmd' <- maybe_wrap_cmd project cmd
       -- TODO: Always edit command before executing?
       log_info (format ("Running command '"%w%"'") cmd')
-      liftIO $ Select.runSelect selector $ project_exec cmd' project
+      liftIO $ project_exec cmd' project
+
+  --     actual_cmd <- Select.runSelect selector resolve_command >>= \case
+  --       Selection _ c -> c
+  --       _ -> liftIO $ throwIO (EmptyError "Command placeholder expansion aborted.")
+  --     liftIO $ project_exec actual_cmd project
+  -- where resolve_command = undefined
 
 type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
 type CommandSelector = Project -> ProjectOpts -> [Command] -> IO (Maybe Command)
@@ -152,7 +161,7 @@ default_config = Config.Config
   { Config.backend = Nothing
   , Config.exact_match = Nothing
   , Config.project_types = default_projects
-  , Config.commands = default_commands
+  , Config.commands = []
   , Config.source_dirs = []
   , Config.use_direnv = Nothing
   , Config.use_nix = Nothing

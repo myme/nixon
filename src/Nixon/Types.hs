@@ -29,7 +29,7 @@ import           Turtle hiding (env)
 data Env = Env { backend :: Backend
                , exact_match :: Maybe Bool
                , project_types :: [ProjectType]
-               , commands :: [(Text, [Command])]
+               , commands :: [Command]
                , source_dirs :: [FilePath]
                , use_direnv :: Maybe Bool
                , use_nix :: Maybe Bool
@@ -53,7 +53,7 @@ build_env opts config = do
     { backend
     , exact_match =  Options.exact_match opts <|> Config.exact_match config
     , project_types = Config.project_types config
-    , commands = Config.commands config
+    , commands = Options.commands opts ++ Config.commands config
     , source_dirs = Config.source_dirs config ++ Options.source_dirs opts
     , use_direnv =  Options.use_direnv opts <|> Config.use_direnv config
     , use_nix =  Options.use_nix opts <|> Config.use_nix config

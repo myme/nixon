@@ -9,9 +9,10 @@ module Nixon.Nix
 import Control.Monad (filterM)
 import Control.Monad.Trans.Maybe
 import Data.Maybe (listToMaybe)
-import Nixon.Command hiding (dir)
-import Nixon.Types
+import Data.Text (intercalate)
+import Nixon.Command
 import Nixon.Process
+import Nixon.Types
 import Nixon.Utils
 import Prelude hiding (FilePath)
 import Turtle hiding (arg)
@@ -53,8 +54,8 @@ nix_cmd cmd path' = use_nix <$> ask >>= \case
     let parts =
           ["nix-shell"
           ,"--command"
-          ,NestedPart (command_parts cmd)
-          ,TextPart (format fp nix_file)
+          ,cmdSrc cmd
+          ,format fp nix_file
           ]
-    pure cmd { command_parts = parts }
+    pure cmd { cmdSrc = intercalate " " parts }
   _ -> pure Nothing
