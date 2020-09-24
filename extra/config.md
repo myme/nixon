@@ -38,7 +38,7 @@ nmcli -t connection | cut -d':' -f1
 ### network-connect {.command}
 
 ```bash
-nmcli connection up "$($nixon networks)"
+nmcli connection up "$(nixon networks)"
 ```
 
 ## `npm` stuff {type="npm"}
@@ -54,7 +54,7 @@ jq '.scripts | to_entries | map({ title: .key, value })' package.json
 ### npm-run {.command}
 
 ```bash
-npm run "$($nixon npm-scripts)"
+npm run "$(nixon npm-scripts)"
 ```
 
 ### npm-install {.command}
@@ -68,7 +68,7 @@ npm install
 ### yarn-run {.command}
 
 ```bash
-yarn run "$($nixon npm-scripts)"
+yarn run "$(nixon npm-scripts)"
 ```
 
 ### yarn-install {.command}
@@ -102,5 +102,5 @@ rg --files
 ### vim-file {.command}
 
 ```bash
-vim "$($nixon rg-files)"
+vim "$(nixon rg-files)"
 ```
