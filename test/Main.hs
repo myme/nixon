@@ -3,12 +3,13 @@ module Main where
 import           Data.Char (isSpace, isPrint)
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Nixon.Command ( Command(..), Part(..), path, shell)
-import           Nixon.Project
-import           Nixon.Project.Types
+-- import           Nixon.Command ( Command(..), CommandPart(..))
+-- import           Nixon.Project
+-- import           Nixon.Project.Types
 import           Nixon.Select
 import           Nixon.Utils
 import           Test.Hspec
+import           Test.Nixon.Command
 import           Test.Nixon.Logging
 import           Test.QuickCheck
 import           Test.QuickCheck.Instances.Text ()
@@ -34,30 +35,31 @@ instance Arbitrary NonWsText where
 
 main :: IO ()
 main = hspec $ do
+  describe "Command" command
   describe "Logging" logging
-  describe "Project" $
-    describe "resolve_command" $ do
-      let project = from_path "/foo/bar/baz"
+  -- describe "Project" $
+  --   describe "resolve_command" $ do
+  --     let project = from_path "/foo/bar/baz"
 
-      it "joins parts with spaces" $ do
-        res <- runSelect empty $ resolve_command project "this is a command"
-        res `shouldBe` selection "this is a command"
+  --     it "joins parts with spaces" $ do
+  --       res <- runSelect empty $ resolve_command project "this is a command"
+  --       res `shouldBe` selection "this is a command"
 
-      it "joins parts with spaces" $ do
-        res <- runSelect empty $ resolve_command project ("this is:" <> path)
-        res `shouldBe` selection "this is: /foo/bar/baz"
+  --     it "joins parts with spaces" $ do
+  --       res <- runSelect empty $ resolve_command project ("this is:" <> path)
+  --       res `shouldBe` selection "this is: /foo/bar/baz"
 
-      it "shell aborts on empty selection" $ do
-        res <- runSelect empty $ do
-          let part = shell "empty" empty
-          resolve_command project ("this is:" <> part)
-        res `shouldBe` EmptySelection
+  --     it "shell aborts on empty selection" $ do
+  --       res <- runSelect empty $ do
+  --         let part = shell "empty" empty
+  --         resolve_command project ("this is:" <> part)
+  --       res `shouldBe` EmptySelection
 
-      it "nested aborts on empty selection" $ do
-        res <- runSelect empty $ do
-          let part = Command [NestedPart [ShellPart "empty" empty]] mempty
-          resolve_command project ("this is:" <> part)
-        res `shouldBe` EmptySelection
+  --     it "nested aborts on empty selection" $ do
+  --       res <- runSelect empty $ do
+  --         let part = Command [NestedPart [ShellPart "empty" empty]] mempty
+  --         resolve_command project ("this is:" <> part)
+  --       res `shouldBe` EmptySelection
 
   describe "Utils" $
     describe "takeToSpace" $ do
