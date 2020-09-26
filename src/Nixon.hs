@@ -4,14 +4,17 @@ module Nixon
   , default_config
   ) where
 
+import           Control.Arrow (second)
 import           Control.Exception
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Reader
+import           Data.Aeson
 import           Data.Foldable (find)
 import           Data.List (intersect)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (intercalate)
 import qualified Data.Text as T
+import           Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as T
 import           Nixon.Command
 import qualified Nixon.Config.JSON as JSON
@@ -33,7 +36,7 @@ import qualified Nixon.Select as Select
 import           Nixon.Types
 import           Nixon.Utils
 import           Prelude hiding (FilePath, log)
-import           Turtle hiding (decimal, die, env, err, find, shell, x)
+import           Turtle hiding (decimal, die, env, err, find, output, shell, text, x)
 
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Maybe Text -> Nixon ()
@@ -88,7 +91,7 @@ run_cmd select_command project opts selector = with_local_config project $ do
       cmd' <- maybe_wrap_cmd project cmd >>= resolve_command project_selector
       -- TODO: Always edit command before executing?
       log_info (format ("Running command '"%w%"'") cmd')
-      -- liftIO $ project_exec cmd' False project
+      liftIO $ project_exec cmd' False project
 
 resolve_command :: Selector -> Command -> Nixon Text
 resolve_command selector cmd = do
@@ -101,8 +104,15 @@ resolve_command selector cmd = do
       Just placeholder -> do
         resolved <- resolve_command selector placeholder
         selection <- liftIO $ selector $ do
-          candidate <- inshell resolved empty
-          pure $ Select.Identity (lineToText candidate)
+          case cmdOutput placeholder of
+            Lines -> do
+              candidate <- inshell resolved empty
+              pure $ Select.Identity (lineToText candidate)
+            JSON -> do
+              (_, output) <- second encodeUtf8 <$> shellStrict resolved empty
+              case eitherDecodeStrict output :: Either String [Select.Candidate] of
+                Left err -> error err
+                Right candidates -> select candidates
         case selection of
           Selection _ result -> pure result
           _ -> error "Placeholder expansion aborted"

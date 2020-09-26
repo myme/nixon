@@ -1,4 +1,6 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RankNTypes #-}
+
 module Nixon.Select
   ( Select
   , Selection (..)
@@ -17,9 +19,12 @@ module Nixon.Select
 
 import           Control.Arrow ((&&&))
 import           Control.Monad.Trans.Reader
+import           Data.Aeson
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (fromMaybe)
+import           GHC.Generics (Generic)
 import           Turtle hiding (f, x, input, select)
+import Data.Aeson.Types (unexpected)
 
 data SelectionType = Default | Alternate Int deriving (Eq, Show)
 data Selection a = EmptySelection
@@ -32,7 +37,12 @@ selection = Selection Default
 
 data Candidate = Identity Text
                | WithTitle Text Text -- ^ Title Value
-               deriving Show
+               deriving (Generic, Show)
+
+instance FromJSON Candidate where
+  parseJSON (String value) = pure $ Identity value
+  parseJSON (Object value) = WithTitle <$> value .: "title" <*> value .: "value"
+  parseJSON value = unexpected value
 
 candidate_title :: Candidate -> Text
 candidate_title (Identity t) = t

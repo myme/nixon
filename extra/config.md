@@ -43,12 +43,12 @@ nmcli connection up "$(nixon networks)"
 
 ## `npm` stuff {type="npm"}
 
-### npm-scripts {.command}
+### npm-scripts {.command .json}
 
 List all `npm` scripts in a `package.json`.
 
 ```bash
-jq '.scripts | to_entries | map({ title: .key, value })' package.json
+jq '.scripts | to_entries | map({ title: (.key + " → " + .value), value: .key })' package.json
 ```
 
 ### npm-run {.command}
