@@ -77,6 +77,26 @@ yarn run "$(nixon npm-scripts)"
 yarn install
 ```
 
+## Cabal stuff {type="cabal"}
+
+### cabal-build {.command}
+
+```bash
+cabal build
+```
+
+### cabal-run {.command}
+
+```bash
+cabal run
+```
+
+### cabal-test {.command}
+
+```bash
+cabal test
+```
+
 ## Git stuff {type="git"}
 
 ### git-log {.command}
