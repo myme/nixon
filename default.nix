@@ -25,6 +25,7 @@ in haskellPackages.mkDerivation {
     quickcheck-instances
     pandoc
     pandoc-types
+    parsec
     process
     strip-ansi-escape
     text

@@ -58,6 +58,7 @@ library
                      , optparse-applicative
                      , pandoc
                      , pandoc-types
+                     , parsec
                      , process
                      , strip-ansi-escape
                      , text
@@ -91,8 +92,9 @@ executable nixon
 
 test-suite nixon-test
   type: exitcode-stdio-1.0
-  other-modules: Test.Nixon.Logging
   main-is: Main.hs
+  other-modules: Test.Nixon.Command
+               , Test.Nixon.Logging
   hs-source-dirs:
       test
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N

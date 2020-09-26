@@ -1,19 +1,30 @@
 module Nixon.Command
   ( Command(..)
+  , CommandPart(..)
   , list_commands
   , show_command
+  , show_parts
   , is_gui_command
+  , mkcommand
+  , parse
+  , parse_parts
+  , parse_text_part
+  , parse_placeholder
   ) where
 
-import Data.Text (unpack, Text, intercalate)
-import Turtle
+import           Data.String (IsString(..))
+import           Data.Text (pack, unpack, Text, intercalate)
+import qualified Text.Parsec as P
+import           Text.Parsec hiding (parse)
+import           Text.Parsec.Text
+import           Turtle ((%), format, s)
 
 data Command = Command
   { cmdName :: Text
   , cmdDesc :: Maybe Text
-  , cmdLang :: Maybe Text
+  , cmdLang :: Text
   , cmdProjectTypes :: [Text]
-  , cmdSrc :: Text
+  , cmdParts :: [CommandPart]
   , cmdIsGui :: Bool
   }
 
@@ -22,10 +33,38 @@ instance Show Command where
   show = unpack . show_command
 
 
+data CommandPart = TextPart Text
+                 | Placeholder Text
+                 deriving (Eq, Show)
+
+
+instance IsString CommandPart where
+  fromString = TextPart . pack
+
+
+mkcommand :: Text -> Maybe Text -> Text -> [Text] -> Text -> Bool -> Either Text Command
+mkcommand name desc lang ptypes src isGui = case parse parse_parts src of
+  Left err -> Left err
+  Right parts -> Right $ Command
+    { cmdName = name
+    , cmdDesc = desc
+    , cmdLang = lang
+    , cmdProjectTypes = ptypes
+    , cmdParts = parts
+    , cmdIsGui = isGui
+    }
+
+
 show_command :: Command -> Text
-show_command (Command name _ lang projectTypes src _) = format fmt name pt (maybe "" id lang) src
+show_command (Command name _ lang projectTypes parts _) = format fmt name pt lang (show_parts parts)
   where fmt = s%" ["%s%"]:\n"%"#!"%s%"\n"%s
         pt = intercalate ", " projectTypes
+
+
+show_parts :: [CommandPart] -> Text
+show_parts = intercalate " " . map format_part
+  where format_part (TextPart src) = src
+        format_part (Placeholder n) = format ("<"%s%">") n
 
 
 list_commands :: [Command] -> Text
@@ -34,3 +73,28 @@ list_commands = intercalate "\n\n" . map show_command
 
 is_gui_command :: Command -> Bool
 is_gui_command _ = False
+
+
+parse :: Show a => Parser a -> Text -> Either Text a
+parse parser input = case P.parse parser "" input of
+  Left err -> Left (pack $ show err)
+  Right result -> Right result
+
+
+parse_parts :: Parser [CommandPart]
+parse_parts = collapse <$> choice
+  [ (:) <$> parse_placeholder <*> parse_parts
+  , (:) <$> parse_text_part <*> parse_parts
+  , pure [] <* eof
+  ]
+  where collapse (TextPart x : TextPart y : rest) = TextPart (x <> y) : collapse rest
+        collapse (x : rest) = x : collapse rest
+        collapse [] = []
+
+
+parse_text_part :: Parser CommandPart
+parse_text_part = TextPart . pack . pure <$> anyChar
+
+
+parse_placeholder :: Parser CommandPart
+parse_placeholder = Placeholder . pack <$> between (string "$(nixon ") (char ')') (many1 $ noneOf ")")
