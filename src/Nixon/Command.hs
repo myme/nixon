@@ -1,6 +1,7 @@
 module Nixon.Command
   ( Command(..)
   , CommandPart(..)
+  , CommandOutput(..)
   , list_commands
   , show_command
   , show_parts
@@ -10,6 +11,10 @@ module Nixon.Command
   , parse_parts
   , parse_text_part
   , parse_placeholder
+  , (<!)
+  , description
+  , gui
+  , json
   ) where
 
 import           Data.String (IsString(..))
@@ -26,6 +31,7 @@ data Command = Command
   , cmdProjectTypes :: [Text]
   , cmdParts :: [CommandPart]
   , cmdIsGui :: Bool
+  , cmdOutput :: CommandOutput
   }
 
 
@@ -42,21 +48,37 @@ instance IsString CommandPart where
   fromString = TextPart . pack
 
 
-mkcommand :: Text -> Maybe Text -> Text -> [Text] -> Text -> Bool -> Either Text Command
-mkcommand name desc lang ptypes src isGui = case parse parse_parts src of
+data CommandOutput = Lines | JSON
+
+
+mkcommand :: Text -> Text -> [Text] -> Text -> Either Text Command
+mkcommand name lang ptypes src = case parse parse_parts src of
   Left err -> Left err
   Right parts -> Right $ Command
     { cmdName = name
-    , cmdDesc = desc
+    , cmdDesc = Nothing
     , cmdLang = lang
     , cmdProjectTypes = ptypes
     , cmdParts = parts
-    , cmdIsGui = isGui
+    , cmdIsGui = False
+    , cmdOutput = Lines
     }
+
+(<!) :: a -> (a -> b) -> b
+(<!) cmd op = op cmd
+
+description :: Text -> Command -> Command
+description d cmd = cmd { cmdDesc = Just d }
+
+gui :: Bool -> Command -> Command
+gui g cmd = cmd { cmdIsGui = g }
+
+json :: Bool -> Command -> Command
+json j cmd = cmd { cmdOutput = if j then JSON else Lines }
 
 
 show_command :: Command -> Text
-show_command (Command name _ lang projectTypes parts _) = format fmt name pt lang (show_parts parts)
+show_command (Command name _ lang projectTypes parts _ _) = format fmt name pt lang (show_parts parts)
   where fmt = s%" ["%s%"]:\n"%"#!"%s%"\n"%s
         pt = intercalate ", " projectTypes
 

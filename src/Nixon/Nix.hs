@@ -9,7 +9,6 @@ module Nixon.Nix
 import Control.Monad (filterM)
 import Control.Monad.Trans.Maybe
 import Data.Maybe (listToMaybe)
-import Data.Text (intercalate)
 import Nixon.Command
 import Nixon.Process
 import Nixon.Types
@@ -52,10 +51,8 @@ nix_cmd cmd path' = use_nix <$> ask >>= \case
       MaybeT (find_dominating_file path' "shell.nix") <|>
       MaybeT (find_dominating_file path' "default.nix")
     let parts =
-          ["nix-shell"
-          ,"--command"
-          ,cmdSrc cmd
-          ,format fp nix_file
-          ]
-    pure cmd { cmdSrc = intercalate " " parts }
+          ["nix-shell" , "--command"] ++
+          cmdParts cmd ++
+          [TextPart $ format fp nix_file]
+    pure cmd { cmdParts = parts }
   _ -> pure Nothing

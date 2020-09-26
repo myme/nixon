@@ -7,7 +7,11 @@ module Nixon
 import           Control.Exception
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Reader
+import           Data.Foldable (find)
+import           Data.List (intersect)
 import           Data.Maybe (fromMaybe)
+import           Data.Text (intercalate)
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Nixon.Command
 import qualified Nixon.Config.JSON as JSON
@@ -19,8 +23,8 @@ import           Nixon.Direnv
 import           Nixon.Fzf
 import           Nixon.Logging
 import           Nixon.Nix
-import           Nixon.Project hiding (project_types)
 import qualified Nixon.Project as P
+import           Nixon.Project hiding (project_types)
 import           Nixon.Project.Defaults
 import           Nixon.Project.Types (ProjectType, project_id)
 import           Nixon.Rofi
@@ -30,7 +34,6 @@ import           Nixon.Types
 import           Nixon.Utils
 import           Prelude hiding (FilePath, log)
 import           Turtle hiding (decimal, die, env, err, find, shell, x)
-import Data.List (intersect)
 
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Maybe Text -> Nixon ()
@@ -58,10 +61,10 @@ with_local_config :: Project -> Nixon () -> Nixon ()
 with_local_config project action =
   liftIO (JSON.find_local_config (project_path project)) >>= \case
     Nothing -> action
-    Just json -> do
+    Just config -> do
       let update_env env = env
-            { use_direnv = JSON.use_direnv json
-            , use_nix = JSON.use_nix json
+            { use_direnv = JSON.use_direnv config
+            , use_nix = JSON.use_nix config
             }
       local update_env action
 
@@ -76,27 +79,38 @@ run_cmd select_command project opts selector = with_local_config project $ do
   let ptypes = map project_id $ P.project_types project
       filter_cmd cmd = let ctypes = cmdProjectTypes cmd
                        in null ctypes || (not $ null $ intersect ptypes ctypes)
+      project_selector = \shell' -> cd (project_path project) >> selector shell'
   cmds <- filter filter_cmd . commands <$> ask
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
   if Options.select opts
-    then liftIO (T.putStrLn $ cmdSrc cmd)
+    then resolve_command project_selector cmd >>= liftIO . T.putStrLn
     else do
-      cmd' <- maybe_wrap_cmd project cmd
+      cmd' <- maybe_wrap_cmd project cmd >>= resolve_command project_selector
       -- TODO: Always edit command before executing?
       log_info (format ("Running command '"%w%"'") cmd')
-      liftIO $ project_exec cmd' project
+      -- liftIO $ project_exec cmd' False project
 
-  --     actual_cmd <- Select.runSelect selector resolve_command >>= \case
-  --       Selection _ c -> c
-  --       _ -> liftIO $ throwIO (EmptyError "Command placeholder expansion aborted.")
-  --     liftIO $ project_exec actual_cmd project
-  -- where resolve_command = undefined
+resolve_command :: Selector -> Command -> Nixon Text
+resolve_command selector cmd = do
+  expanded <- mapM expand_placeholder (cmdParts cmd)
+  pure (intercalate "" expanded)
+  where
+    expand_placeholder (TextPart t) = pure t
+    expand_placeholder (Placeholder p) = find ((==) p . cmdName) . commands <$> ask >>= \case
+      Nothing -> error $ "Invalid placeholder: " <> T.unpack p
+      Just placeholder -> do
+        resolved <- resolve_command selector placeholder
+        selection <- liftIO $ selector $ do
+          candidate <- inshell resolved empty
+          pure $ Select.Identity (lineToText candidate)
+        case selection of
+          Selection _ result -> pure result
+          _ -> error "Placeholder expansion aborted"
 
 type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
 type CommandSelector = Project -> ProjectOpts -> [Command] -> IO (Maybe Command)
-type GenericSelector = Shell Select.Candidate-> IO (Selection Text)
 
-get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, GenericSelector)
+get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, Selector)
 get_selectors = do
   env <- ask
   let ptypes = project_types env

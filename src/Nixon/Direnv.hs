@@ -5,7 +5,6 @@ module Nixon.Direnv
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           Data.List (elemIndex)
-import           Data.Text (intercalate, words)
 import qualified Data.Text as T
 import           Nixon.Command
 import           Nixon.Project
@@ -20,7 +19,7 @@ direnv_cmd cmd path' = use_direnv <$> ask >>= \case
   Just True -> liftIO $ runMaybeT $ do
     _ <- MaybeT (fmap find_path <$> need "DIRENV_DIR")
     _ <- MaybeT (fmap dirname <$> find_dominating_file path' ".envrc")
-    let parts = ["direnv exec", format fp path'] ++ words (cmdSrc cmd)
-    lift . pure $ cmd { cmdSrc = intercalate " " parts }
+    let parts = ["direnv exec ", TextPart $ format fp path', " "] ++ cmdParts cmd
+    lift . pure $ cmd { cmdParts = parts }
   _ -> pure Nothing
   where find_path = flip elemIndex (parents path') . fromText . T.dropWhile (/= '/')

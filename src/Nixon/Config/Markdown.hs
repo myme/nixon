@@ -11,7 +11,7 @@ import           Data.Bifunctor (Bifunctor(first))
 import           Data.Maybe (listToMaybe)
 import           Data.Text (unpack, pack)
 import           Data.Text.Encoding (encodeUtf8)
-import           Nixon.Command
+import           Nixon.Command hiding (parse)
 import qualified Nixon.Config.JSON as JSON
 import           Prelude hiding (FilePath)
 import           Text.Pandoc (Attr, Block(..))
@@ -84,9 +84,11 @@ parse nodes = go (S 0 []) (JSON.empty, []) nodes
       -- We found a command
       | hasArgs "command" attr =
         let pt = getKwargs "type" attr <> stateProjectTypes st
-        in case parseCommand name Nothing pt rest of
-          (Nothing, rest') -> go st (cfg, ps) rest'
-          (Just p, rest') -> go st (cfg, p : ps) rest'
+            isGui = hasArgs "gui" attr
+            isJson = hasArgs "json" attr
+        in case parseCommand name pt rest of
+          (Left err, _) -> Left err
+          (Right p, rest') -> go st (cfg, p <! gui isGui <! json isJson : ps) rest'
 
       -- Pick up project type along the way
       -- TODO: Accumulate multiple types?
@@ -119,10 +121,10 @@ parseConfig (Source lang src : rest') = case lang of
 parseConfig rest = (Left "Expecting config source after header", rest)
 
 
-parseCommand :: Text -> Maybe Text -> [Text] -> [Node] -> (Maybe Command, [Node])
-parseCommand name Nothing projectTypes (Paragraph desc : rest)
-  = parseCommand name (Just desc) projectTypes rest
-parseCommand name desc projectTypes (Source lang src : rest)
-  = (Just (Command name desc lang projectTypes src False), rest)
-parseCommand _ _ _ (_ : rest) = (Nothing, rest)
-parseCommand _ _ _ [] = (Nothing, [])
+parseCommand :: Text -> [Text] -> [Node] -> (Either Text Command, [Node])
+parseCommand name projectTypes (Paragraph desc : rest) =
+  let (cmd, rest') = parseCommand name projectTypes rest
+  in  (description desc <$> cmd, rest')
+parseCommand name projectTypes (Source (Just lang) src : rest) = (cmd, rest)
+  where cmd = mkcommand name lang projectTypes src
+parseCommand name _ rest = (Left $ format ("Expecting source block for "%s) name, rest)

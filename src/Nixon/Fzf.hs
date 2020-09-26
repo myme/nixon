@@ -22,7 +22,7 @@ import           Data.List (sort)
 import qualified Data.Map as Map
 import           Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
-import           Nixon.Command (Command(..))
+import           Nixon.Command (show_parts, Command(..))
 import           Nixon.Config.Options (ProjectOpts)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Process
@@ -198,7 +198,7 @@ fzf_project_command opts project popts commands = do
       --   _ -> MaybeT (pure Nothing)
     Selection (Alternate _) cmd -> pure cmd
     _ -> pure Nothing
-  where format_cmd cmd = format (s%" - "%s) (cmdName cmd) (cmdSrc cmd)
+  where format_cmd cmd = format (s%" - "%s) (cmdName cmd) (show_parts $ cmdParts cmd)
 
 -- | Use readline to manipulate/change a fzf selection
 fzf_edit_selection :: (MonadIO m, MonadException m) => Text -> m (Maybe Text)

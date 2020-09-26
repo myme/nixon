@@ -49,7 +49,7 @@ instance Functor Selection where
 
 type Selector = Shell Candidate -> IO (Selection Text)
 
-type Select a = ReaderT Selector IO a
+type Select m a = ReaderT Selector m a
 
 default_selection :: a -> Selection a -> a
 default_selection _ (Selection _ value) = value
@@ -58,10 +58,10 @@ default_selection def _ = def
 build_map :: (a -> Text) -> [a] -> Map.Map Text a
 build_map f = Map.fromList . map (f &&& id)
 
-runSelect :: Selector -> Select a -> IO a
+runSelect :: Selector -> Select m a -> m a
 runSelect = flip runReaderT
 
-select :: Shell Candidate -> Select (Selection Text)
+select :: MonadIO m => Shell Candidate -> Select m (Selection Text)
 select input = do
   selector <- ask
   liftIO $ selector input

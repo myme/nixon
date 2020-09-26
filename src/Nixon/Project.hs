@@ -104,19 +104,19 @@ find_project_types path' project_types = testdir path' >>= \case
           [] -> pure True
           xs -> fmap and . traverse (test_marker path') $ xs
 
-project_exec :: Command -> Project -> IO ()
-project_exec cmd project = IO.hIsTerminalDevice IO.stdin >>= \case
-  True  -> run [cmdSrc cmd] (Just $ project_path project)
+project_exec :: Text -> Bool -> Project -> IO ()
+project_exec cmd is_gui project = IO.hIsTerminalDevice IO.stdin >>= \case
+  True  -> run [cmd] (Just $ project_path project)
   False -> do
     let path' = Just $ project_path project
-    if cmdIsGui cmd
+    if is_gui
       then do
         shell' <- fromMaybe "bash" <$> need "SHELL"
-        spawn (shell' : ["-c", cmdSrc cmd]) path'
+        spawn (shell' : ["-c", cmd]) path'
       else do
         -- TODO: Add config for terminal
         let terminal = "x-terminal-emulator"
-        spawn (terminal : ["-e", cmdSrc cmd]) path'
+        spawn (terminal : ["-e", cmd]) path'
 
 -- | Test that a marker is valid for a path
 test_marker :: FilePath -> ProjectMarker -> IO Bool
