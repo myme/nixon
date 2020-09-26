@@ -3,7 +3,6 @@
 module Nixon.Config.JSON
   ( Config(..)
   , JSONError(..)
-  , default_path
   , empty
   , find_local_config
   , read_config
@@ -18,7 +17,6 @@ import qualified Data.Text as T
 import           GHC.Generics
 import           Nixon.Utils (find_dominating_file)
 import           Prelude hiding (FilePath)
-import           System.Directory (XdgDirectory(..), getXdgDirectory)
 import           System.IO.Error
 import           Turtle hiding (empty, err)
 
@@ -42,9 +40,6 @@ instance FromJSON Config where
     <*> (maybe [] (fmap fromText) <$> v .:? "source_dirs")
     <*> v .:? "use_direnv"
     <*> v .:? "use_nix"
-
-default_path :: MonadIO m => m FilePath
-default_path = liftIO $ fromString <$> getXdgDirectory XdgConfig "nixon.json"
 
 data JSONError = NoSuchFile
                | EmptyFile

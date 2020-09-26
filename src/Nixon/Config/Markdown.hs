@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Nixon.Config.Markdown
-  ( readMarkdown
+  ( defaultPath
+  , readMarkdown
   , parseMarkdown
   ) where
 
@@ -14,11 +15,16 @@ import           Data.Text.Encoding (encodeUtf8)
 import           Nixon.Command hiding (parse)
 import qualified Nixon.Config.JSON as JSON
 import           Prelude hiding (FilePath)
+import           System.Directory (XdgDirectory(..), getXdgDirectory)
 import           Text.Pandoc (Attr, Block(..))
 import qualified Text.Pandoc as P
 import qualified Text.Pandoc.Builder as B
 import           Text.Pandoc.Walk
 import           Turtle hiding (Header, err, filename, text, l, x)
+
+
+defaultPath :: MonadIO m => m FilePath
+defaultPath = liftIO $ fromString <$> getXdgDirectory XdgConfig "nixon.md"
 
 
 -- | Extract commands from a markdown file
