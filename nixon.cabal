@@ -42,7 +42,6 @@ library
                      , Nixon.Nix
                      , Nixon.Process
                      , Nixon.Project
-                     , Nixon.Project.Defaults
                      , Nixon.Project.Types
                      , Nixon.Rofi
                      , Nixon.Select

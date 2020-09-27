@@ -28,7 +28,6 @@ import           Nixon.Logging
 import           Nixon.Nix
 import qualified Nixon.Project as P
 import           Nixon.Project hiding (project_types)
-import           Nixon.Project.Defaults
 import           Nixon.Project.Types (ProjectType, project_id)
 import           Nixon.Rofi
 import           Nixon.Select (Selection(..), Selector)
@@ -184,7 +183,7 @@ default_config :: Config
 default_config = Config.Config
   { Config.backend = Nothing
   , Config.exact_match = Nothing
-  , Config.project_types = default_projects
+  , Config.project_types = []
   , Config.commands = []
   , Config.source_dirs = []
   , Config.use_direnv = Nothing

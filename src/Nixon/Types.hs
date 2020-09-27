@@ -52,7 +52,7 @@ build_env opts config = do
   pure Env
     { backend
     , exact_match =  Options.exact_match opts <|> Config.exact_match config
-    , project_types = Config.project_types config
+    , project_types = Options.project_types opts ++ Config.project_types config
     , commands = Options.commands opts ++ Config.commands config
     , source_dirs = Config.source_dirs config ++ Options.source_dirs opts
     , use_direnv =  Options.use_direnv opts <|> Config.use_direnv config

@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Nixon.Config.JSON
   ( Config(..)
@@ -15,6 +16,7 @@ import qualified Data.ByteString.Char8 as ByteString
 import           Data.Char
 import qualified Data.Text as T
 import           GHC.Generics
+import           Nixon.Project.Types (ProjectMarker(..), ProjectType(..))
 import           Nixon.Utils (find_dominating_file)
 import           Prelude hiding (FilePath)
 import           System.IO.Error
@@ -23,6 +25,7 @@ import           Turtle hiding (empty, err)
 data Config = Config
   { exact_match :: Maybe Bool
   , source_dirs :: [FilePath]
+  , project_types :: [ProjectType]
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
   } deriving (Generic, Show)
@@ -30,6 +33,7 @@ data Config = Config
 empty :: Config
 empty = Config { exact_match = Nothing
                , source_dirs = []
+               , project_types = []
                , use_direnv = Nothing
                , use_nix = Nothing
                }
@@ -38,8 +42,22 @@ instance FromJSON Config where
   parseJSON = withObject "Config" $ \v -> Config
     <$> v .:? "exact_match"
     <*> (maybe [] (fmap fromText) <$> v .:? "source_dirs")
+    <*> (maybe [] (fmap mkptype) <$> v .:? "projects")
     <*> v .:? "use_direnv"
     <*> v .:? "use_nix"
+
+newtype JsonProjectType = JsonProjectType ProjectType
+
+instance FromJSON JsonProjectType where
+  parseJSON = withObject "projects" $ \v -> do
+    project_id <- v .: "name"
+    project_markers <- maybe [] (fmap $ ProjectPath . fromText) <$> v .:? "test"
+    project_description <- v .: "desc"
+    pure $ JsonProjectType (ProjectType { project_id , project_markers , project_description})
+
+
+mkptype :: JsonProjectType -> ProjectType
+mkptype (JsonProjectType ptype) = ptype
 
 data JSONError = NoSuchFile
                | EmptyFile

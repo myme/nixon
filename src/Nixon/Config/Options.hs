@@ -15,6 +15,7 @@ import           Nixon.Command
 import qualified Nixon.Config.JSON as JSON
 import qualified Nixon.Config.Markdown as MD
 import           Nixon.Config.Types hiding (Config(..))
+import           Nixon.Project.Types (ProjectType)
 import           Nixon.Utils (implode_home)
 import qualified Options.Applicative as Opts
 import           Prelude hiding (FilePath)
@@ -36,6 +37,7 @@ data Options = Options
     -- , backend_args :: [Text]
   , exact_match :: Maybe Bool
   , source_dirs :: [FilePath]
+  , project_types :: [ProjectType]
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
   , loglevel :: Maybe LogLevel
@@ -60,6 +62,7 @@ default_options = Options
   { backend = Nothing
   , exact_match = Nothing
   , source_dirs = []
+  , project_types = []
   , use_direnv = Nothing
   , use_nix = Nothing
   , loglevel = Just LogWarning
@@ -88,6 +91,7 @@ parser default_config = Options
   <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
   <*> maybeSwitch "exact" 'e' "Enable exact match"
   <*> many (optPath "path" 'p' "Project directory")
+  <*> pure []
   <*> maybeSwitch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
   <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
   <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
@@ -134,6 +138,7 @@ parse_args = do
   liftIO $ MD.readMarkdown config_path >>= \(cfg, cmds) -> pure $ Right opts
       { exact_match = exact_match opts <|> JSON.exact_match cfg
       , source_dirs = JSON.source_dirs cfg ++ source_dirs opts
+      , project_types = JSON.project_types cfg
       , use_direnv = use_direnv opts <|> JSON.use_direnv cfg
       , use_nix = use_nix opts <|> JSON.use_nix cfg
       , commands = cmds
