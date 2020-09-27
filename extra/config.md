@@ -48,6 +48,20 @@ nmcli -t connection | cut -d':' -f1
 nmcli connection up "$(nixon networks)"
 ```
 
+## `nix` stuff
+
+### nix-build {.command}
+
+```bash
+nix-build
+```
+
+### nix-shell {.command}
+
+```bash
+nix-shell
+```
+
 ## `npm` stuff {type="npm"}
 
 ### npm-scripts {.command .json}
