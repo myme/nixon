@@ -8,9 +8,6 @@
   "use_direnv":true,
   "use_nix":true,
   "source_dirs": [
-    "~/dotfiles",
-    "~/src",
-    "~/projects"
   ],
   "projects": [
     { "name": "cabal", "test": ["cabal.project"], "desc": "Cabal new-style project"},
