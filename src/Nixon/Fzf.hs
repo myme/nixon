@@ -188,14 +188,6 @@ fzf_project_command opts project popts commands = do
     Selection Default cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
       pure cmd'
-      -- resolved <- liftIO $ Select.runSelect (fzf_with_edit mempty) (resolve_command cmd')
-      -- case resolved of
-      --   Selection _ selection
-      --     | Options.select popts -> pure (cmd' { cmdSrc = selection })
-      --     | otherwise -> do
-      --       edited <- MaybeT (fzf_edit_selection selection)
-      --       pure $ cmd' { cmdSrc = edited }
-      --   _ -> MaybeT (pure Nothing)
     Selection (Alternate _) cmd -> pure cmd
     _ -> pure Nothing
   where format_cmd cmd = format (s%" - "%s) (cmdName cmd) (show_parts $ cmdParts cmd)
