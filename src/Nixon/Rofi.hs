@@ -10,22 +10,22 @@ module Nixon.Rofi
   , RofiResult(..)
   ) where
 
-import           Control.Arrow (second)
+import           Control.Arrow ((&&&), second)
 import           Data.Bool (bool)
 import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import           Nixon.Command (show_command)
+import           Nixon.Command
 import           Nixon.Config.Options (ProjectOpts)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Process
 import           Nixon.Project
 import           Nixon.Select (Candidate, Selection(..), SelectionType(..))
 import qualified Nixon.Select as Select
-import           Nixon.Utils (implode_home, toLines)
+import           Nixon.Utils (shell_to_list, implode_home, toLines)
 import           Prelude hiding (FilePath)
 import qualified Turtle as Tu
-import           Turtle hiding (arg, decimal, s, d, f, x, shell, toLines)
+import           Turtle hiding (arg, decimal, d, f, x, shell, toLines)
 
 -- | Data type for command line options to rofi
 data RofiOpts = RofiOpts
@@ -85,12 +85,15 @@ rofi opts candidates = do
         , arg "-filter" =<< _query opts
         ]
 
-  (code, out) <- second T.strip <$> procStrict "rofi" args (toLines $ Select.candidate_value <$> candidates)
+  map' <- Map.fromList . fmap (Select.candidate_title &&& Select.candidate_value) <$> shell_to_list candidates
+  (code, out) <- second (flip Map.lookup map' . T.strip) <$> procStrict "rofi" args (toLines $ select $ Map.keys map')
   pure $ case code of
-    ExitSuccess -> Selection Default out
+    ExitSuccess -> mkselection Default out
     ExitFailure 1 -> CanceledSelection
-    ExitFailure c | c >= 10 && c < 20 -> Selection (Alternate (c - 10)) out
-    _ -> undefined
+    ExitFailure c | c >= 10 && c < 20 -> mkselection (Alternate (c - 10)) out
+                  | otherwise -> error $ "Exit error: " <> show c
+  where mkselection _ Nothing = EmptySelection
+        mkselection type' (Just selection) = Selection type' selection
 
 -- | Format project names suited to rofi selection list
 rofi_format_project_name :: MonadIO m => Project -> m Text
@@ -119,8 +122,9 @@ rofi_projects opts query projects = do
 
 rofi_project_command :: MonadIO m => RofiOpts -> ProjectOpts -> [Command] -> m (Maybe Command)
 rofi_project_command opts popts commands = do
-  let candidates = Select.build_map show_command $ commands
+  let candidates = Select.build_map format_cmd $ commands
       opts' = opts <> rofi_prompt "Select command" <> maybe mempty rofi_query (Options.command popts)
   rofi opts' (Select.Identity <$> select (Map.keys candidates)) >>= pure . \case
     Selection _ txt -> Map.lookup txt candidates
     _ -> Nothing
+  where format_cmd cmd = format (s%" - "%s) (cmdName cmd) (show_parts $ cmdParts cmd)

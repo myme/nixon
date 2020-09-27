@@ -91,7 +91,7 @@ run_cmd select_command project opts selector = with_local_config project $ do
       cmd' <- maybe_wrap_cmd project cmd >>= resolve_command project_selector
       -- TODO: Always edit command before executing?
       log_info (format ("Running command '"%w%"'") cmd')
-      liftIO $ project_exec cmd' False project
+      liftIO $ project_exec cmd' (cmdIsGui cmd) project
 
 resolve_command :: Selector -> Command -> Nixon Text
 resolve_command selector cmd = do

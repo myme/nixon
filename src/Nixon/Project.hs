@@ -112,7 +112,7 @@ project_exec cmd is_gui project = IO.hIsTerminalDevice IO.stdin >>= \case
     if is_gui
       then do
         shell' <- fromMaybe "bash" <$> need "SHELL"
-        spawn (shell' : ["-c", cmd]) path'
+        spawn (shell' : ["-c", "\"", cmd, "\""]) path'
       else do
         -- TODO: Add config for terminal
         let terminal = "x-terminal-emulator"
