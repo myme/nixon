@@ -119,4 +119,4 @@ parse_text_part = TextPart . pack . pure <$> anyChar
 
 
 parse_placeholder :: Parser CommandPart
-parse_placeholder = Placeholder . pack <$> between (string "$(nixon ") (char ')') (many1 $ noneOf ")")
+parse_placeholder = Placeholder . pack <$> between (try $ string "$(nixon ") (char ')') (many1 $ noneOf ")")

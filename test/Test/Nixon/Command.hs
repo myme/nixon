@@ -19,6 +19,9 @@ command = do
       parse parse_parts "cat \"$(nixon placeholder)\"" `shouldBe`
         Right [TextPart "cat \"", Placeholder "placeholder", TextPart "\""]
 
+    it "allows use of $ not matching '$(nixon '" $ do
+      parse parse_parts "echo $SOME_VAR" `shouldBe` Right [TextPart "echo $SOME_VAR"]
+
     it "fails on unterminated placeholder" $ do
       parse parse_parts "cat \"$(nixon placeholder\"" `shouldSatisfy` isLeft
 
