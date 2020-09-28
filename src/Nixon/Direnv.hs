@@ -4,7 +4,6 @@ module Nixon.Direnv
 
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
-import           Data.List (elemIndex)
 import qualified Data.Text as T
 import           Nixon.Command
 import           Nixon.Project
@@ -17,9 +16,12 @@ import           Turtle hiding (find, root)
 direnv_cmd :: Command -> FilePath -> Nixon (Maybe Command)
 direnv_cmd cmd path' = use_direnv <$> ask >>= \case
   Just True -> liftIO $ runMaybeT $ do
-    _ <- MaybeT (fmap find_path <$> need "DIRENV_DIR")
-    _ <- MaybeT (fmap dirname <$> find_dominating_file path' ".envrc")
-    let parts = ["direnv exec ", TextPart $ format fp path', " "] ++ cmdParts cmd
-    lift . pure $ cmd { cmdParts = parts }
+    direnv_active <- maybe False find_path <$> need "DIRENV_DIR"
+    if direnv_active
+      then pure cmd
+      else do
+        _ <- MaybeT (fmap dirname <$> find_dominating_file path' ".envrc")
+        let parts = ["direnv exec ", TextPart $ format fp path', " "] ++ cmdParts cmd
+        lift . pure $ cmd { cmdParts = parts }
   _ -> pure Nothing
-  where find_path = flip elemIndex (parents path') . fromText . T.dropWhile (/= '/')
+  where find_path = (`elem` parents path') . fromText . T.dropWhile (/= '/')
