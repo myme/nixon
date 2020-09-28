@@ -190,7 +190,10 @@ fzf_project_command opts project popts commands = do
       pure cmd'
     Selection (Alternate _) cmd -> pure cmd
     _ -> pure Nothing
-  where format_cmd cmd = format (s%" - "%s) (cmdName cmd) (show_parts $ cmdParts cmd)
+  where format_cmd cmd = format (s%" - "%s) (cmdName cmd) (description cmd)
+        description cmd = case cmdDesc cmd of
+          Just desc -> desc
+          _ -> T.unwords $ map T.strip $ T.lines $ show_parts $ cmdParts cmd
 
 -- | Use readline to manipulate/change a fzf selection
 fzf_edit_selection :: (MonadIO m, MonadException m) => Text -> m (Maybe Text)
