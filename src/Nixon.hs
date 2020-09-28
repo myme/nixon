@@ -85,15 +85,15 @@ run_cmd select_command project opts selector = with_local_config project $ do
   cmds <- filter filter_cmd . commands <$> ask
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
   if Options.select opts
-    then resolve_command project_selector cmd >>= liftIO . T.putStrLn
+    then resolve_command project project_selector cmd >>= liftIO . T.putStrLn
     else do
-      cmd' <- maybe_wrap_cmd project cmd >>= resolve_command project_selector
+      cmd' <- maybe_wrap_cmd project cmd >>= resolve_command project project_selector
       -- TODO: Always edit command before executing?
       log_info (format ("Running command '"%w%"'") cmd')
       liftIO $ project_exec cmd' (cmdIsGui cmd) project
 
-resolve_command :: Selector -> Command -> Nixon Text
-resolve_command selector cmd = do
+resolve_command :: Project -> Selector -> Command -> Nixon Text
+resolve_command project selector cmd = do
   expanded <- mapM expand_placeholder (cmdParts cmd)
   pure (intercalate "" expanded)
   where
@@ -101,7 +101,7 @@ resolve_command selector cmd = do
     expand_placeholder (Placeholder p) = find ((==) p . cmdName) . commands <$> ask >>= \case
       Nothing -> error $ "Invalid placeholder: " <> T.unpack p
       Just placeholder -> do
-        resolved <- resolve_command selector placeholder
+        resolved <- maybe_wrap_cmd project placeholder >>= resolve_command project selector
         selection <- liftIO $ selector $ do
           case cmdOutput placeholder of
             Lines -> do
