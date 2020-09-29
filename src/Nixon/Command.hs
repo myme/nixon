@@ -4,6 +4,7 @@ module Nixon.Command
   , CommandOutput(..)
   , list_commands
   , show_command
+  , show_command_oneline
   , show_parts
   , is_gui_command
   , mkcommand
@@ -19,6 +20,7 @@ module Nixon.Command
 
 import           Data.String (IsString(..))
 import           Data.Text (pack, unpack, Text, intercalate)
+import qualified Data.Text as T
 import qualified Text.Parsec as P
 import           Text.Parsec hiding (parse)
 import           Text.Parsec.Text
@@ -81,6 +83,13 @@ show_command :: Command -> Text
 show_command (Command name _ lang projectTypes parts _ _) = format fmt name pt lang (show_parts parts)
   where fmt = s%" ["%s%"]:\n"%"#!"%s%"\n"%s
         pt = intercalate ", " projectTypes
+
+
+show_command_oneline :: Command -> Text
+show_command_oneline cmd = format (s%" - "%s) (cmdName cmd) desc
+  where desc = case cmdDesc cmd of
+          Just d -> d
+          _ -> T.unwords $ map T.strip $ T.lines $ show_parts $ cmdParts cmd
 
 
 show_parts :: [CommandPart] -> Text
