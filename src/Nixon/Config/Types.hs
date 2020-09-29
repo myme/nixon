@@ -6,7 +6,7 @@ module Nixon.Config.Types
 
 import Nixon.Logging
 import Nixon.Command (Command)
-import Nixon.Project.Types
+import Nixon.Project
 import Prelude hiding (FilePath)
 import Turtle (FilePath)
 

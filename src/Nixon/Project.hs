@@ -1,5 +1,7 @@
 module Nixon.Project
   ( Project (..)
+  , ProjectType (..)
+  , ProjectMarker (..)
   , Command
   , find_in_project
   , find_in_project_or_default
@@ -7,6 +9,7 @@ module Nixon.Project
   , find_projects_by_name
   , mkproject
   , parents
+  , proj
   , project_exec
   , project_path
   , sort_projects
@@ -18,13 +21,54 @@ import           Data.Function (on)
 import           Data.List (sortBy)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (isInfixOf)
+import qualified Data.Text as T
 import           Nixon.Command (Command(..))
 import           Nixon.Process
-import           Nixon.Project.Types as Types
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           System.Wordexp
 import           Turtle hiding (f, find, sort, sortBy, text, toText)
+import Data.List (intercalate)
+
+data Project = Project { project_name :: FilePath
+                       , project_dir :: FilePath
+                       , project_types :: [ProjectType]
+                       } deriving Show
+
+from_path :: FilePath -> Project
+from_path path' = Project { project_name = filename path'
+                          , project_dir = parent path'
+                          , project_types = []
+                          }
+
+-- | Full path to a project
+project_path :: Project -> FilePath
+project_path project = project_dir project </> project_name project
+
+data ProjectType = ProjectType { project_id :: Text
+                               , project_markers :: [ProjectMarker]
+                               , project_description :: Text
+                               } deriving Show
+
+-- | Construct a project description
+proj :: Text -> [ProjectMarker] -> Text -> ProjectType
+proj = ProjectType
+
+data ProjectMarker = ProjectPath FilePath -- ^ Check if path exists
+                   | ProjectFile FilePath -- ^ Check if path is a file
+                   | ProjectDir FilePath -- ^ Check if path is a directory
+                   | ProjectOr [ProjectMarker] -- ^ Logical `or` two marker checks
+                   | ProjectFunc (FilePath -> IO Bool) -- ^ Run arbitrary check on candidate dir
+
+instance IsString ProjectMarker where
+  fromString = ProjectPath . fromText . T.pack
+
+instance Show ProjectMarker where
+  show (ProjectFunc _) = "ProjectFunc (..)"
+  show (ProjectOr ms)  = "ProjectOr (" ++ intercalate ", " (map show ms) ++ ")"
+  show (ProjectPath p) = "ProjectPath" ++ show p
+  show (ProjectFile p) = "ProjectFile" ++ show p
+  show (ProjectDir p)  = "ProjectDir"  ++ show p
 
 mkproject :: FilePath -> Project
 mkproject path' = Project (filename path') (parent path') []
@@ -45,7 +89,7 @@ find_in_project project_types path' = find_project project_types path' >>= \case
 find_in_project_or_default :: [ProjectType] -> FilePath -> IO Project
 find_in_project_or_default project_types path' = do
   types <- find_project_types path' project_types
-  let current = (from_path path') { Types.project_types = types }
+  let current = (from_path path') { project_types = types }
   fromMaybe current <$> find_in_project project_types path'
 
 find_projects_by_name :: FilePath -> [ProjectType] -> [FilePath] -> IO [Project]
@@ -64,9 +108,9 @@ find_project project_types source_dir = do
       if all (null . project_markers) types
         then pure Nothing
         else pure $ Just Project
-          { Types.project_name = filename source_dir
-          , Types.project_dir = parent source_dir
-          , Types.project_types = types
+          { project_name = filename source_dir
+          , project_dir = parent source_dir
+          , project_types = types
           }
 
 -- | Find projects from a list of source directories.

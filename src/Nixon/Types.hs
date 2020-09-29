@@ -20,7 +20,7 @@ import           Nixon.Config.Types (Backend(..), Config)
 import qualified Nixon.Config.Types as Config
 import           Nixon.Logging (HasLogging, LogLevel(..))
 import qualified Nixon.Logging as Logging
-import           Nixon.Project.Types (ProjectType)
+import           Nixon.Project (ProjectType)
 import           Nixon.Utils
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO

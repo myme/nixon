@@ -16,7 +16,7 @@ import qualified Data.ByteString.Char8 as ByteString
 import           Data.Char
 import qualified Data.Text as T
 import           GHC.Generics
-import           Nixon.Project.Types (ProjectMarker(..), ProjectType(..))
+import           Nixon.Project (ProjectMarker(..), ProjectType(..))
 import           Nixon.Utils (find_dominating_file)
 import           Prelude hiding (FilePath)
 import           System.IO.Error

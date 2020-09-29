@@ -15,7 +15,7 @@ import           Nixon.Command
 import qualified Nixon.Config.JSON as JSON
 import qualified Nixon.Config.Markdown as MD
 import           Nixon.Config.Types hiding (Config(..))
-import           Nixon.Project.Types (ProjectType)
+import           Nixon.Project (ProjectType)
 import           Nixon.Utils (implode_home)
 import qualified Options.Applicative as Opts
 import           Prelude hiding (FilePath)

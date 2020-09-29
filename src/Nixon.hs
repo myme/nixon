@@ -28,7 +28,7 @@ import           Nixon.Logging
 import           Nixon.Nix
 import qualified Nixon.Project as P
 import           Nixon.Project hiding (project_types)
-import           Nixon.Project.Types (ProjectType, project_id)
+import           Nixon.Project (ProjectType, project_id)
 import           Nixon.Rofi
 import           Nixon.Select (Selection(..), Selector)
 import qualified Nixon.Select as Select
