@@ -23,26 +23,26 @@ nix_files = ["shell.nix"
             ]
 
 -- | Return the path to a project's Nix file, if there is one
-find_nix_file :: FilePath -> IO (Maybe FilePath)
+find_nix_file :: MonadIO m => FilePath -> m (Maybe FilePath)
 find_nix_file dir = listToMaybe <$> filter_path nix_files
   where filter_path = filterM (testpath . (dir </>))
 
 -- | Evaluate a command in a nix-shell
-nix_shell :: FilePath -> Maybe Text -> IO ()
-nix_shell = nix_run run
+nix_shell :: MonadIO m => FilePath -> Maybe Text -> m ()
+nix_shell = liftIO ... nix_run run
 
 -- | Fork and evaluate a command in a nix-shell
-nix_shell_spawn :: FilePath -> Maybe Text -> IO ()
+nix_shell_spawn :: MonadIO m => FilePath -> Maybe Text -> m ()
 nix_shell_spawn = nix_run spawn
 
 type Runner = [Text] -> Maybe FilePath -> IO ()
 
-nix_run :: Runner -> FilePath -> Maybe Text -> IO ()
-nix_run run' nix_file cmd = do
+nix_run :: MonadIO m => Runner -> FilePath -> Maybe Text -> m ()
+nix_run run' nix_file cmd = liftIO $
   let nix_file' = format fp nix_file
       args = build_args [pure [nix_file']
                         , arg "--run" =<< cmd]
-  run' ("nix-shell" : args) (Just $ parent nix_file)
+  in run' ("nix-shell" : args) (Just $ parent nix_file)
 
 nix_cmd :: Command -> FilePath -> Nixon (Maybe Command)
 nix_cmd cmd path' = use_nix <$> ask >>= \case

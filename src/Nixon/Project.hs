@@ -79,26 +79,26 @@ parents path'
   | otherwise = path' : parents (parent path')
 
 -- | Find/filter out a project in which path is a subdirectory.
-find_in_project :: [ProjectType] -> FilePath -> IO (Maybe Project)
-find_in_project project_types path' = find_project project_types path' >>= \case
+find_in_project :: MonadIO m => [ProjectType] -> FilePath -> m (Maybe Project)
+find_in_project project_types path' = liftIO $ find_project project_types path' >>= \case
     Nothing -> if parent path' == root path'
       then pure Nothing
       else find_in_project project_types (parent path')
     project -> pure project
 
-find_in_project_or_default :: [ProjectType] -> FilePath -> IO Project
+find_in_project_or_default :: MonadIO m => [ProjectType] -> FilePath -> m Project
 find_in_project_or_default project_types path' = do
-  types <- find_project_types path' project_types
+  types <- liftIO $ find_project_types path' project_types
   let current = (from_path path') { project_types = types }
   fromMaybe current <$> find_in_project project_types path'
 
-find_projects_by_name :: FilePath -> [ProjectType] -> [FilePath] -> IO [Project]
-find_projects_by_name project project_types = fmap find_matching . find_projects 1 project_types
+find_projects_by_name :: MonadIO m => FilePath -> [ProjectType] -> [FilePath] -> m [Project]
+find_projects_by_name project project_types = liftIO . fmap find_matching . find_projects 1 project_types
   where find_matching = filter ((project `isInfix`) . toText . project_name)
         isInfix p = isInfixOf (toText p)
         toText = format fp
 
-find_project :: [ProjectType] -> FilePath -> IO (Maybe Project)
+find_project :: MonadIO m => [ProjectType] -> FilePath -> m (Maybe Project)
 find_project project_types source_dir = do
   isdir <- testdir source_dir
   if not isdir
@@ -117,7 +117,7 @@ find_project project_types source_dir = do
 --
 -- Filepath expansion is done on each source directory. For each source
 -- directory not a project, look for subdirs being projects.
-find_projects :: Integer -> [ProjectType] -> [FilePath] -> IO [Project]
+find_projects :: MonadIO m => Integer -> [ProjectType] -> [FilePath] -> m [Project]
 find_projects max_depth project_types source_dirs
   | max_depth < 0 = pure []
   | otherwise = reduce Fold.list $ do
@@ -130,9 +130,9 @@ find_projects max_depth project_types source_dirs
         select projects
       Just project -> pure project
 
-expand_path :: FilePath -> IO [FilePath]
+expand_path :: MonadIO m => FilePath -> m [FilePath]
 expand_path path' = do
-  expanded <- wordexp nosubst (encodeString path')
+  expanded <- liftIO $ wordexp nosubst (encodeString path')
   pure $ either (const []) (map fromString) expanded
 
 sort_projects :: [Project] -> [Project]
@@ -140,16 +140,16 @@ sort_projects = sortBy (compare `on` project_path)
 
 -- | Given a path, find matching markers/project type.
 -- TODO: Follow symbolic links?
-find_project_types :: FilePath -> [ProjectType] -> IO [ProjectType]
-find_project_types path' project_types = testdir path' >>= \case
+find_project_types :: MonadIO m => FilePath -> [ProjectType] -> m [ProjectType]
+find_project_types path' project_types = liftIO $ testdir path' >>= \case
   False -> pure []
   True  -> filterM has_markers project_types
   where has_markers project = case project_markers project of
           [] -> pure True
           xs -> fmap and . traverse (test_marker path') $ xs
 
-project_exec :: Text -> Bool -> Project -> IO ()
-project_exec cmd is_gui project = IO.hIsTerminalDevice IO.stdin >>= \case
+project_exec :: MonadIO m => Text -> Bool -> Project -> m ()
+project_exec cmd is_gui project = liftIO $ IO.hIsTerminalDevice IO.stdin >>= \case
   True  -> run [cmd] (Just $ project_path project)
   False -> do
     shell' <- fromMaybe "bash" <$> need "SHELL"
@@ -163,9 +163,9 @@ project_exec cmd is_gui project = IO.hIsTerminalDevice IO.stdin >>= \case
         spawn (terminal : "-e" : cmd') path'
 
 -- | Test that a marker is valid for a path
-test_marker :: FilePath -> ProjectMarker -> IO Bool
+test_marker :: MonadIO m => FilePath -> ProjectMarker -> m Bool
 test_marker p (ProjectPath marker) = testpath (p </> marker)
 test_marker p (ProjectFile marker) = testfile (p </> marker)
 test_marker p (ProjectDir  marker) = testdir (p </> marker)
 test_marker p (ProjectOr   ms)     = or <$> mapM (test_marker p) ms
-test_marker p (ProjectFunc marker) = marker p
+test_marker p (ProjectFunc marker) = liftIO $ marker p

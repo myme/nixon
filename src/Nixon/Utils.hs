@@ -6,6 +6,7 @@ module Nixon.Utils
  , takeToSpace
  , filter_elems
  , implode_home
+ , (...)
  ) where
 
 import           Data.Char (isSpace)
@@ -49,3 +50,8 @@ implode_home :: MonadIO m => FilePath -> m FilePath
 implode_home path' = do
   home' <- home
   pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')
+
+-- | Composition of single parameter function with binary function, aka "blackbird"
+infixr 9 ...
+(...) :: (c -> d) -> (a -> b -> c) -> (a -> b -> d)
+(...) = (.) . (.)

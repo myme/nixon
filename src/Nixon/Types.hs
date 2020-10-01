@@ -40,13 +40,13 @@ newtype NixonError = EmptyError Text deriving Show
 
 instance Exception NixonError
 
-get_backend :: Maybe Backend -> IO Backend
+get_backend :: MonadIO m => Maybe Backend -> m Backend
 get_backend backend = do
-  def_backend <- bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
+  def_backend <- liftIO $ bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
   pure $ fromMaybe def_backend backend
 
 -- | Merge the mess of CLI args, config file + user overrides (custom build)
-build_env :: Options.Options -> Config.Config -> IO Env
+build_env :: MonadIO m => Options.Options -> Config.Config -> m Env
 build_env opts config = do
   backend <- get_backend (Config.backend config <|> Options.backend opts)
   pure Env

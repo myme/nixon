@@ -28,14 +28,14 @@ defaultPath = liftIO $ fromString <$> getXdgDirectory XdgConfig "nixon.md"
 
 
 -- | Extract commands from a markdown file
-readMarkdown :: FilePath -> IO (JSON.Config, [Command])
-readMarkdown filename = P.runIOorExplode $
+readMarkdown :: MonadIO m => FilePath -> m (JSON.Config, [Command])
+readMarkdown filename = liftIO $ P.runIOorExplode $
   liftIO $ parseMarkdown =<< readTextFile filename
 
 
 -- | Extract commands from a markdown document
-parseMarkdown :: Text -> IO (JSON.Config, [Command])
-parseMarkdown markdown = P.runIOorExplode $ do
+parseMarkdown :: MonadIO m => Text -> m (JSON.Config, [Command])
+parseMarkdown markdown = liftIO $ P.runIOorExplode $ do
   res <- parse . query extract <$> P.readMarkdown mdOpts markdown
   case res of
     Left errorMsg -> error (unpack errorMsg)

@@ -27,14 +27,14 @@ build_args :: [Maybe [a]] -> [a]
 build_args = concat . catMaybes
 
 -- | Run a command and wait for it to finish
-run :: [Text] -> Maybe FilePath -> IO ()
+run :: MonadIO m => [Text] -> Maybe FilePath -> m ()
 run cmd cwd' = sh $ do
   let cp' = shell (T.unpack $ T.intercalate " " cmd)
   maybe (pure ()) pushd cwd'
   system cp' mempty
 
 -- | Spawn/fork off a command in the background
-spawn :: [Text] -> Maybe FilePath -> IO ()
-spawn cmd cwd' = void $ forkProcess $ do
+spawn :: MonadIO m => [Text] -> Maybe FilePath -> m ()
+spawn cmd cwd' = liftIO $ void $ forkProcess $ do
   _ <- createSession
   run cmd cwd'
