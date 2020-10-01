@@ -31,12 +31,13 @@ data Config = Config
   } deriving (Generic, Show)
 
 empty :: Config
-empty = Config { exact_match = Nothing
-               , source_dirs = []
-               , project_types = []
-               , use_direnv = Nothing
-               , use_nix = Nothing
-               }
+empty = Config
+  { exact_match = Nothing
+  , source_dirs = []
+  , project_types = []
+  , use_direnv = Nothing
+  , use_nix = Nothing
+  }
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \v -> Config

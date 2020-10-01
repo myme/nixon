@@ -26,9 +26,9 @@ import           Nixon.Direnv
 import           Nixon.Fzf
 import           Nixon.Logging
 import           Nixon.Nix
+import           Nixon.Project (ProjectType, project_id)
 import qualified Nixon.Project as P
 import           Nixon.Project hiding (project_types)
-import           Nixon.Project (ProjectType, project_id)
 import           Nixon.Rofi
 import           Nixon.Select (Selection(..), Selector)
 import qualified Nixon.Select as Select
@@ -73,10 +73,10 @@ with_local_config project action =
 -- | Find and run a command in a project.
 -- TODO: Print command before running it (add -q|--quiet)
 run_cmd :: CommandSelector
-             -> Project
-             -> ProjectOpts
-             -> Selector
-             -> Nixon ()
+        -> Project
+        -> ProjectOpts
+        -> Selector
+        -> Nixon ()
 run_cmd select_command project opts selector = with_local_config project $ do
   let ptypes = map project_id $ P.project_types project
       filter_cmd cmd = let ctypes = cmdProjectTypes cmd

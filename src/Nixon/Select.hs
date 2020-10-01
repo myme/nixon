@@ -20,11 +20,11 @@ module Nixon.Select
 import           Control.Arrow ((&&&))
 import           Control.Monad.Trans.Reader
 import           Data.Aeson
+import           Data.Aeson.Types (unexpected)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (fromMaybe)
 import           GHC.Generics (Generic)
 import           Turtle hiding (f, x, input, select)
-import Data.Aeson.Types (unexpected)
 
 data SelectionType = Default | Alternate Int deriving (Eq, Show)
 data Selection a = EmptySelection

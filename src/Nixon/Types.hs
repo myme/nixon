@@ -26,15 +26,16 @@ import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           Turtle hiding (env)
 
-data Env = Env { backend :: Backend
-               , exact_match :: Maybe Bool
-               , project_types :: [ProjectType]
-               , commands :: [Command]
-               , source_dirs :: [FilePath]
-               , use_direnv :: Maybe Bool
-               , use_nix :: Maybe Bool
-               , loglevel :: LogLevel
-               }
+data Env = Env
+  { backend :: Backend
+  , exact_match :: Maybe Bool
+  , project_types :: [ProjectType]
+  , commands :: [Command]
+  , source_dirs :: [FilePath]
+  , use_direnv :: Maybe Bool
+  , use_nix :: Maybe Bool
+  , loglevel :: LogLevel
+  }
 
 newtype NixonError = EmptyError Text deriving Show
 

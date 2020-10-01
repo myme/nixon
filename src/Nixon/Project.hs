@@ -18,6 +18,7 @@ module Nixon.Project
 import qualified Control.Foldl as Fold
 import           Control.Monad (filterM)
 import           Data.Function (on)
+import           Data.List (intercalate)
 import           Data.List (sortBy)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (isInfixOf)
@@ -28,7 +29,6 @@ import           Prelude hiding (FilePath)
 import qualified System.IO as IO
 import           System.Wordexp
 import           Turtle hiding (f, find, sort, sortBy, text, toText)
-import Data.List (intercalate)
 
 data Project = Project { project_name :: FilePath
                        , project_dir :: FilePath

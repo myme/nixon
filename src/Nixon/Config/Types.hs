@@ -4,20 +4,21 @@ module Nixon.Config.Types
   , Config(..)
   ) where
 
-import Nixon.Logging
 import Nixon.Command (Command)
+import Nixon.Logging
 import Nixon.Project
 import Prelude hiding (FilePath)
 import Turtle (FilePath)
 
 data Backend = Fzf | Rofi deriving Show
 
-data Config = Config { backend :: Maybe Backend
-                     , exact_match :: Maybe Bool
-                     , project_types :: [ProjectType]
-                     , commands :: [Command]
-                     , source_dirs :: [FilePath]
-                     , use_direnv :: Maybe Bool
-                     , use_nix :: Maybe Bool
-                     , loglevel :: LogLevel
-                     }
+data Config = Config
+  { backend :: Maybe Backend
+  , exact_match :: Maybe Bool
+  , project_types :: [ProjectType]
+  , commands :: [Command]
+  , source_dirs :: [FilePath]
+  , use_direnv :: Maybe Bool
+  , use_nix :: Maybe Bool
+  , loglevel :: LogLevel
+  }

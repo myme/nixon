@@ -78,12 +78,13 @@ default_options = Options
 
 -- | Add options supporting negation with a "no-" prefix.
 maybeSwitch :: Text -> Char -> Text -> Parser (Maybe Bool)
-maybeSwitch long short help = Opts.flag Nothing (Just True) (
-                                  Opts.short short <>
-                                  Opts.long (Text.unpack long) <>
-                                  Opts.help (Text.unpack help)) <|>
-                              Opts.flag Nothing (Just False) (
-                                  Opts.long ("no-" ++ Text.unpack long))
+maybeSwitch long short help =
+  Opts.flag Nothing (Just True) (
+    Opts.short short <>
+    Opts.long (Text.unpack long) <>
+    Opts.help (Text.unpack help)) <|>
+  Opts.flag Nothing (Just False) (
+    Opts.long ("no-" ++ Text.unpack long))
 
 -- TODO: Allow switching off "use_direnv" and "use_nix"
 parser :: FilePath -> Parser Options
