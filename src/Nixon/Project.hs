@@ -152,15 +152,15 @@ project_exec :: Text -> Bool -> Project -> IO ()
 project_exec cmd is_gui project = IO.hIsTerminalDevice IO.stdin >>= \case
   True  -> run [cmd] (Just $ project_path project)
   False -> do
+    shell' <- fromMaybe "bash" <$> need "SHELL"
     let path' = Just $ project_path project
     if is_gui
-      then do
-        shell' <- fromMaybe "bash" <$> need "SHELL"
-        spawn (shell' : ["-c", "\"", cmd, "\""]) path'
+      then spawn (shell' : ["-c", "\"", cmd, "\""]) path'
       else do
         -- TODO: Add config for terminal
         let terminal = "x-terminal-emulator"
-        spawn (terminal : ["-e", cmd]) path'
+            cmd' = shell' : ["-c", "\"", cmd <> "; read", "\""]
+        spawn (terminal : "-e" : cmd') path'
 
 -- | Test that a marker is valid for a path
 test_marker :: FilePath -> ProjectMarker -> IO Bool
