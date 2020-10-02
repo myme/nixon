@@ -10,7 +10,6 @@ module Nixon.Project
   , mkproject
   , parents
   , proj
-  , project_exec
   , project_path
   , sort_projects
   ) where
@@ -24,9 +23,7 @@ import           Data.Maybe (fromMaybe)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
 import           Nixon.Command (Command(..))
-import           Nixon.Process
 import           Prelude hiding (FilePath)
-import qualified System.IO as IO
 import           System.Wordexp
 import           Turtle hiding (f, find, sort, sortBy, text, toText)
 
@@ -147,20 +144,6 @@ find_project_types path' project_types = liftIO $ testdir path' >>= \case
   where has_markers project = case project_markers project of
           [] -> pure True
           xs -> fmap and . traverse (test_marker path') $ xs
-
-project_exec :: MonadIO m => Text -> Bool -> Project -> m ()
-project_exec cmd is_gui project = liftIO $ IO.hIsTerminalDevice IO.stdin >>= \case
-  True  -> run [cmd] (Just $ project_path project)
-  False -> do
-    shell' <- fromMaybe "bash" <$> need "SHELL"
-    let path' = Just $ project_path project
-    if is_gui
-      then spawn (shell' : ["-c", "\"", cmd, "\""]) path'
-      else do
-        -- TODO: Add config for terminal
-        let terminal = "x-terminal-emulator"
-            cmd' = shell' : ["-c", "\"", cmd <> "; read", "\""]
-        spawn (terminal : "-e" : cmd') path'
 
 -- | Test that a marker is valid for a path
 test_marker :: MonadIO m => FilePath -> ProjectMarker -> m Bool

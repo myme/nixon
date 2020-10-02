@@ -34,6 +34,7 @@ data Env = Env
   , source_dirs :: [FilePath]
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
+  , terminal :: Maybe Text
   , loglevel :: LogLevel
   }
 
@@ -58,6 +59,7 @@ build_env opts config = do
     , source_dirs = Config.source_dirs config ++ Options.source_dirs opts
     , use_direnv =  Options.use_direnv opts <|> Config.use_direnv config
     , use_nix =  Options.use_nix opts <|> Config.use_nix config
+    , terminal = Options.terminal opts <|> Config.terminal config
     , loglevel = fromMaybe (Config.loglevel config) (Options.loglevel opts)
     }
 

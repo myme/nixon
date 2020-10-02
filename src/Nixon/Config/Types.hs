@@ -8,7 +8,7 @@ import Nixon.Command (Command)
 import Nixon.Logging
 import Nixon.Project
 import Prelude hiding (FilePath)
-import Turtle (FilePath)
+import Turtle (Text, FilePath)
 
 data Backend = Fzf | Rofi deriving Show
 
@@ -20,5 +20,6 @@ data Config = Config
   , source_dirs :: [FilePath]
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
+  , terminal :: Maybe Text
   , loglevel :: LogLevel
   }

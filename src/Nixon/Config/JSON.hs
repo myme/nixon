@@ -28,6 +28,7 @@ data Config = Config
   , project_types :: [ProjectType]
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
+  , terminal :: Maybe Text
   } deriving (Generic, Show)
 
 empty :: Config
@@ -37,6 +38,7 @@ empty = Config
   , project_types = []
   , use_direnv = Nothing
   , use_nix = Nothing
+  , terminal = Nothing
   }
 
 instance FromJSON Config where
@@ -46,6 +48,7 @@ instance FromJSON Config where
     <*> (maybe [] (fmap mkptype) <$> v .:? "projects")
     <*> v .:? "use_direnv"
     <*> v .:? "use_nix"
+    <*> v .:? "terminal"
 
 newtype JsonProjectType = JsonProjectType ProjectType
 

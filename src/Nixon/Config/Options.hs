@@ -40,6 +40,7 @@ data Options = Options
   , project_types :: [ProjectType]
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
+  , terminal :: Maybe Text
   , loglevel :: Maybe LogLevel
   , config :: Maybe FilePath
   , commands :: [Command]
@@ -65,6 +66,7 @@ default_options = Options
   , project_types = []
   , use_direnv = Nothing
   , use_nix = Nothing
+  , terminal = Nothing
   , loglevel = Just LogWarning
   , config = Nothing
   , commands = []
@@ -95,6 +97,7 @@ parser default_config = Options
   <*> pure []
   <*> maybeSwitch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
   <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
+  <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")
   <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
   <*> optional (optPath "config" 'C' (config_help default_config))
   <*> pure []

@@ -36,6 +36,8 @@ import           Nixon.Types
 import           Nixon.Utils
 import           Prelude hiding (FilePath, log)
 import           Turtle hiding (decimal, die, env, err, find, output, shell, text, x)
+import qualified System.IO as IO
+import Nixon.Process (spawn, run)
 
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Maybe Text -> Nixon ()
@@ -90,7 +92,22 @@ run_cmd select_command project opts selector = with_local_config project $ do
       cmd' <- maybe_wrap_cmd project cmd >>= resolve_command project project_selector
       -- TODO: Always edit command before executing?
       log_info (format ("Running command '"%w%"'") cmd')
-      liftIO $ project_exec cmd' (cmdIsGui cmd) project
+      project_exec cmd' (cmdIsGui cmd) project
+
+project_exec :: Text -> Bool -> Project -> Nixon ()
+project_exec cmd is_gui project = liftIO (IO.hIsTerminalDevice IO.stdin) >>= \case
+  True  -> run [cmd] (Just $ project_path project)
+  False -> do
+    shell' <- fromMaybe "bash" <$> need "SHELL"
+    let path' = Just $ project_path project
+    if is_gui
+      then spawn (shell' : ["-c", "\"", cmd, "\""]) path'
+      else do
+        let cmd' = shell' : ["-c", "\"", cmd <> "; read", "\""]
+        term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
+           $  MaybeT (terminal <$> ask)
+          <|> MaybeT (need "TERMINAL")
+        spawn (term : "-e" : cmd') path'
 
 resolve_command :: Project -> Selector -> Command -> Nixon Text
 resolve_command project selector cmd = do
@@ -188,6 +205,7 @@ default_config = Config.Config
   , Config.source_dirs = []
   , Config.use_direnv = Nothing
   , Config.use_nix = Nothing
+  , Config.terminal = Nothing
   , Config.loglevel = LogWarning
   }
 
