@@ -1,5 +1,7 @@
 module Nixon.Utils
- ( find_dominating_file
+ ( escape
+ , find_dominating_file
+ , quote
  , printErr
  , shell_to_list
  , toLines
@@ -16,7 +18,16 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Prelude hiding (FilePath)
 import qualified System.IO as IO
-import           Turtle hiding (x, toLines)
+import           Turtle hiding (input, x, toLines)
+
+escape :: Text -> Text
+escape input = T.concatMap convert input
+  where convert '"' = "\\\""
+        convert '\\' = "\\\\"
+        convert x = T.singleton x
+
+quote :: Text -> Text
+quote input = "\"" <> escape input <> "\""
 
 -- | Locate a file going up the filesystem hierarchy
 find_dominating_file :: MonadIO m => FilePath -> FilePath -> m (Maybe FilePath)

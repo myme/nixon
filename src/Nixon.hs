@@ -101,9 +101,10 @@ project_exec cmd is_gui project = liftIO (IO.hIsTerminalDevice IO.stdin) >>= \ca
     shell' <- fromMaybe "bash" <$> need "SHELL"
     let path' = Just $ project_path project
     if is_gui
-      then spawn (shell' : ["-c", "\"", cmd, "\""]) path'
+      then spawn (shell' : ["-c", quote cmd]) path'
       else do
-        let cmd' = shell' : ["-c", "\"", cmd <> "; read", "\""]
+        let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
+            cmd' = shell' : ["-c", quote (cmd <> end)]
         term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
            $  MaybeT (terminal <$> ask)
           <|> MaybeT (need "TERMINAL")

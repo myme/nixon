@@ -3,9 +3,6 @@ module Main where
 import           Data.Char (isSpace, isPrint)
 import           Data.Text (Text)
 import qualified Data.Text as T
--- import           Nixon.Command ( Command(..), CommandPart(..))
--- import           Nixon.Project
--- import           Nixon.Project.Types
 import           Nixon.Select
 import           Nixon.Utils
 import           Test.Hspec
@@ -37,31 +34,25 @@ main :: IO ()
 main = hspec $ do
   describe "Command" command
   describe "Logging" logging
-  -- describe "Project" $
-  --   describe "resolve_command" $ do
-  --     let project = from_path "/foo/bar/baz"
 
-  --     it "joins parts with spaces" $ do
-  --       res <- runSelect empty $ resolve_command project "this is a command"
-  --       res `shouldBe` selection "this is a command"
+  describe "Utils" $ do
+    describe "escape" $ do
+      it "leaves simple string alone" $
+        escape "foo" `shouldBe` "foo"
 
-  --     it "joins parts with spaces" $ do
-  --       res <- runSelect empty $ resolve_command project ("this is:" <> path)
-  --       res `shouldBe` selection "this is: /foo/bar/baz"
+      it "escapes quote character" $
+        escape "\"" `shouldBe` "\\\""
 
-  --     it "shell aborts on empty selection" $ do
-  --       res <- runSelect empty $ do
-  --         let part = shell "empty" empty
-  --         resolve_command project ("this is:" <> part)
-  --       res `shouldBe` EmptySelection
+      it "escapes backslash character" $
+        escape "\\" `shouldBe` "\\\\"
 
-  --     it "nested aborts on empty selection" $ do
-  --       res <- runSelect empty $ do
-  --         let part = Command [NestedPart [ShellPart "empty" empty]] mempty
-  --         resolve_command project ("this is:" <> part)
-  --       res `shouldBe` EmptySelection
+    describe "quote" $ do
+      it "surrounds text in quotes" $
+        quote "foo" `shouldBe` "\"foo\""
 
-  describe "Utils" $
+      it "escapes inner text" $
+        quote "\"foo\"" `shouldBe` "\"\\\"foo\\\"\""
+
     describe "takeToSpace" $ do
       it "is empty with leading space" $
         property $ \text -> takeToSpace (" " <> getWs text) == ""
