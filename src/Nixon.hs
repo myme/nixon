@@ -20,7 +20,7 @@ import           Nixon.Command
 import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Options (Backend(..), ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
-import           Nixon.Config.Types (Config, LogLevel(..))
+import           Nixon.Config.Types (isGuiBackend, Config, LogLevel(..))
 import qualified Nixon.Config.Types as Config
 import           Nixon.Direnv
 import           Nixon.Fzf
@@ -95,20 +95,22 @@ run_cmd select_command project opts selector = with_local_config project $ do
       project_exec cmd' (cmdIsGui cmd) project
 
 project_exec :: Text -> Bool -> Project -> Nixon ()
-project_exec cmd is_gui project = liftIO (IO.hIsTerminalDevice IO.stdin) >>= \case
-  True  -> run [cmd] (Just $ project_path project)
-  False -> do
-    shell' <- fromMaybe "bash" <$> need "SHELL"
-    let path' = Just $ project_path project
-    if is_gui
-      then spawn (shell' : ["-c", quote cmd]) path'
-      else do
-        let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
-            cmd' = shell' : ["-c", quote (cmd <> end)]
-        term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
-           $  MaybeT (terminal <$> ask)
-          <|> MaybeT (need "TERMINAL")
-        spawn (term : "-e" : cmd') path'
+project_exec cmd is_gui project = do
+  isTTY <- (&&) <$> (not . isGuiBackend . backend <$> ask) <*> liftIO (IO.hIsTerminalDevice IO.stdin)
+  if isTTY
+    then run [cmd] (Just $ project_path project)
+    else do
+      shell' <- fromMaybe "bash" <$> need "SHELL"
+      let path' = Just $ project_path project
+      if is_gui
+        then spawn (shell' : ["-c", quote cmd]) path'
+        else do
+          let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
+              cmd' = shell' : ["-c", quote (cmd <> end)]
+          term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
+            $  MaybeT (terminal <$> ask)
+            <|> MaybeT (need "TERMINAL")
+          spawn (term : "-e" : cmd') path'
 
 resolve_command :: Project -> Selector -> Command -> Nixon Text
 resolve_command project selector cmd = do

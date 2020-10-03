@@ -2,6 +2,7 @@ module Nixon.Config.Types
   ( Backend(..)
   , LogLevel(..)
   , Config(..)
+  , isGuiBackend
   ) where
 
 import Nixon.Command (Command)
@@ -11,6 +12,10 @@ import Prelude hiding (FilePath)
 import Turtle (Text, FilePath)
 
 data Backend = Fzf | Rofi deriving Show
+
+isGuiBackend :: Backend -> Bool
+isGuiBackend Fzf = False
+isGuiBackend Rofi = True
 
 data Config = Config
   { backend :: Maybe Backend
