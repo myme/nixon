@@ -26,6 +26,7 @@ import           Nixon.Direnv
 import           Nixon.Fzf
 import           Nixon.Logging
 import           Nixon.Nix
+import           Nixon.Process (spawn, run)
 import           Nixon.Project (ProjectType, project_id)
 import qualified Nixon.Project as P
 import           Nixon.Project hiding (project_types)
@@ -35,9 +36,8 @@ import qualified Nixon.Select as Select
 import           Nixon.Types
 import           Nixon.Utils
 import           Prelude hiding (FilePath, log)
-import           Turtle hiding (decimal, die, env, err, find, output, shell, text, x)
 import qualified System.IO as IO
-import Nixon.Process (spawn, run)
+import           Turtle hiding (decimal, die, env, err, find, output, shell, text, x)
 
 -- | List projects, filtering if a filter is specified.
 list :: [Project] -> Maybe Text -> Nixon ()

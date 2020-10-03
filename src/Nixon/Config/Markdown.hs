@@ -97,11 +97,10 @@ parse nodes = go (S 0 []) (JSON.empty, []) nodes
           (Right p, rest') -> go st (cfg, p <! gui isGui <! json isJson : ps) rest'
 
       -- Pick up project type along the way
-      -- TODO: Accumulate multiple types?
       | otherwise = go st' (cfg, ps) rest
         where st' = st { stateHeaderLevel = l
-                      , stateProjectTypes = getKwargs "type" attr <> parentTypes
-                      }
+                       , stateProjectTypes = getKwargs "type" attr <> parentTypes
+                       }
               parentTypes | l == stateHeaderLevel st = []
                           | otherwise = stateProjectTypes st
 

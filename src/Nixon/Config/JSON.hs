@@ -10,6 +10,7 @@ module Nixon.Config.JSON
   ) where
 
 import           Control.Exception
+import           Control.Monad.Trans.Maybe
 import           Data.Aeson hiding (json)
 import           Data.Bifunctor
 import qualified Data.ByteString.Char8 as ByteString
@@ -80,11 +81,9 @@ read_config path = do
              | otherwise -> pure $ first (ParseError . fromString) (eitherDecodeStrict c)
 
 find_local_config :: MonadIO m => FilePath -> m (Maybe Config)
-find_local_config path = do
-  local_config <- find_dominating_file path ".nixon.json"
-  case local_config of
-    Nothing -> pure Nothing
-    Just file  -> read_config file >>= \case
-      Left (ParseError err) -> liftIO $ throwIO (ParseError err)
-      Left _ -> pure Nothing
-      Right json -> pure (Just json)
+find_local_config path = runMaybeT $ do
+  local_config <- MaybeT $ find_dominating_file path ".nixon.json"
+  res <- read_config local_config
+  MaybeT $ either onError (pure . Just) res
+  where onError (ParseError err) = liftIO $ throwIO (ParseError err)
+        onError _ = pure Nothing
