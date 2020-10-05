@@ -45,7 +45,7 @@ nix_run run' nix_file cmd = liftIO $
   in run' ("nix-shell" : args) (Just $ parent nix_file)
 
 nix_cmd :: Command -> FilePath -> Nixon (Maybe Command)
-nix_cmd cmd path' = use_nix <$> ask >>= \case
+nix_cmd cmd path' = use_nix . config <$> ask >>= \case
   Just True -> liftIO $ runMaybeT $ do
     nix_file <-
       MaybeT (find_dominating_file path' "shell.nix") <|>

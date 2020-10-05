@@ -2,12 +2,16 @@ module Nixon.Config.Types
   ( Backend(..)
   , LogLevel(..)
   , Config(..)
+  , ConfigError(..)
   , isGuiBackend
+  , defaultConfig
   ) where
 
+import Control.Applicative
+import Control.Exception
 import Nixon.Command (Command)
-import Nixon.Logging
-import Nixon.Project
+import Nixon.Logging (LogLevel(..))
+import Nixon.Project (ProjectType)
 import Prelude hiding (FilePath)
 import Turtle (Text, FilePath)
 
@@ -27,4 +31,37 @@ data Config = Config
   , use_nix :: Maybe Bool
   , terminal :: Maybe Text
   , loglevel :: LogLevel
+  } deriving Show
+
+instance Semigroup Config where
+  (<>) lhs rhs = lhs
+    { backend = backend rhs <|> backend lhs
+    , exact_match = exact_match rhs <|> exact_match lhs
+    , project_types = project_types lhs ++ project_types rhs
+    , commands = commands rhs ++ commands lhs  -- Prioritize local commands first
+    , source_dirs = source_dirs lhs ++ source_dirs rhs
+    , use_direnv = use_direnv rhs <|> use_direnv lhs
+    , use_nix = use_nix rhs <|> use_nix lhs
+    , terminal = terminal rhs <|> terminal lhs
+    , loglevel = loglevel rhs
+    }
+
+defaultConfig :: Config
+defaultConfig = Config
+  { backend = Nothing
+  , exact_match = Nothing
+  , project_types = []
+  , commands = []
+  , source_dirs = []
+  , use_direnv = Nothing
+  , use_nix = Nothing
+  , terminal = Nothing
+  , loglevel = LogWarning
   }
+
+data ConfigError = NoSuchFile
+                 | EmptyFile
+                 | ParseError Text
+                 deriving Show
+
+instance Exception ConfigError

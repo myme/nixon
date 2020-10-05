@@ -1,7 +1,6 @@
 module Nixon
   ( nixon
   , nixon_with_config
-  , default_config
   ) where
 
 import           Control.Arrow (second)
@@ -17,10 +16,9 @@ import qualified Data.Text as T
 import           Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as T
 import           Nixon.Command
-import qualified Nixon.Config.JSON as JSON
+import qualified Nixon.Config as Config
 import           Nixon.Config.Options (Backend(..), ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
-import           Nixon.Config.Types (isGuiBackend, Config, LogLevel(..))
 import qualified Nixon.Config.Types as Config
 import           Nixon.Direnv
 import           Nixon.Fzf
@@ -62,15 +60,10 @@ maybe_wrap_cmd project cmd = fmap (fromMaybe cmd) $ runMaybeT
 
 -- | Attempt to parse a local JSON
 with_local_config :: Project -> Nixon () -> Nixon ()
-with_local_config project action =
-  liftIO (JSON.find_local_config (project_path project)) >>= \case
+with_local_config project action = do
+  liftIO (Config.find_local_config (project_path project)) >>= \case
     Nothing -> action
-    Just config -> do
-      let update_env env = env
-            { use_direnv = JSON.use_direnv config
-            , use_nix = JSON.use_nix config
-            }
-      local update_env action
+    Just cfg -> local (\env -> env { config = config env <> cfg }) action
 
 -- | Find and run a command in a project.
 -- TODO: Print command before running it (add -q|--quiet)
@@ -84,7 +77,7 @@ run_cmd select_command project opts selector = with_local_config project $ do
       filter_cmd cmd = let ctypes = cmdProjectTypes cmd
                        in null ctypes || (not $ null $ intersect ptypes ctypes)
       project_selector = \shell' -> cd (project_path project) >> selector shell'
-  cmds <- filter filter_cmd . commands <$> ask
+  cmds <- filter filter_cmd . commands . config <$> ask
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
   if Options.select opts
     then resolve_command project project_selector cmd >>= liftIO . T.putStrLn
@@ -96,7 +89,7 @@ run_cmd select_command project opts selector = with_local_config project $ do
 
 project_exec :: Text -> Bool -> Project -> Nixon ()
 project_exec cmd is_gui project = do
-  isTTY <- (&&) <$> (not . isGuiBackend . backend <$> ask) <*> liftIO (IO.hIsTerminalDevice IO.stdin)
+  isTTY <- (&&) <$> (not . Config.isGuiBackend . backend <$> ask) <*> liftIO (IO.hIsTerminalDevice IO.stdin)
   if isTTY
     then run [cmd] (Just $ project_path project)
     else do
@@ -108,7 +101,7 @@ project_exec cmd is_gui project = do
           let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
               cmd' = shell' : ["-c", quote (cmd <> end)]
           term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
-            $  MaybeT (terminal <$> ask)
+            $  MaybeT (terminal . config <$> ask)
             <|> MaybeT (need "TERMINAL")
           spawn (term : "-e" : cmd') path'
 
@@ -118,7 +111,7 @@ resolve_command project selector cmd = do
   pure (intercalate "" expanded)
   where
     expand_placeholder (TextPart t) = pure t
-    expand_placeholder (Placeholder p) = find ((==) p . cmdName) . commands <$> ask >>= \case
+    expand_placeholder (Placeholder p) = find ((==) p . cmdName) . commands . config <$> ask >>= \case
       Nothing -> error $ "Invalid placeholder: " <> T.unpack p
       Just placeholder -> do
         resolved <- maybe_wrap_cmd project placeholder >>= resolve_command project selector
@@ -142,9 +135,10 @@ type CommandSelector = Project -> ProjectOpts -> [Command] -> IO (Maybe Command)
 get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, Selector)
 get_selectors = do
   env <- ask
-  let ptypes = project_types env
-      fzf_opts = maybe mempty fzf_exact (exact_match env)
-      rofi_opts = maybe mempty rofi_exact (exact_match env)
+  let cfg = config env
+      ptypes = project_types cfg
+      fzf_opts = maybe mempty fzf_exact (exact_match cfg)
+      rofi_opts = maybe mempty rofi_exact (exact_match cfg)
   pure $ case backend env of
     Fzf -> (ptypes, fzf_projects fzf_opts, fzf_project_command fzf_opts, fzf_with_edit fzf_opts)
     Rofi -> (ptypes, rofi_projects rofi_opts, \_ -> rofi_project_command rofi_opts, rofi rofi_opts)
@@ -180,15 +174,15 @@ run_action opts = do
 -- TODO: Pingbot integration?
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
-nixon_with_config :: MonadIO m => Config -> m ()
-nixon_with_config user_config = do
-  opts <- either die pure =<< Options.parse_args
-  err <- liftIO $ try $ runNixon opts user_config $ case Options.sub_command opts of
+nixon_with_config :: MonadIO m => Config.Config -> m ()
+nixon_with_config user_config = liftIO $ do
+  (sub_cmd, cfg) <- either die pure =<< Options.parse_args
+  err <- try $ runNixon (user_config <> cfg) $ case sub_cmd of
     ProjectCommand project_opts -> do
       log_info "Running <project> command"
-      env <- ask
-      let ptypes = project_types env
-          srcs = source_dirs env
+      cfg' <- config <$> ask
+      let ptypes = project_types cfg'
+          srcs = source_dirs cfg'
       projects <- sort_projects <$> liftIO (find_projects 1 ptypes srcs)
       project_action projects project_opts
     RunCommand run_opts -> do
@@ -197,21 +191,8 @@ nixon_with_config user_config = do
   case err of
     Left (EmptyError msg) -> die msg
     Right _ -> pure ()
-  where die err = liftIO $ log_error err >> exit (ExitFailure 1)
-
-default_config :: Config
-default_config = Config.Config
-  { Config.backend = Nothing
-  , Config.exact_match = Nothing
-  , Config.project_types = []
-  , Config.commands = []
-  , Config.source_dirs = []
-  , Config.use_direnv = Nothing
-  , Config.use_nix = Nothing
-  , Config.terminal = Nothing
-  , Config.loglevel = LogWarning
-  }
+  where die err = liftIO $ log_error (format w err) >> exit (ExitFailure 1)
 
 -- | Nixon with default configuration
 nixon :: MonadIO m => m ()
-nixon = nixon_with_config default_config
+nixon = nixon_with_config Config.defaultConfig

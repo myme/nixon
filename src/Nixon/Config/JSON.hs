@@ -3,25 +3,14 @@
 
 module Nixon.Config.JSON
   ( Config(..)
-  , JSONError(..)
   , empty
-  , find_local_config
-  , read_config
   ) where
 
-import           Control.Exception
-import           Control.Monad.Trans.Maybe
-import           Data.Aeson hiding (json)
-import           Data.Bifunctor
-import qualified Data.ByteString.Char8 as ByteString
-import           Data.Char
-import qualified Data.Text as T
-import           GHC.Generics
-import           Nixon.Project (ProjectMarker(..), ProjectType(..))
-import           Nixon.Utils (find_dominating_file)
-import           Prelude hiding (FilePath)
-import           System.IO.Error
-import           Turtle hiding (empty, err)
+import Data.Aeson hiding (json)
+import GHC.Generics
+import Nixon.Project (ProjectMarker(..), ProjectType(..))
+import Prelude hiding (FilePath)
+import Turtle hiding (empty, err)
 
 data Config = Config
   { exact_match :: Maybe Bool
@@ -63,27 +52,3 @@ instance FromJSON JsonProjectType where
 
 mkptype :: JsonProjectType -> ProjectType
 mkptype (JsonProjectType ptype) = ptype
-
-data JSONError = NoSuchFile
-               | EmptyFile
-               | ParseError Text
-               deriving Show
-
-instance Exception JSONError
-
-read_config :: MonadIO m => FilePath -> m (Either JSONError Config)
-read_config path = do
-  let path' = T.unpack (format fp path)
-  liftIO $ tryIOError (ByteString.readFile path') >>= \case
-    Left err | isDoesNotExistError err -> pure (Left NoSuchFile)
-             | otherwise -> ioError err
-    Right c  | ByteString.dropWhile isSpace c == "" -> pure (Left EmptyFile)
-             | otherwise -> pure $ first (ParseError . fromString) (eitherDecodeStrict c)
-
-find_local_config :: MonadIO m => FilePath -> m (Maybe Config)
-find_local_config path = runMaybeT $ do
-  local_config <- MaybeT $ find_dominating_file path ".nixon.json"
-  res <- read_config local_config
-  MaybeT $ either onError (pure . Just) res
-  where onError (ParseError err) = liftIO $ throwIO (ParseError err)
-        onError _ = pure Nothing

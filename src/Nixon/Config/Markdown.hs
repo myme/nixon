@@ -2,7 +2,6 @@
 
 module Nixon.Config.Markdown
   ( defaultPath
-  , readMarkdown
   , parseMarkdown
   ) where
 
@@ -14,6 +13,7 @@ import           Data.Text (unpack, pack)
 import           Data.Text.Encoding (encodeUtf8)
 import           Nixon.Command hiding (parse)
 import qualified Nixon.Config.JSON as JSON
+import           Nixon.Config.Types
 import           Prelude hiding (FilePath)
 import           System.Directory (XdgDirectory(..), getXdgDirectory)
 import           Text.Pandoc (Attr, Block(..))
@@ -27,20 +27,21 @@ defaultPath :: MonadIO m => m FilePath
 defaultPath = liftIO $ fromString <$> getXdgDirectory XdgConfig "nixon.md"
 
 
--- | Extract commands from a markdown file
-readMarkdown :: MonadIO m => FilePath -> m (JSON.Config, [Command])
-readMarkdown filename = liftIO $ P.runIOorExplode $
-  liftIO $ parseMarkdown =<< readTextFile filename
-
-
 -- | Extract commands from a markdown document
-parseMarkdown :: MonadIO m => Text -> m (JSON.Config, [Command])
-parseMarkdown markdown = liftIO $ P.runIOorExplode $ do
-  res <- parse . query extract <$> P.readMarkdown mdOpts markdown
-  case res of
-    Left errorMsg -> error (unpack errorMsg)
-    Right cmds -> pure cmds
+parseMarkdown :: Text -> Either Text Config
+parseMarkdown markdown = do
+  nodes <- (first (pack . show) . P.runPure) $ (query extract) <$> P.readMarkdown mdOpts markdown
+  buildConfig <$> parse nodes
   where mdOpts = P.def { P.readerExtensions = P.pandocExtensions }
+        buildConfig :: (JSON.Config, [Command]) -> Config
+        buildConfig (cfg, cmds) = defaultConfig
+          { exact_match = JSON.exact_match cfg
+          , source_dirs = JSON.source_dirs cfg
+          , project_types = JSON.project_types cfg
+          , use_direnv = JSON.use_direnv cfg
+          , use_nix = JSON.use_nix cfg
+          , commands = cmds
+          }
 
 
 data Node = Head Int Text Attr -- ^ level name command type

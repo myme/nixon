@@ -12,9 +12,9 @@ module Nixon.Config.Options
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nixon.Command
-import qualified Nixon.Config.JSON as JSON
+import           Nixon.Config (read_config)
 import qualified Nixon.Config.Markdown as MD
-import           Nixon.Config.Types hiding (Config(..))
+import           Nixon.Config.Types (Backend(..), Config, ConfigError(..), LogLevel(..))
 import           Nixon.Project (ProjectType)
 import           Nixon.Utils (implode_home)
 import qualified Options.Applicative as Opts
@@ -134,16 +134,9 @@ merge_opts secondary primary = ProjectOpts
   }
 
 -- | Read configuration from config file and command line arguments
-parse_args :: MonadIO m => m (Either Text Options)
+parse_args :: MonadIO m => m (Either ConfigError (SubCommand, Config))
 parse_args = do
   default_config <- implode_home =<< MD.defaultPath
   opts <- Turtle.options "Launch project environment" (parser default_config)
   config_path <- maybe MD.defaultPath pure (config opts)
-  liftIO $ MD.readMarkdown config_path >>= \(cfg, cmds) -> pure $ Right opts
-      { exact_match = exact_match opts <|> JSON.exact_match cfg
-      , source_dirs = JSON.source_dirs cfg ++ source_dirs opts
-      , project_types = JSON.project_types cfg
-      , use_direnv = use_direnv opts <|> JSON.use_direnv cfg
-      , use_nix = use_nix opts <|> JSON.use_nix cfg
-      , commands = cmds
-      }
+  liftIO $ (liftA2 (,) (pure $ sub_command opts)) <$> read_config config_path

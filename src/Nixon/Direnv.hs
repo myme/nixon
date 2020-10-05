@@ -14,7 +14,7 @@ import           Turtle hiding (find, root)
 
 -- | Convert a regular command to a direnv command
 direnv_cmd :: Command -> FilePath -> Nixon (Maybe Command)
-direnv_cmd cmd path' = use_direnv <$> ask >>= \case
+direnv_cmd cmd path' = use_direnv . config <$> ask >>= \case
   Just True -> liftIO $ runMaybeT $ do
     direnv_active <- maybe False find_path <$> need "DIRENV_DIR"
     if direnv_active
