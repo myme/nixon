@@ -46,7 +46,7 @@ build_env config = do
 type Nixon = ReaderT Env IO
 
 instance HasLogging Nixon where
-  loglevel = Config.loglevel . config <$> ask
+  loglevel = fromMaybe Logging.LogWarning . Config.loglevel . config <$> ask
   logout = printErr
 
 runNixon :: MonadIO m => Config -> ReaderT Env m a -> m a

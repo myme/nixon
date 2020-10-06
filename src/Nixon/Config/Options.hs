@@ -11,11 +11,10 @@ module Nixon.Config.Options
 
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Nixon.Command
 import           Nixon.Config (read_config)
 import qualified Nixon.Config.Markdown as MD
 import           Nixon.Config.Types (Backend(..), Config, ConfigError(..), LogLevel(..))
-import           Nixon.Project (ProjectType)
+import qualified Nixon.Config.Types as Config
 import           Nixon.Utils (implode_home)
 import qualified Options.Applicative as Opts
 import           Prelude hiding (FilePath)
@@ -33,17 +32,8 @@ import           Turtle hiding (err, select)
 --      --backend-arg "rofi: ..."
 -- | Command line options.
 data Options = Options
-  { backend :: Maybe Backend
-    -- , backend_args :: [Text]
-  , exact_match :: Maybe Bool
-  , source_dirs :: [FilePath]
-  , project_types :: [ProjectType]
-  , use_direnv :: Maybe Bool
-  , use_nix :: Maybe Bool
-  , terminal :: Maybe Text
-  , loglevel :: Maybe LogLevel
-  , config :: Maybe FilePath
-  , commands :: [Command]
+  { config_file :: Maybe FilePath
+  , config :: Config
   , sub_command :: SubCommand
   } deriving Show
 
@@ -60,16 +50,8 @@ data ProjectOpts = ProjectOpts
 
 default_options :: Options
 default_options = Options
-  { backend = Nothing
-  , exact_match = Nothing
-  , source_dirs = []
-  , project_types = []
-  , use_direnv = Nothing
-  , use_nix = Nothing
-  , terminal = Nothing
-  , loglevel = Just LogWarning
-  , config = Nothing
-  , commands = []
+  { config_file = Nothing
+  , config = Config.defaultConfig
   , sub_command = ProjectCommand ProjectOpts
     { project = Nothing
     , command = Nothing
@@ -91,16 +73,8 @@ maybeSwitch long short help =
 -- TODO: Allow switching off "use_direnv" and "use_nix"
 parser :: FilePath -> Parser Options
 parser default_config = Options
-  <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
-  <*> maybeSwitch "exact" 'e' "Enable exact match"
-  <*> many (optPath "path" 'p' "Project directory")
-  <*> pure []
-  <*> maybeSwitch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
-  <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
-  <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")
-  <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
-  <*> optional (optPath "config" 'C' (config_help default_config))
-  <*> pure []
+  <$> optional (optPath "config" 'C' (config_help default_config))
+  <*> parse_config
   <*> ( ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
         RunCommand <$> subcommand "run" "Run command" project_parser <|>
         ProjectCommand <$> project_parser)
@@ -117,6 +91,16 @@ parser default_config = Options
       ,("error", LogError)
       ]
     config_help = fromString . Text.unpack . format ("Path to configuration file (default: "%fp%")")
+    parse_config = Config.Config
+      <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
+      <*> maybeSwitch "exact" 'e' "Enable exact match"
+      <*> pure [] -- Project types are not CLI args
+      <*> pure [] -- Commands are not CLI args
+      <*> many (optPath "path" 'p' "Project directory")
+      <*> maybeSwitch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
+      <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
+      <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")
+      <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
 
 project_parser :: Parser ProjectOpts
 project_parser = ProjectOpts
@@ -138,5 +122,9 @@ parse_args :: MonadIO m => m (Either ConfigError (SubCommand, Config))
 parse_args = do
   default_config <- implode_home =<< MD.defaultPath
   opts <- Turtle.options "Launch project environment" (parser default_config)
-  config_path <- maybe MD.defaultPath pure (config opts)
-  liftIO $ (liftA2 (,) (pure $ sub_command opts)) <$> read_config config_path
+  config_path <- maybe MD.defaultPath pure (config_file opts)
+  liftIO $ do
+    cfg <- read_config config_path
+    let mergedConfig = liftA2 (<>) cfg (pure $ config opts)
+        subCmdConfig = liftA2 (,) (pure $ sub_command opts) mergedConfig
+    pure subCmdConfig

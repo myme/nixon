@@ -30,7 +30,7 @@ data Config = Config
   , use_direnv :: Maybe Bool
   , use_nix :: Maybe Bool
   , terminal :: Maybe Text
-  , loglevel :: LogLevel
+  , loglevel :: Maybe LogLevel
   } deriving Show
 
 instance Semigroup Config where
@@ -43,7 +43,7 @@ instance Semigroup Config where
     , use_direnv = use_direnv rhs <|> use_direnv lhs
     , use_nix = use_nix rhs <|> use_nix lhs
     , terminal = terminal rhs <|> terminal lhs
-    , loglevel = loglevel rhs
+    , loglevel = loglevel rhs <|> loglevel lhs
     }
 
 defaultConfig :: Config
@@ -56,7 +56,7 @@ defaultConfig = Config
   , use_direnv = Nothing
   , use_nix = Nothing
   , terminal = Nothing
-  , loglevel = LogWarning
+  , loglevel = Just LogWarning
   }
 
 data ConfigError = NoSuchFile
