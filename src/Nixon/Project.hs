@@ -120,6 +120,7 @@ find_projects max_depth project_types source_dirs
   | otherwise = reduce Fold.list $ do
     expanded <- liftIO $ concat <$> traverse expand_path source_dirs
     candidate <- select expanded
+    guard =<< testdir candidate
     liftIO (find_project project_types candidate) >>= \case
       Nothing -> do
         children <- ls candidate
