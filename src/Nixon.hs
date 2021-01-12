@@ -3,7 +3,7 @@ module Nixon
   , nixon_with_config
   ) where
 
-import           Control.Exception
+import           Control.Exception hiding (evaluate)
 import           Control.Monad.Trans.Maybe
 import           Control.Monad.Trans.Reader
 import           Data.Aeson
@@ -13,13 +13,14 @@ import           Data.List.NonEmpty (NonEmpty((:|)))
 import           Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import           Nixon.Command
+import           Nixon.Command hiding (empty)
 import qualified Nixon.Config as Config
 import           Nixon.Config.Options (Backend(..), ProjectOpts(..), RunOpts(..), SubCommand(..))
 import qualified Nixon.Config.Options as Opts
 import           Nixon.Config.Types (ignore_case)
 import qualified Nixon.Config.Types as Config
 import           Nixon.Direnv
+import           Nixon.Evaluator
 import           Nixon.Fzf
 import           Nixon.Logging
 import           Nixon.Nix
@@ -97,19 +98,18 @@ project_exec project cmd env' = do
   let source = cmdSource cmd
   log_info (format ("Running command "%w) source)
   if isTTY || forceTTY
-    then run (pure source) (Just $ project_path project) env'
+    then evaluate run cmd (Just $ project_path project) env'
     else do
-      shell' <- fromMaybe "bash" <$> need "SHELL"
       let path' = Just $ project_path project
       if cmdIsBg cmd
-        then spawn (shell' :| ["-c" <> quote source]) path' env'
+        then evaluate spawn cmd path' env'
         else do
           let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
-              cmd' = T.unwords $ shell' : "-c" : [quote (source <> end)]
+              cmd' = cmd { cmdSource = cmdSource cmd <> end }
           term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
              $  MaybeT (terminal . config <$> ask)
             <|> MaybeT (need "TERMINAL")
-          spawn (term :| "-e" : [cmd']) path' env'
+          evaluate (spawn . ((term :| ["-e"]) <>)) cmd' path' env'
 
 -- | Resolve all command environment variable placeholders.
 resolve_env :: Project -> Selector -> Command -> Nixon Env
@@ -128,10 +128,10 @@ resolve_cmd project selector cmd = do
   selection <- liftIO $ selector $ do
     case cmdOutput cmd of
       Lines -> do
-        candidate <- run_with_output stream (pure $ cmdSource cmd) path' env'
+        candidate <- evaluate (run_with_output stream) cmd path' env'
         pure $ Select.Identity (lineToText candidate)
       JSON -> do
-        output <- BS.strict $ run_with_output BS.stream (pure $ cmdSource cmd) path' env'
+        output <- BS.strict $ evaluate (run_with_output BS.stream) cmd path' env'
         case eitherDecodeStrict output :: Either String [Select.Candidate] of
           Left err -> error err
           Right candidates -> select candidates

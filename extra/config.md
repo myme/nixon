@@ -9,6 +9,7 @@
   "use_direnv":true,
   "use_nix":true,
   "project_dirs": [
+    "~/src"
   ],
   "project_types": [
     { "name": "cabal", "test": ["cabal.project"], "desc": "Cabal new-style project"},

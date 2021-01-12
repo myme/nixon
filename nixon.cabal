@@ -38,6 +38,7 @@ library
                      , Nixon.Config.Options
                      , Nixon.Config.Types
                      , Nixon.Direnv
+                     , Nixon.Evaluator
                      , Nixon.Fzf
                      , Nixon.Logging
                      , Nixon.Nix
@@ -51,6 +52,7 @@ library
                      , aeson
                      , bytestring
                      , containers
+                     , cryptohash
                      , directory
                      , foldl
                      , haskeline

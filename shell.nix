@@ -15,6 +15,7 @@ in haskellPackages.shellFor {
     cabal-install
     cabal2nix
     hlint
+    python3
   ]) ++ (with haskellPackages; [
     ghcid
   ]);

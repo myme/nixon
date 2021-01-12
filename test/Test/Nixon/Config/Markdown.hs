@@ -4,7 +4,7 @@ module Test.Nixon.Config.Markdown where
 
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Nixon.Command (CommandEnv(Env))
+import           Nixon.Command (CommandEnv(Env), Language (Bash))
 import qualified Nixon.Command as Cmd
 import           Nixon.Config.Markdown (parseMarkdown)
 import           Nixon.Config.Types (defaultConfig)
@@ -131,7 +131,7 @@ command_tests = describe "commands section" $ do
       Right Cfg.Config
         { Cfg.commands = [Cmd.Command
           { Cmd.cmdName = "hello"
-          , Cmd.cmdLang = "bash"
+          , Cmd.cmdLang = Bash
           , Cmd.cmdDesc = Just "Command description."
           , Cmd.cmdSource = "echo Hello World"
           , Cmd.cmdEnv = []
@@ -151,7 +151,7 @@ command_tests = describe "commands section" $ do
       Right Cfg.Config
         { Cfg.commands = [Cmd.Command
           { Cmd.cmdName = "hello"
-          , Cmd.cmdLang = "bash"
+          , Cmd.cmdLang = Bash
           , Cmd.cmdSource = "echo Hello World"
           , Cmd.cmdEnv = []
           , Cmd.cmdIsBg = False

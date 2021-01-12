@@ -2,6 +2,8 @@ module Nixon.Command
   ( Command(..)
   , CommandEnv(..)
   , CommandOutput(..)
+  , Language(..)
+  , empty
   , is_bg_command
   , mkcommand
   , parse
@@ -13,7 +15,8 @@ module Nixon.Command
   , show_command_oneline
   ) where
 
-import           Data.Text (Text, pack, replace)
+
+import           Data.Text (Text, pack, replace, unpack)
 import           Nixon.Utils (first_word)
 import qualified Text.Parsec as P
 import           Text.Parsec hiding (parse)
@@ -23,7 +26,7 @@ import           Turtle ((%), format, s)
 data Command = Command
   { cmdName :: Text
   , cmdDesc :: Maybe Text
-  , cmdLang :: Text
+  , cmdLang :: Language
   , cmdProjectTypes :: [Text]
   , cmdSource :: Text
   , cmdEnv :: [(Text, CommandEnv)]
@@ -31,18 +34,57 @@ data Command = Command
   , cmdOutput :: CommandOutput
   } deriving (Eq, Show)
 
+empty :: Command
+empty = Command
+  { cmdName = ""
+  , cmdDesc = Nothing
+  , cmdLang = None
+  , cmdProjectTypes = []
+  , cmdSource = ""
+  , cmdEnv = []
+  , cmdIsBg = False
+  , cmdOutput = Lines
+  }
+
+data Language = Bash
+              | Haskell
+              | JavaScript
+              | Python
+              | Unknown Text
+              | None
+              deriving Eq
+
+instance Show Language where
+  show = \case
+    Bash       -> "bash"
+    Haskell    -> "haskell"
+    JavaScript -> "javascript"
+    Python     -> "python"
+    Unknown l  -> unpack l
+    None       -> ""
+
+parseLang :: Text -> Language
+parseLang = \case
+  "bash"       -> Bash
+  "haskell"    -> Haskell
+  "js"         -> JavaScript
+  "javascript" -> JavaScript
+  "python"     -> Python
+  ""           -> None
+  lang         -> Unknown lang
+
 -- | Placeholders for environment variables
 newtype CommandEnv = Env Text deriving (Eq, Show)
 
 data CommandOutput = Lines | JSON deriving (Eq, Show)
 
-mkcommand :: Text -> Text -> [Text] -> Text -> Either Text Command
+mkcommand :: Text -> Maybe Text -> [Text] -> Text -> Either Text Command
 mkcommand spec lang ptypes src = case parse parse_args spec of
   Left err -> Left err
   Right args -> Right $ Command
     { cmdName = first_word spec
     , cmdDesc = Nothing
-    , cmdLang = lang
+    , cmdLang = maybe None parseLang lang
     , cmdProjectTypes = ptypes
     , cmdSource = src
     , cmdEnv = args

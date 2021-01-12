@@ -18,6 +18,7 @@ in haskellPackages.mkDerivation {
     base
     bytestring
     containers
+    cryptohash
     directory
     foldl
     haskeline
