@@ -5,11 +5,11 @@ module Nixon.Config.Markdown
   , parseMarkdown
   ) where
 
-import           Control.Arrow ((***))
 import           Data.Aeson (eitherDecodeStrict)
 import           Data.Bifunctor (Bifunctor(first))
+import           Data.Either (fromRight)
 import           Data.Maybe (listToMaybe)
-import           Data.Text (unpack, pack)
+import           Data.Text (pack)
 import           Data.Text.Encoding (encodeUtf8)
 import           Nixon.Command hiding (parse)
 import qualified Nixon.Config.JSON as JSON
@@ -30,7 +30,7 @@ defaultPath = liftIO $ fromString <$> getXdgDirectory XdgConfig "nixon.md"
 -- | Extract commands from a markdown document
 parseMarkdown :: Text -> Either Text Config
 parseMarkdown markdown = do
-  nodes <- (first (pack . show) . P.runPure) $ (query extract) <$> P.readMarkdown mdOpts markdown
+  nodes <- first (pack . show) . P.runPure $ query extract <$> P.readMarkdown mdOpts markdown
   buildConfig <$> parse nodes
   where mdOpts = P.def { P.readerExtensions = P.pandocExtensions }
         buildConfig :: (JSON.Config, [Command]) -> Config
@@ -53,13 +53,12 @@ data Node = Head Int Text Attr -- ^ level name command type
 
 -- | "Tokenize" Pandoc blocks into a list of Nodes
 extract :: Block -> [Node]
-extract (Header lvl attr@(name, _, _) _) = [Head lvl (pack name) attr]
-extract p@(Para _) = [Paragraph $ either (const "") id text]
+extract (Header lvl attr@(name, _, _) _) = [Head lvl name attr]
+extract p@(Para _) = [Paragraph $ fromRight "" text]
   where text = P.runPure $ do
           let doc = B.doc (B.singleton p)
           P.writePlain P.def doc
-extract (CodeBlock (_, args, _) src) = [Source lang (pack src)]
-  where lang = pack <$> listToMaybe args
+extract (CodeBlock (_, args, _) src) = [Source (listToMaybe args) src]
 extract _ = [NA]
 
 
@@ -70,7 +69,7 @@ data ParseState = S { stateHeaderLevel :: Int
 
 -- | Parse Command blocks from a list of nodes
 parse :: [Node] -> Either Text (JSON.Config, [Command])
-parse nodes = go (S 0 []) (JSON.empty, []) nodes
+parse = go (S 0 []) (JSON.empty, [])
   where
     go _ ps [] = Right ps
 
@@ -110,11 +109,11 @@ parse nodes = go (S 0 []) (JSON.empty, []) nodes
 
 
 hasArgs :: Text -> Attr -> Bool
-hasArgs key (_, args, _) = unpack key `elem` args
+hasArgs key (_, args, _) = key `elem` args
 
 
 getKwargs :: Text -> Attr -> [Text]
-getKwargs key (_, _, kwargs) = map snd $ filter ((== key) . fst) $ map (pack *** pack) kwargs
+getKwargs key (_, _, kwargs) = map snd $ filter ((== key) . fst) kwargs
 
 
 parseConfig :: [Node] -> (Either Text JSON.Config, [Node])

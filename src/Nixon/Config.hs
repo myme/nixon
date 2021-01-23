@@ -4,7 +4,6 @@ module Nixon.Config
  ) where
 
 import           Control.Exception (throwIO)
-import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor
 import           Data.Char

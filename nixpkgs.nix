@@ -1,5 +1,5 @@
 import (builtins.fetchGit {
-  url = "https://github.com/NixOS/nixpkgs-channels";
-  ref = "nixos-20.03";
-  rev = "5adf2a6c11646898742b0c08f7e94101620ba707";
+  url = "https://github.com/NixOS/nixpkgs";
+  ref = "nixos-20.09";
+  rev = "ce4a93e13a73a53028f9e86a8a8c7f21fbc93196";
 })

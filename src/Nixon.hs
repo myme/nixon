@@ -25,7 +25,6 @@ import           Nixon.Fzf
 import           Nixon.Logging
 import           Nixon.Nix
 import           Nixon.Process (spawn, run)
-import           Nixon.Project (ProjectType, project_id)
 import qualified Nixon.Project as P
 import           Nixon.Project hiding (project_types)
 import           Nixon.Rofi
@@ -75,7 +74,7 @@ run_cmd :: CommandSelector
 run_cmd select_command project opts selector = with_local_config project $ do
   let ptypes = map project_id $ P.project_types project
       filter_cmd cmd = let ctypes = cmdProjectTypes cmd
-                       in null ctypes || (not $ null $ intersect ptypes ctypes)
+                       in null ctypes || not (null $ intersect ptypes ctypes)
       project_selector = \shell' -> cd (project_path project) >> selector shell'
   cmds <- filter filter_cmd . commands . config <$> ask
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds

@@ -22,7 +22,7 @@ import           Data.List (sort)
 import qualified Data.Map as Map
 import           Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
-import           Nixon.Command (show_command_oneline, Command(..))
+import           Nixon.Command (show_command_oneline)
 import           Nixon.Config.Options (ProjectOpts)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Process
