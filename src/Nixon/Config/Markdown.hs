@@ -41,6 +41,7 @@ parseMarkdown markdown = do
           , use_direnv = JSON.use_direnv cfg
           , use_nix = JSON.use_nix cfg
           , commands = cmds
+          , loglevel = Nothing
           }
 
 

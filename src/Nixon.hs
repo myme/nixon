@@ -83,7 +83,7 @@ run_cmd select_command project opts selector = with_local_config project $ do
     else do
       cmd' <- maybe_wrap_cmd project cmd >>= resolve_command project project_selector
       -- TODO: Always edit command before executing?
-      log_info (format ("Running command '"%w%"'") cmd')
+      log_info (format ("Running command "%w) cmd')
       project_exec cmd' (cmdIsGui cmd) project
 
 project_exec :: Text -> Bool -> Project -> Nixon ()
