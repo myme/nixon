@@ -9,7 +9,6 @@ module Nixon.Config.Options
   , parse_args
   ) where
 
-import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nixon.Config (read_config)
 import qualified Nixon.Config.Markdown as MD
