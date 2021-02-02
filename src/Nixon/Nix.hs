@@ -50,9 +50,8 @@ nix_cmd cmd path' = use_nix . config <$> ask >>= \case
     nix_file <-
       MaybeT (find_dominating_file path' "shell.nix") <|>
       MaybeT (find_dominating_file path' "default.nix")
-    let parts =
-          ["nix-shell" , "--command"] ++
-          cmdParts cmd ++
-          [TextPart $ format fp nix_file]
+    let parts = "nix-shell --command "
+              : NestedPart (cmdParts cmd)
+              : [TextPart $ format (" "%fp) nix_file]
     pure cmd { cmdParts = parts }
   _ -> pure Nothing

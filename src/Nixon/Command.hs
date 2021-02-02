@@ -21,6 +21,7 @@ module Nixon.Command
 import           Data.String (IsString(..))
 import           Data.Text (pack, unpack, Text, intercalate)
 import qualified Data.Text as T
+import           Nixon.Utils (quote)
 import qualified Text.Parsec as P
 import           Text.Parsec hiding (parse)
 import           Text.Parsec.Text
@@ -43,6 +44,7 @@ instance Show Command where
 
 data CommandPart = TextPart Text
                  | Placeholder Text
+                 | NestedPart [CommandPart]
                  deriving (Eq, Show)
 
 
@@ -93,9 +95,10 @@ show_command_oneline cmd = format (s%" - "%s) (cmdName cmd) desc
 
 
 show_parts :: [CommandPart] -> Text
-show_parts = intercalate " " . map format_part
+show_parts = T.unwords . map format_part
   where format_part (TextPart src) = src
         format_part (Placeholder n) = format ("<"%s%">") n
+        format_part (NestedPart ns) = quote $ show_parts ns
 
 
 list_commands :: [Command] -> Text
@@ -116,7 +119,7 @@ parse_parts :: Parser [CommandPart]
 parse_parts = collapse <$> choice
   [ (:) <$> parse_placeholder <*> parse_parts
   , (:) <$> parse_text_part <*> parse_parts
-  , pure [] <* eof
+  , []  <$  eof
   ]
   where collapse (TextPart x : TextPart y : rest) = TextPart (x <> y) : collapse rest
         collapse (x : rest) = x : collapse rest

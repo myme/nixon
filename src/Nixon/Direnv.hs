@@ -21,7 +21,7 @@ direnv_cmd cmd path' = use_direnv . config <$> ask >>= \case
       then pure cmd
       else do
         _ <- MaybeT (fmap dirname <$> find_dominating_file path' ".envrc")
-        let parts = ["direnv exec ", TextPart $ format fp path', " "] ++ cmdParts cmd
+        let parts = ["direnv exec ", TextPart $ format (fp%" ") path'] ++ cmdParts cmd
         lift . pure $ cmd { cmdParts = parts }
   _ -> pure Nothing
   where find_path = (`elem` parents path') . fromText . T.dropWhile (/= '/')

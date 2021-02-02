@@ -11,7 +11,6 @@ import           Data.Aeson
 import           Data.Foldable (find)
 import           Data.List (intersect)
 import           Data.Maybe (fromMaybe)
-import           Data.Text (intercalate)
 import qualified Data.Text as T
 import           Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as T
@@ -105,11 +104,11 @@ project_exec cmd is_gui project = do
           spawn (term : "-e" : cmd') path'
 
 resolve_command :: Project -> Selector -> Command -> Nixon Text
-resolve_command project selector cmd = do
-  expanded <- mapM expand_placeholder (cmdParts cmd)
-  pure (intercalate "" expanded)
+resolve_command project selector cmd = expand_placeholders (cmdParts cmd)
   where
+    expand_placeholders = fmap T.concat . mapM expand_placeholder
     expand_placeholder (TextPart t) = pure t
+    expand_placeholder (NestedPart ns) = quote <$> expand_placeholders ns
     expand_placeholder (Placeholder p) = find ((==) p . cmdName) . commands . config <$> ask >>= \case
       Nothing -> error $ "Invalid placeholder: " <> T.unpack p
       Just placeholder -> do
