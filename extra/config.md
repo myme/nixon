@@ -25,47 +25,47 @@
 
 ## Generic commands
 
-### terminal {.command .gui}
+### `terminal` {.gui}
 
 ```bash
 x-terminal-emulator
 ```
 
-### emacs {.command .gui}
+### `emacs` {.gui}
 
 ```bash
 emacs
 ```
 
-### networks {.command}
+### `networks`
 
 ```bash
 nmcli -t connection | cut -d':' -f1
 ```
 
-### network-connect {.command}
+### `network-connect`
 
 ```bash
 nmcli connection up "$(nixon networks)"
 ```
 
-## `nix` stuff
+## nix stuff
 
-### nix-build {.command}
+### `nix-build`
 
 ```bash
 nix-build
 ```
 
-### nix-shell {.command}
+### `nix-shell`
 
 ```bash
 nix-shell
 ```
 
-## `npm` stuff {type="npm"}
+## npm stuff {type="npm"}
 
-### npm-scripts {.command .json}
+### `npm-scripts` {.json}
 
 List all `npm` scripts in a `package.json`.
 
@@ -73,27 +73,27 @@ List all `npm` scripts in a `package.json`.
 jq '.scripts | to_entries | map({ title: (.key + " → " + .value), value: .key })' package.json
 ```
 
-### npm-run {.command}
+### `npm-run`
 
 ```bash
 npm run "$(nixon npm-scripts)"
 ```
 
-### npm-install {.command}
+### `npm-install`
 
 ```bash
 npm install
 ```
 
-## `yarn` stuff {type="yarn"}
+## yarn stuff {type="yarn"}
 
-### yarn-run {.command}
+### `yarn-run`
 
 ```bash
 yarn run "$(nixon npm-scripts)"
 ```
 
-### yarn-install {.command}
+### `yarn-install`
 
 ```bash
 yarn install
@@ -101,19 +101,19 @@ yarn install
 
 ## Cabal stuff {type="cabal"}
 
-### cabal-build {.command}
+### `cabal-build`
 
 ```bash
 cabal build
 ```
 
-### cabal-run {.command}
+### `cabal-run`
 
 ```bash
 cabal run
 ```
 
-### cabal-test {.command}
+### `cabal-test`
 
 ```bash
 cabal test
@@ -121,13 +121,13 @@ cabal test
 
 ## Git stuff {type="git"}
 
-### git-log {.command}
+### `git-log`
 
 ```bash
 git log --oneline --color
 ```
 
-### git-files {.command}
+### `git-files`
 
 ```bash
 git ls-files
@@ -135,13 +135,13 @@ git ls-files
 
 ## Files
 
-### rg-files {.command}
+### `rg-files`
 
 ```bash
 rg --files
 ```
 
-### vim-file {.command}
+### `vim-file`
 
 ```bash
 vim "$(nixon rg-files)"
