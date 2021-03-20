@@ -36,6 +36,7 @@ parseMarkdown markdown = do
         buildConfig :: (JSON.Config, [Command]) -> Config
         buildConfig (cfg, cmds) = defaultConfig
           { exact_match = JSON.exact_match cfg
+          , ignore_case = JSON.ignore_case cfg
           , source_dirs = JSON.source_dirs cfg
           , project_types = JSON.project_types cfg
           , use_direnv = JSON.use_direnv cfg

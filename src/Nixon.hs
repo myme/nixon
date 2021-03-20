@@ -10,7 +10,7 @@ import           Control.Monad.Trans.Reader
 import           Data.Aeson
 import           Data.Foldable (find)
 import           Data.List (intersect)
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.Text as T
 import           Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.IO as T
@@ -18,6 +18,7 @@ import           Nixon.Command
 import qualified Nixon.Config as Config
 import           Nixon.Config.Options (Backend(..), ProjectOpts, SubCommand(..))
 import qualified Nixon.Config.Options as Options
+import           Nixon.Config.Types (ignore_case)
 import qualified Nixon.Config.Types as Config
 import           Nixon.Direnv
 import           Nixon.Fzf
@@ -135,8 +136,8 @@ get_selectors = do
   env <- ask
   let cfg = config env
       ptypes = project_types cfg
-      fzf_opts = maybe mempty fzf_exact (exact_match cfg)
-      rofi_opts = maybe mempty rofi_exact (exact_match cfg)
+      fzf_opts = mconcat $ catMaybes [fzf_exact <$> exact_match cfg, fzf_ignore_case <$> ignore_case cfg]
+      rofi_opts = mconcat $ catMaybes [rofi_exact <$> exact_match cfg, rofi_ignore_case <$> ignore_case cfg]
   pure $ case backend env of
     Fzf -> (ptypes, fzf_projects fzf_opts, fzf_project_command fzf_opts, fzf_with_edit fzf_opts)
     Rofi -> (ptypes, rofi_projects rofi_opts, \_ -> rofi_project_command rofi_opts, rofi rofi_opts)

@@ -14,6 +14,7 @@ import Turtle hiding (empty, err)
 
 data Config = Config
   { exact_match :: Maybe Bool
+  , ignore_case :: Maybe Bool
   , source_dirs :: [FilePath]
   , project_types :: [ProjectType]
   , use_direnv :: Maybe Bool
@@ -24,6 +25,7 @@ data Config = Config
 empty :: Config
 empty = Config
   { exact_match = Nothing
+  , ignore_case = Nothing
   , source_dirs = []
   , project_types = []
   , use_direnv = Nothing
@@ -34,6 +36,7 @@ empty = Config
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \v -> Config
     <$> v .:? "exact_match"
+    <*> v .:? "ignore_case"
     <*> (maybe [] (fmap fromText) <$> v .:? "source_dirs")
     <*> (maybe [] (fmap mkptype) <$> v .:? "projects")
     <*> v .:? "use_direnv"

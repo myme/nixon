@@ -3,6 +3,7 @@ module Nixon.Fzf
   , fzf
   , fzf_border
   , fzf_exact
+  , fzf_ignore_case
   , fzf_header
   , fzf_height
   , fzf_format_project_name
@@ -37,6 +38,7 @@ import           Turtle hiding (arg, header, readline, sort, shell, toLines, f, 
 data FzfOpts = FzfOpts
   { _border :: Bool
   , _exact :: Maybe Bool
+  , _ignore_case :: Maybe Bool
   , _header :: Maybe Text
   , _height :: Maybe Integer
   , _query :: Maybe Text
@@ -55,6 +57,7 @@ data FieldIndex = FieldIndex Integer
 instance Semigroup FzfOpts where
   left <> right = FzfOpts { _border = _border right || _border left
                           , _exact = _exact right <|> _exact left
+                          , _ignore_case = _ignore_case right <|> _ignore_case left
                           , _header = _header right <|> _header left
                           , _height = _height right <|> _height left
                           , _query = _query right <|> _query left
@@ -67,6 +70,7 @@ instance Semigroup FzfOpts where
 instance Monoid FzfOpts where
   mempty = FzfOpts { _border = False
                    , _exact = Nothing
+                   , _ignore_case = Nothing
                    , _header = Nothing
                    , _height = Nothing
                    , _query = Nothing
@@ -81,6 +85,9 @@ fzf_border = mempty { _border = True }
 
 fzf_exact :: Bool -> FzfOpts
 fzf_exact enable = mempty { _exact = Just enable }
+
+fzf_ignore_case :: Bool -> FzfOpts
+fzf_ignore_case enable = mempty { _ignore_case = Just enable }
 
 fzf_header :: Text -> FzfOpts
 fzf_header header = mempty { _header = Just header }
@@ -117,11 +124,12 @@ fzf_raw opts candidates = do
         Nothing -> "-1" : "--expect=alt-enter" : "--ansi" : build_args
           [ flag "--border" (_border opts)
           , flag "--exact" =<< _exact opts
+          , flag "-i" =<< _ignore_case opts
           , arg "--header" =<< _header opts
-          , arg "--height" =<< format (d%"%") <$> _height opts
+          , arg "--height" . format (d%"%") =<< _height opts
           , arg "--query" =<< _query opts
           , arg "--preview" =<< _preview opts
-          , arg "--with-nth" =<< format_field_index <$> _with_nth opts
+          , arg "--with-nth" . format_field_index =<< _with_nth opts
           , flag "--no-sort" (_no_sort opts)
           ]
   (code, out) <- procStrict "fzf" args candidates
@@ -185,9 +193,7 @@ fzf_project_command opts project popts commands = do
       opts' = opts <> fzf_header header <> maybe mempty fzf_query (Options.command popts) <> fzf_no_sort
       input' = Select.Identity <$> select (fst <$> candidates)
   fmap (`lookup` candidates) <$> fzf opts' input' >>= \case
-    Selection Default cmd -> runMaybeT $ do
-      cmd' <- MaybeT (pure cmd)
-      pure cmd'
+    Selection Default cmd -> runMaybeT $ MaybeT (pure cmd)
     Selection (Alternate _) cmd -> pure cmd
     _ -> pure Nothing
 

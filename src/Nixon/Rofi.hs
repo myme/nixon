@@ -2,6 +2,7 @@ module Nixon.Rofi
   ( rofi
   , rofi_format_project_name
   , rofi_exact
+  , rofi_ignore_case
   , rofi_markup
   , rofi_msg
   , rofi_projects
@@ -30,6 +31,7 @@ import           Turtle hiding (arg, decimal, d, f, x, shell, toLines)
 -- | Data type for command line options to rofi
 data RofiOpts = RofiOpts
   { _exact :: Maybe Bool
+  , _ignore_case :: Maybe Bool
   , _msg :: Maybe Text
   , _markup :: Bool
   , _prompt :: Maybe Text
@@ -38,6 +40,7 @@ data RofiOpts = RofiOpts
 
 instance Semigroup RofiOpts where
   left <> right = RofiOpts { _exact = _exact right <|> _exact left
+                           , _ignore_case = _ignore_case right <|> _ignore_case left
                            , _markup = _markup right || _markup left
                            , _msg = _msg right <|> _msg left
                            , _prompt = _prompt right <|> _prompt left
@@ -46,6 +49,7 @@ instance Semigroup RofiOpts where
 
 instance Monoid RofiOpts where
   mempty = RofiOpts { _exact = Nothing
+                    , _ignore_case = Nothing
                     , _markup = False
                     , _msg = Nothing
                     , _prompt = Nothing
@@ -54,6 +58,9 @@ instance Monoid RofiOpts where
 
 rofi_exact :: Bool -> RofiOpts
 rofi_exact exact = mempty { _exact = Just exact }
+
+rofi_ignore_case :: Bool -> RofiOpts
+rofi_ignore_case ignore_case = mempty { _ignore_case = Just ignore_case }
 
 rofi_markup :: RofiOpts
 rofi_markup = mempty { _markup = True }
@@ -79,6 +86,7 @@ rofi :: MonadIO m => RofiOpts -> Shell Candidate -> m (Selection Text)
 rofi opts candidates = do
   let args = "-dmenu" : build_args
         [ arg_fmt "-matching" (bool "fuzzy" "normal" . fromMaybe False) (_exact opts)
+        , flag "-i" =<< _ignore_case opts
         , flag "-markup-rows" (_markup opts)
         , arg "-mesg" =<< _msg opts
         , arg "-p" =<< _prompt opts

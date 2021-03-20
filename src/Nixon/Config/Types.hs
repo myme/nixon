@@ -24,6 +24,7 @@ isGuiBackend Rofi = True
 data Config = Config
   { backend :: Maybe Backend
   , exact_match :: Maybe Bool
+  , ignore_case :: Maybe Bool
   , project_types :: [ProjectType]
   , commands :: [Command]
   , source_dirs :: [FilePath]
@@ -37,6 +38,7 @@ instance Semigroup Config where
   (<>) lhs rhs = lhs
     { backend = backend rhs <|> backend lhs
     , exact_match = exact_match rhs <|> exact_match lhs
+    , ignore_case = ignore_case rhs <|> ignore_case lhs
     , project_types = project_types lhs ++ project_types rhs
     , commands = commands rhs ++ commands lhs  -- Prioritize local commands first
     , source_dirs = source_dirs lhs ++ source_dirs rhs
@@ -50,6 +52,7 @@ defaultConfig :: Config
 defaultConfig = Config
   { backend = Nothing
   , exact_match = Nothing
+  , ignore_case = Nothing
   , project_types = []
   , commands = []
   , source_dirs = []

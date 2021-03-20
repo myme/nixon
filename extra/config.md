@@ -5,6 +5,7 @@
 ```json
 {
   "exact_match": true,
+  "ignore_case": true,
   "use_direnv":true,
   "use_nix":true,
   "source_dirs": [

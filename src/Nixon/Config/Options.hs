@@ -93,6 +93,7 @@ parser default_config = Options
     parse_config = Config.Config
       <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
       <*> maybeSwitch "exact" 'e' "Enable exact match"
+      <*> maybeSwitch "ignore-case" 'i' "Case-insensitive match"
       <*> pure [] -- Project types are not CLI args
       <*> pure [] -- Commands are not CLI args
       <*> many (optPath "path" 'p' "Project directory")
