@@ -2,10 +2,7 @@ module Nixon.Command
   ( Command(..)
   , CommandPart(..)
   , CommandOutput(..)
-  , list_commands
-  , show_command
   , show_command_oneline
-  , show_parts
   , is_bg_command
   , mkcommand
   , parse
@@ -19,7 +16,7 @@ module Nixon.Command
   ) where
 
 import           Data.String (IsString(..))
-import           Data.Text (pack, unpack, Text, intercalate)
+import           Data.Text (pack, Text)
 import qualified Data.Text as T
 import           Nixon.Utils (quote)
 import qualified Text.Parsec as P
@@ -35,11 +32,7 @@ data Command = Command
   , cmdParts :: [CommandPart]
   , cmdIsBg :: Bool
   , cmdOutput :: CommandOutput
-  } deriving Eq
-
-
-instance Show Command where
-  show = unpack . show_command
+  } deriving (Eq, Show)
 
 
 data CommandPart = TextPart Text
@@ -52,7 +45,7 @@ instance IsString CommandPart where
   fromString = TextPart . pack
 
 
-data CommandOutput = Lines | JSON deriving Eq
+data CommandOutput = Lines | JSON deriving (Eq, Show)
 
 
 mkcommand :: Text -> Text -> [Text] -> Text -> Either Text Command
@@ -81,12 +74,6 @@ json :: Bool -> Command -> Command
 json j cmd = cmd { cmdOutput = if j then JSON else Lines }
 
 
-show_command :: Command -> Text
-show_command (Command name _ lang projectTypes parts _ _) = format fmt name pt lang (show_parts parts)
-  where fmt = s%" ["%s%"]:\n"%"#!"%s%"\n"%s
-        pt = intercalate ", " projectTypes
-
-
 show_command_oneline :: Command -> Text
 show_command_oneline cmd = format (s%" - "%s) (cmdName cmd) desc
   where desc = case cmdDesc cmd of
@@ -99,10 +86,6 @@ show_parts = T.unwords . map format_part
   where format_part (TextPart src) = src
         format_part (Placeholder n) = format ("<"%s%">") n
         format_part (NestedPart ns) = quote $ show_parts ns
-
-
-list_commands :: [Command] -> Text
-list_commands = intercalate "\n\n" . map show_command
 
 
 is_bg_command :: Command -> Bool
