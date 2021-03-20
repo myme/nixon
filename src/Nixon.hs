@@ -99,7 +99,7 @@ project_exec cmd is_gui project = do
           let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
               cmd' = shell' : ["-c", quote (cmd <> end)]
           term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
-            $  MaybeT (terminal . config <$> ask)
+             $  MaybeT (terminal . config <$> ask)
             <|> MaybeT (need "TERMINAL")
           spawn (term : "-e" : cmd') path'
 
