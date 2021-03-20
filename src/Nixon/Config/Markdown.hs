@@ -8,11 +8,12 @@ module Nixon.Config.Markdown
 import           Data.Aeson (eitherDecodeStrict)
 import           Data.Bifunctor (Bifunctor(first))
 import           Data.Either (fromRight)
+import           Data.List (find)
 import           Data.Maybe (listToMaybe)
-import           Data.Text (pack, strip)
+import           Data.Text (isSuffixOf, pack, strip)
 import           Data.Text.Encoding (encodeUtf8)
-import qualified Nixon.Command as Cmd
 import           Nixon.Command ((<!), bg, json)
+import qualified Nixon.Command as Cmd
 import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Types
 import           Prelude hiding (FilePath)
@@ -20,7 +21,7 @@ import           System.Directory (XdgDirectory(..), getXdgDirectory)
 import qualified Text.Pandoc as P
 import qualified Text.Pandoc.Builder as B
 import           Text.Pandoc.Walk
-import           Turtle hiding (Header, err, filename, text, l, x)
+import           Turtle hiding (Header, err, filename, find, text, l, x)
 
 
 defaultPath :: MonadIO m => m FilePath
@@ -54,9 +55,12 @@ data Node = Head Int Text P.Attr -- ^ level name command type
 -- | "Tokenize" Pandoc blocks into a list of Nodes
 extract :: P.Block -> [Node]
 extract (P.Header lvl (name, args, kwargs) children) =
-  let args' = if any isCommand children && "command" `notElem` args
-        then "command" : args
-        else args
+  let args' = case find isCommand children of
+        Just (P.Code _ txt) ->
+          ["command" | "command" `notElem` args] ++
+          ["bg" | "bg" `notElem` args && "&" `isSuffixOf` txt] ++
+          args
+        _ -> args
   in [Head lvl name (name, args', kwargs)]
 extract p@(P.Para _) = [Paragraph $ fromRight "" text]
   where text = P.runPure $ do

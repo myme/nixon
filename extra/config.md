@@ -25,13 +25,13 @@
 
 ## Generic commands
 
-### `terminal` {.bg}
+### `terminal &`
 
 ```bash
 x-terminal-emulator
 ```
 
-### `emacs` {.bg}
+### `emacs &`
 
 ```bash
 emacs

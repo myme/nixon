@@ -123,6 +123,23 @@ markdown_tests = do
               { Cmd.cmdName = "hello"
               , Cmd.cmdLang = "bash"
               , Cmd.cmdParts = [Cmd.TextPart "echo Hello World"]
+              , Cmd.cmdIsBg = False
+              }]
+            } -> True
+          _ -> False
+
+      it "detects background commands by &" $ do
+        let result = parseMarkdown $ T.unlines
+              ["# `hello &`"
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands = [Cmd.Command
+              { Cmd.cmdName = "hello"
+              , Cmd.cmdIsBg = True
               }]
             } -> True
           _ -> False
