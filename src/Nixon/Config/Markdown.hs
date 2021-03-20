@@ -11,12 +11,12 @@ import           Data.Either (fromRight)
 import           Data.Maybe (listToMaybe)
 import           Data.Text (pack, strip)
 import           Data.Text.Encoding (encodeUtf8)
-import           Nixon.Command hiding (parse)
+import qualified Nixon.Command as Cmd
+import           Nixon.Command ((<!), gui, json)
 import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Types
 import           Prelude hiding (FilePath)
 import           System.Directory (XdgDirectory(..), getXdgDirectory)
-import           Text.Pandoc (Attr, Block(..))
 import qualified Text.Pandoc as P
 import qualified Text.Pandoc.Builder as B
 import           Text.Pandoc.Walk
@@ -33,7 +33,7 @@ parseMarkdown markdown = do
   nodes <- first (pack . show) . P.runPure $ query extract <$> P.readMarkdown mdOpts markdown
   buildConfig <$> parse nodes
   where mdOpts = P.def { P.readerExtensions = P.pandocExtensions }
-        buildConfig :: (JSON.Config, [Command]) -> Config
+        buildConfig :: (JSON.Config, [Cmd.Command]) -> Config
         buildConfig (cfg, cmds) = defaultConfig
           { exact_match = JSON.exact_match cfg
           , ignore_case = JSON.ignore_case cfg
@@ -45,20 +45,20 @@ parseMarkdown markdown = do
           }
 
 
-data Node = Head Int Text Attr -- ^ level name command type
+data Node = Head Int Text P.Attr -- ^ level name command type
           | Source (Maybe Text) Text -- ^ lang src
           | Paragraph Text
           deriving Show
 
 
 -- | "Tokenize" Pandoc blocks into a list of Nodes
-extract :: Block -> [Node]
-extract (Header lvl attr@(name, _, _) _) = [Head lvl name attr]
-extract p@(Para _) = [Paragraph $ fromRight "" text]
+extract :: P.Block -> [Node]
+extract (P.Header lvl attr@(name, _, _) _) = [Head lvl name attr]
+extract p@(P.Para _) = [Paragraph $ fromRight "" text]
   where text = P.runPure $ do
           let doc = B.doc (B.singleton p)
           P.writePlain P.def doc
-extract (CodeBlock (_, args, _) src) = [Source (listToMaybe args) src]
+extract (P.CodeBlock (_, args, _) src) = [Source (listToMaybe args) src]
 extract _ = []
 
 
@@ -68,7 +68,7 @@ data ParseState = S { stateHeaderLevel :: Int
 
 
 -- | Parse Command blocks from a list of nodes
-parse :: [Node] -> Either Text (JSON.Config, [Command])
+parse :: [Node] -> Either Text (JSON.Config, [Cmd.Command])
 parse = go (S 0 []) (JSON.empty, [])
   where
     go _ ps [] = Right ps
@@ -108,11 +108,11 @@ parse = go (S 0 []) (JSON.empty, [])
     go st ps (_ : rest) = go st ps rest
 
 
-hasArgs :: Text -> Attr -> Bool
+hasArgs :: Text -> P.Attr -> Bool
 hasArgs key (_, args, _) = key `elem` args
 
 
-getKwargs :: Text -> Attr -> [Text]
+getKwargs :: Text -> P.Attr -> [Text]
 getKwargs key (_, _, kwargs) = map snd $ filter ((== key) . fst) kwargs
 
 
@@ -126,10 +126,10 @@ parseConfig (Source lang src : rest') = case lang of
 parseConfig rest = (Left "Expecting config source after header", rest)
 
 
-parseCommand :: Text -> [Text] -> [Node] -> (Either Text Command, [Node])
+parseCommand :: Text -> [Text] -> [Node] -> (Either Text Cmd.Command, [Node])
 parseCommand name projectTypes (Paragraph desc : rest) =
   let (cmd, rest') = parseCommand name projectTypes rest
-  in  (description (strip desc) <$> cmd, rest')
+  in  (Cmd.description (strip desc) <$> cmd, rest')
 parseCommand name projectTypes (Source (Just lang) src : rest) = (cmd, rest)
-  where cmd = mkcommand name lang projectTypes src
+  where cmd = Cmd.mkcommand name lang projectTypes src
 parseCommand name _ rest = (Left $ format ("Expecting source block for "%s) name, rest)
