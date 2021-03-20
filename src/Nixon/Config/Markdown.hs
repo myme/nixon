@@ -12,7 +12,7 @@ import           Data.Maybe (listToMaybe)
 import           Data.Text (pack, strip)
 import           Data.Text.Encoding (encodeUtf8)
 import qualified Nixon.Command as Cmd
-import           Nixon.Command ((<!), gui, json)
+import           Nixon.Command ((<!), bg, json)
 import qualified Nixon.Config.JSON as JSON
 import           Nixon.Config.Types
 import           Prelude hiding (FilePath)
@@ -99,11 +99,11 @@ parse = go (S 0 []) (JSON.empty, [])
       -- We found a command
       | hasArgs "command" attr =
         let pt = getKwargs "type" attr <> stateProjectTypes st
-            isGui = hasArgs "gui" attr
+            isBg = hasArgs "bg" attr
             isJson = hasArgs "json" attr
         in case parseCommand name pt rest of
           (Left err, _) -> Left err
-          (Right p, rest') -> go st (cfg, p <! gui isGui <! json isJson : ps) rest'
+          (Right p, rest') -> go st (cfg, p <! bg isBg <! json isJson : ps) rest'
 
       -- Pick up project type along the way
       | otherwise = go st' (cfg, ps) rest

@@ -90,7 +90,7 @@ markdown_tests = do
 
       it "extracts source block" $ do
         let result = parseMarkdown $ T.unlines
-              ["# hello {.command}"
+              ["# hello {.command .bg}"
               ,""
               ,"Command description."
               ,""
@@ -105,6 +105,7 @@ markdown_tests = do
               , Cmd.cmdLang = "bash"
               , Cmd.cmdDesc = Just "Command description."
               , Cmd.cmdParts = [Cmd.TextPart "echo Hello World"]
+              , Cmd.cmdIsBg = True
               }]
             } -> True
           _ -> False

@@ -84,17 +84,17 @@ run_cmd select_command project opts selector = with_local_config project $ do
       cmd' <- maybe_wrap_cmd project cmd >>= resolve_command project project_selector
       -- TODO: Always edit command before executing?
       log_info (format ("Running command "%w) cmd')
-      project_exec cmd' (cmdIsGui cmd) project
+      project_exec cmd' (cmdIsBg cmd) project
 
 project_exec :: Text -> Bool -> Project -> Nixon ()
-project_exec cmd is_gui project = do
+project_exec cmd is_bg project = do
   isTTY <- (&&) <$> (not . Config.isGuiBackend . backend <$> ask) <*> liftIO (IO.hIsTerminalDevice IO.stdin)
   if isTTY
     then run [cmd] (Just $ project_path project)
     else do
       shell' <- fromMaybe "bash" <$> need "SHELL"
       let path' = Just $ project_path project
-      if is_gui
+      if is_bg
         then spawn (shell' : ["-c", quote cmd]) path'
         else do
           let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"

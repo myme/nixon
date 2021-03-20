@@ -6,7 +6,7 @@ module Nixon.Command
   , show_command
   , show_command_oneline
   , show_parts
-  , is_gui_command
+  , is_bg_command
   , mkcommand
   , parse
   , parse_parts
@@ -14,7 +14,7 @@ module Nixon.Command
   , parse_placeholder
   , (<!)
   , description
-  , gui
+  , bg
   , json
   ) where
 
@@ -33,7 +33,7 @@ data Command = Command
   , cmdLang :: Text
   , cmdProjectTypes :: [Text]
   , cmdParts :: [CommandPart]
-  , cmdIsGui :: Bool
+  , cmdIsBg :: Bool
   , cmdOutput :: CommandOutput
   } deriving Eq
 
@@ -64,7 +64,7 @@ mkcommand name lang ptypes src = case parse parse_parts src of
     , cmdLang = lang
     , cmdProjectTypes = ptypes
     , cmdParts = parts
-    , cmdIsGui = False
+    , cmdIsBg = False
     , cmdOutput = Lines
     }
 
@@ -74,8 +74,8 @@ mkcommand name lang ptypes src = case parse parse_parts src of
 description :: Text -> Command -> Command
 description d cmd = cmd { cmdDesc = Just d }
 
-gui :: Bool -> Command -> Command
-gui g cmd = cmd { cmdIsGui = g }
+bg :: Bool -> Command -> Command
+bg g cmd = cmd { cmdIsBg = g }
 
 json :: Bool -> Command -> Command
 json j cmd = cmd { cmdOutput = if j then JSON else Lines }
@@ -105,8 +105,8 @@ list_commands :: [Command] -> Text
 list_commands = intercalate "\n\n" . map show_command
 
 
-is_gui_command :: Command -> Bool
-is_gui_command _ = False
+is_bg_command :: Command -> Bool
+is_bg_command _ = False
 
 
 parse :: Show a => Parser a -> Text -> Either Text a
