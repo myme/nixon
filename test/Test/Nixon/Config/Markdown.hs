@@ -108,3 +108,22 @@ markdown_tests = do
               }]
             } -> True
           _ -> False
+
+      it "detects command by code block" $ do
+        let result = parseMarkdown $ T.unlines
+              ["# `hello`"
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands = [Cmd.Command
+              { Cmd.cmdName = "hello"
+              , Cmd.cmdLang = "bash"
+              , Cmd.cmdParts = [Cmd.TextPart "echo Hello World"]
+              }]
+            } -> True
+          _ -> False
+
+      xdescribe "placeholders" $ pure ()

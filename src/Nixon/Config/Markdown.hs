@@ -53,13 +53,22 @@ data Node = Head Int Text P.Attr -- ^ level name command type
 
 -- | "Tokenize" Pandoc blocks into a list of Nodes
 extract :: P.Block -> [Node]
-extract (P.Header lvl attr@(name, _, _) _) = [Head lvl name attr]
+extract (P.Header lvl (name, args, kwargs) children) =
+  let args' = if any isCommand children && "command" `notElem` args
+        then "command" : args
+        else args
+  in [Head lvl name (name, args', kwargs)]
 extract p@(P.Para _) = [Paragraph $ fromRight "" text]
   where text = P.runPure $ do
           let doc = B.doc (B.singleton p)
           P.writePlain P.def doc
 extract (P.CodeBlock (_, args, _) src) = [Source (listToMaybe args) src]
 extract _ = []
+
+
+isCommand :: P.Inline -> Bool
+isCommand (P.Code _ _) = True
+isCommand _            = False
 
 
 data ParseState = S { stateHeaderLevel :: Int
