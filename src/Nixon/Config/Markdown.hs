@@ -9,7 +9,7 @@ import           Data.Aeson (eitherDecodeStrict)
 import           Data.Bifunctor (Bifunctor(first))
 import           Data.Either (fromRight)
 import           Data.Maybe (listToMaybe)
-import           Data.Text (pack)
+import           Data.Text (pack, strip)
 import           Data.Text.Encoding (encodeUtf8)
 import           Nixon.Command hiding (parse)
 import qualified Nixon.Config.JSON as JSON
@@ -42,7 +42,6 @@ parseMarkdown markdown = do
           , use_direnv = JSON.use_direnv cfg
           , use_nix = JSON.use_nix cfg
           , commands = cmds
-          , loglevel = Nothing
           }
 
 
@@ -131,7 +130,7 @@ parseConfig rest = (Left "Expecting config source after header", rest)
 parseCommand :: Text -> [Text] -> [Node] -> (Either Text Command, [Node])
 parseCommand name projectTypes (Paragraph desc : rest) =
   let (cmd, rest') = parseCommand name projectTypes rest
-  in  (description desc <$> cmd, rest')
+  in  (description (strip desc) <$> cmd, rest')
 parseCommand name projectTypes (Source (Just lang) src : rest) = (cmd, rest)
   where cmd = mkcommand name lang projectTypes src
 parseCommand name _ rest = (Left $ format ("Expecting source block for "%s) name, rest)

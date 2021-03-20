@@ -35,7 +35,7 @@ data Command = Command
   , cmdParts :: [CommandPart]
   , cmdIsGui :: Bool
   , cmdOutput :: CommandOutput
-  }
+  } deriving Eq
 
 
 instance Show Command where
@@ -52,7 +52,7 @@ instance IsString CommandPart where
   fromString = TextPart . pack
 
 
-data CommandOutput = Lines | JSON
+data CommandOutput = Lines | JSON deriving Eq
 
 
 mkcommand :: Text -> Text -> [Text] -> Text -> Either Text Command

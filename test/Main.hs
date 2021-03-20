@@ -7,6 +7,7 @@ import           Nixon.Select
 import           Nixon.Utils
 import           Test.Hspec
 import           Test.Nixon.Command
+import           Test.Nixon.Config.Markdown
 import           Test.Nixon.Logging
 import           Test.QuickCheck
 import           Test.QuickCheck.Instances.Text ()
@@ -33,6 +34,8 @@ instance Arbitrary NonWsText where
 main :: IO ()
 main = hspec $ do
   describe "Command" command
+  describe "Command" $ do
+    describe "Markdown" markdown_tests
   describe "Logging" logging
 
   describe "Utils" $ do

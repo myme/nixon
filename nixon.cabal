@@ -93,6 +93,7 @@ test-suite nixon-test
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules: Test.Nixon.Command
+               , Test.Nixon.Config.Markdown
                , Test.Nixon.Logging
   hs-source-dirs:
       test

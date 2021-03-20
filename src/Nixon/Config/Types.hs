@@ -15,7 +15,7 @@ import Nixon.Project (ProjectType)
 import Prelude hiding (FilePath)
 import Turtle (Text, FilePath)
 
-data Backend = Fzf | Rofi deriving Show
+data Backend = Fzf | Rofi deriving (Eq, Show)
 
 isGuiBackend :: Backend -> Bool
 isGuiBackend Fzf = False
@@ -32,7 +32,7 @@ data Config = Config
   , use_nix :: Maybe Bool
   , terminal :: Maybe Text
   , loglevel :: Maybe LogLevel
-  } deriving Show
+  } deriving (Eq, Show)
 
 instance Semigroup Config where
   (<>) lhs rhs = lhs

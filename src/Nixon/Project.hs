@@ -45,7 +45,7 @@ project_path project = project_dir project </> project_name project
 data ProjectType = ProjectType { project_id :: Text
                                , project_markers :: [ProjectMarker]
                                , project_description :: Text
-                               } deriving Show
+                               } deriving (Eq, Show)
 
 -- | Construct a project description
 proj :: Text -> [ProjectMarker] -> Text -> ProjectType
@@ -59,6 +59,13 @@ data ProjectMarker = ProjectPath FilePath -- ^ Check if path exists
 
 instance IsString ProjectMarker where
   fromString = ProjectPath . fromText . T.pack
+
+instance Eq ProjectMarker where
+  (==) (ProjectPath p) (ProjectPath q) = p == q
+  (==) (ProjectFile p) (ProjectFile q) = p == q
+  (==) (ProjectDir p) (ProjectDir q) = p == q
+  (==) (ProjectOr p) (ProjectOr q) = all (uncurry (==)) $ zip p q
+  (==) _ _ = False
 
 instance Show ProjectMarker where
   show (ProjectFunc _) = "ProjectFunc (..)"
