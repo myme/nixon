@@ -48,7 +48,6 @@ parseMarkdown markdown = do
 data Node = Head Int Text Attr -- ^ level name command type
           | Source (Maybe Text) Text -- ^ lang src
           | Paragraph Text
-          | NA
           deriving Show
 
 
@@ -60,7 +59,7 @@ extract p@(Para _) = [Paragraph $ fromRight "" text]
           let doc = B.doc (B.singleton p)
           P.writePlain P.def doc
 extract (CodeBlock (_, args, _) src) = [Source (listToMaybe args) src]
-extract _ = [NA]
+extract _ = []
 
 
 data ParseState = S { stateHeaderLevel :: Int
