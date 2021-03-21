@@ -14,6 +14,7 @@ module Nixon.Command
   ) where
 
 import           Data.Text (Text, pack, replace)
+import           Nixon.Utils (first_word)
 import qualified Text.Parsec as P
 import           Text.Parsec hiding (parse)
 import           Text.Parsec.Text
@@ -35,10 +36,10 @@ newtype CommandEnv = Env Text deriving (Eq, Show)
 data CommandOutput = Lines | JSON deriving (Eq, Show)
 
 mkcommand :: Text -> Text -> [Text] -> Text -> Either Text Command
-mkcommand name lang ptypes src = case parse parse_args name of
+mkcommand spec lang ptypes src = case parse parse_args spec of
   Left err -> Left err
   Right args -> Right $ Command
-    { cmdName = name
+    { cmdName = first_word spec
     , cmdDesc = Nothing
     , cmdLang = lang
     , cmdProjectTypes = ptypes

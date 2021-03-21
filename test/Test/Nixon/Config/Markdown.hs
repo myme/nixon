@@ -4,6 +4,7 @@ module Test.Nixon.Config.Markdown where
 
 import           Data.Text (Text)
 import qualified Data.Text as T
+import           Nixon.Command (CommandEnv(Env))
 import qualified Nixon.Command as Cmd
 import           Nixon.Config.Markdown (parseMarkdown)
 import           Nixon.Config.Types (defaultConfig)
@@ -90,6 +91,32 @@ command_tests = describe "commands section" $ do
     xit "fails with duplicate commands" $ do
       False `shouldBe` True
 
+  it "simple command name" $ do
+    let result = parseMarkdown $ T.unlines
+          ["# `hello`"
+          ,"```bash"
+          ,"echo Hello World"
+          ,"```"
+          ]
+    result `shouldSatisfy` \case
+      Right Cfg.Config
+        { Cfg.commands =
+          [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
+      _ -> False
+
+  it "command name is first word" $ do
+    let result = parseMarkdown $ T.unlines
+          ["# `hello ${foo} ${bar}`"
+          ,"```bash"
+          ,"echo Hello World"
+          ,"```"
+          ]
+    result `shouldSatisfy` \case
+      Right Cfg.Config
+        { Cfg.commands =
+          [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
+      _ -> False
+
   it "extracts source block" $ do
     let result = parseMarkdown $ T.unlines
           ["# hello {.command .bg}"
@@ -142,7 +169,7 @@ command_tests = describe "commands section" $ do
     result `shouldSatisfy` \case
       Right Cfg.Config
         { Cfg.commands = [Cmd.Command
-          { Cmd.cmdName = "hello &"
+          { Cmd.cmdName = "hello"
           , Cmd.cmdIsBg = True
           }]
         } -> True
@@ -160,15 +187,23 @@ command_tests = describe "commands section" $ do
       Right Cfg.Config { Cfg.commands = [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
       _ -> False
 
-  xdescribe "placeholders" $ do
+  describe "extracts environment placeholders" $ do
     it "fails" $ do
-      let _ = parseMarkdown $ T.unlines
-            ["# `hello $(placeholder) &`"
+      let result = parseMarkdown $ T.unlines
+            ["# `hello ${arg} ${another-arg} &`"
             ,"```bash"
-            ,"echo Hello \"$1\""
+            ,"echo Hello \"$arg\" \"$another_arg\""
             ,"```"
             ]
-      False `shouldBe` True
+      result `shouldSatisfy` \case
+        Right Cfg.Config
+          { Cfg.commands = [Cmd.Command
+            { Cmd.cmdName = "hello"
+            , Cmd.cmdIsBg = True
+            , Cmd.cmdEnv = [("arg", Env "arg"), ("another_arg", Env "another-arg")]
+            }]
+          } -> True
+        _ -> False
 
 markdown_tests :: SpecWith ()
 markdown_tests = do

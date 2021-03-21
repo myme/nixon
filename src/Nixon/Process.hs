@@ -5,6 +5,7 @@ module Nixon.Process
   , build_args
   , flag
   , run
+  , run_with_output
   , spawn
   ) where
 
@@ -30,16 +31,28 @@ arg_fmt key f' = pure . ([key] <>) . pure . f'
 build_args :: [Maybe [a]] -> [a]
 build_args = concat . catMaybes
 
--- | Run a command and wait for it to finish
-run :: MonadIO m => [Text] -> Maybe FilePath -> Env -> m ()
-run cmd cwd' env' = sh $ do
+build_cmd :: MonadIO m => [Text] -> Maybe FilePath -> Env -> m CreateProcess
+build_cmd cmd cwd' env' = do
   currentEnv <- liftIO getEnvironment
   let cp' = shell $ T.unpack (T.unwords cmd)
       cpEnv = Just $ currentEnv ++ map (T.unpack *** T.unpack) env'
-  system cp' {
+  pure cp' {
     cwd = T.unpack . format fp <$> cwd',
     env = cpEnv
-  } mempty
+  }
+
+-- | Run a command and wait for it to finish
+run :: MonadIO m => [Text] -> Maybe FilePath -> Env -> m ()
+run cmd cwd' env' = sh $ do
+  cmd' <- build_cmd cmd cwd' env'
+  system cmd' empty
+
+type Runner a = CreateProcess -> Shell a -> Shell a
+
+run_with_output :: Runner a -> [Text] -> Maybe FilePath -> Env -> Shell a
+run_with_output stream' cmd cwd' env' = do
+  cmd' <- build_cmd cmd cwd' env'
+  stream' cmd' empty
 
 -- | Spawn/fork off a command in the background
 spawn :: MonadIO m => [Text] -> Maybe FilePath -> Env -> m ()

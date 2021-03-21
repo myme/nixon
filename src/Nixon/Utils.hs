@@ -1,6 +1,7 @@
 module Nixon.Utils
  ( escape
  , find_dominating_file
+ , first_word
  , quote
  , printErr
  , shell_to_list
@@ -12,7 +13,7 @@ module Nixon.Utils
 
 import           Data.Char (isSpace)
 import           Data.List.NonEmpty (toList)
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Prelude hiding (FilePath)
@@ -20,7 +21,7 @@ import qualified System.IO as IO
 import           Turtle hiding (input, x, toLines)
 
 escape :: Text -> Text
-escape input = T.concatMap convert input
+escape = T.concatMap convert
   where convert '"' = "\\\""
         convert '\\' = "\\\\"
         convert x = T.singleton x
@@ -37,6 +38,9 @@ find_dominating_file path' name = do
     True -> pure $ Just candidate
     False | is_root -> pure Nothing
           | otherwise -> find_dominating_file (parent path') name
+
+first_word :: Text -> Text
+first_word txt = fromMaybe txt $ listToMaybe $ T.words txt
 
 -- | Print a text message to stderr
 printErr :: (MonadIO m) => Text -> m ()
