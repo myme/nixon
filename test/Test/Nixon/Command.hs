@@ -6,28 +6,25 @@ import Test.Hspec
 
 command :: SpecWith ()
 command = do
-  describe "parse_parts" $ do
+  describe "parse_args" $ do
     it "parses text part" $ do
-      parse parse_parts "echo 'foo bar baz'" `shouldBe`
-        Right [TextPart "echo 'foo bar baz'"]
+      parse parse_args "echo 'foo bar baz'" `shouldBe`
+        Right []
 
-    it "parses placeholder part" $ do
-      parse parse_parts "$(nixon placeholder)" `shouldBe`
-        Right [Placeholder "placeholder"]
+    it "parses arg part" $ do
+      parse parse_args "${arg}" `shouldBe`
+        Right [("arg", Env "arg")]
 
     it "parses text and placeholder part" $ do
-      parse parse_parts "cat \"$(nixon placeholder)\"" `shouldBe`
-        Right [TextPart "cat \"", Placeholder "placeholder", TextPart "\""]
+      parse parse_args "cat \"${arg}\"" `shouldBe`
+        Right [("arg", Env "arg")]
 
-    it "allows use of $ not matching '$(nixon '" $ do
-      parse parse_parts "echo $SOME_VAR" `shouldBe` Right [TextPart "echo $SOME_VAR"]
+    it "replaces '-' with '_' in $name" $ do
+      parse parse_args "cat \"${some-arg}\"" `shouldBe`
+        Right [("some_arg", Env "some-arg")]
 
-    it "fails on unterminated placeholder" $ do
-      parse parse_parts "cat \"$(nixon placeholder\"" `shouldSatisfy` isLeft
+    it "allows use of $ not matching '${'" $ do
+      parse parse_args "echo $SOME_VAR" `shouldBe` Right []
 
-  describe "parse_placeholder" $ do
-    it "parses placeholder" $ do
-      parse parse_placeholder "$(nixon placeholder)" `shouldBe` Right (Placeholder "placeholder")
-
-    it "fails on regular text" $ do
-      parse parse_placeholder "echo \"Foo\"" `shouldSatisfy` isLeft
+    it "fails on unterminated arg" $ do
+      parse parse_args "cat \"${arg\"" `shouldSatisfy` isLeft

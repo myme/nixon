@@ -55,13 +55,13 @@ data Node = Head Int Text P.Attr -- ^ level name command type
 -- | "Tokenize" Pandoc blocks into a list of Nodes
 extract :: P.Block -> [Node]
 extract (P.Header lvl (name, args, kwargs) children) =
-  let args' = case find isCommand children of
-        Just (P.Code _ txt) ->
+  let (name', args') = case find isCommand children of
+        Just (P.Code _ txt) -> (txt,
           ["command" | "command" `notElem` args] ++
           ["bg" | "bg" `notElem` args && "&" `isSuffixOf` txt] ++
-          args
-        _ -> args
-  in [Head lvl name (name, args', kwargs)]
+          args)
+        _ -> (name, args)
+  in [Head lvl name' (name, args', kwargs)]
   where isCommand (P.Code _ _) = True
         isCommand _            = False
 extract p@(P.Para _) = [Paragraph $ fromRight "" text]

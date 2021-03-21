@@ -73,10 +73,10 @@ List all `npm` scripts in a `package.json`.
 jq '.scripts | to_entries | map({ title: (.key + " → " + .value), value: .key })' package.json
 ```
 
-### `npm-run`
+### `npm-run ${npm-scripts}`
 
 ```bash
-npm run "$(nixon npm-scripts)"
+npm run "$npm_scripts"
 ```
 
 ### `npm-install`

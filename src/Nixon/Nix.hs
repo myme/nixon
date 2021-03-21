@@ -6,15 +6,16 @@ module Nixon.Nix
   , nix_cmd
   ) where
 
-import Control.Monad (filterM)
-import Control.Monad.Trans.Maybe
-import Data.Maybe (listToMaybe)
-import Nixon.Command
-import Nixon.Process
-import Nixon.Types
-import Nixon.Utils
-import Prelude hiding (FilePath)
-import Turtle hiding (arg)
+import           Control.Monad (filterM)
+import           Control.Monad.Trans.Maybe
+import           Data.Maybe (listToMaybe)
+import qualified Data.Text as T
+import           Nixon.Command
+import           Nixon.Process
+import           Nixon.Types hiding (Env)
+import           Nixon.Utils
+import           Prelude hiding (FilePath)
+import           Turtle hiding (arg)
 
 -- | Nix project files, in prioritized order
 nix_files :: [FilePath]
@@ -28,21 +29,21 @@ find_nix_file dir = listToMaybe <$> filter_path nix_files
   where filter_path = filterM (testpath . (dir </>))
 
 -- | Evaluate a command in a nix-shell
-nix_shell :: MonadIO m => FilePath -> Maybe Text -> m ()
-nix_shell = liftIO ... nix_run run
+nix_shell :: MonadIO m => FilePath -> Maybe Text -> Env -> m ()
+nix_shell nix_file cwd' env' = liftIO $ nix_run run nix_file cwd' env'
 
 -- | Fork and evaluate a command in a nix-shell
-nix_shell_spawn :: MonadIO m => FilePath -> Maybe Text -> m ()
+nix_shell_spawn :: MonadIO m => FilePath -> Maybe Text -> Env -> m ()
 nix_shell_spawn = nix_run spawn
 
-type Runner = [Text] -> Maybe FilePath -> IO ()
+type Runner = [Text] -> Maybe FilePath -> Env -> IO ()
 
-nix_run :: MonadIO m => Runner -> FilePath -> Maybe Text -> m ()
-nix_run run' nix_file cmd = liftIO $
+nix_run :: MonadIO m => Runner -> FilePath -> Maybe Text -> Env -> m ()
+nix_run run' nix_file cmd env' = liftIO $
   let nix_file' = format fp nix_file
       args = build_args [pure [nix_file']
                         , arg "--run" =<< cmd]
-  in run' ("nix-shell" : args) (Just $ parent nix_file)
+  in run' ("nix-shell" : args) (Just $ parent nix_file) env'
 
 nix_cmd :: Command -> FilePath -> Nixon (Maybe Command)
 nix_cmd cmd path' = use_nix . config <$> ask >>= \case
@@ -50,8 +51,11 @@ nix_cmd cmd path' = use_nix . config <$> ask >>= \case
     nix_file <-
       MaybeT (find_dominating_file path' "shell.nix") <|>
       MaybeT (find_dominating_file path' "default.nix")
-    let parts = "nix-shell --command "
-              : NestedPart (cmdParts cmd)
-              : [TextPart $ format (" "%fp) nix_file]
-    pure cmd { cmdParts = parts }
+    pure $ cmd {
+      cmdSource = T.unwords
+        ["nix-shell --command"
+        ,quote $ cmdSource cmd
+        ,format fp nix_file
+        ]
+    }
   _ -> pure Nothing

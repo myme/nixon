@@ -24,13 +24,13 @@ import           Nixon.Direnv
 import           Nixon.Fzf
 import           Nixon.Logging
 import           Nixon.Nix
-import           Nixon.Process (spawn, run)
+import           Nixon.Process (Env, spawn, run)
 import qualified Nixon.Project as P
 import           Nixon.Project hiding (project_types)
 import           Nixon.Rofi
 import           Nixon.Select (Selection(..), Selector)
 import qualified Nixon.Select as Select
-import           Nixon.Types
+import           Nixon.Types hiding (Env)
 import           Nixon.Utils
 import           Prelude hiding (FilePath, log)
 import qualified System.IO as IO
@@ -78,44 +78,39 @@ run_cmd select_command project opts selector = with_local_config project $ do
       project_selector = \shell' -> cd (project_path project) >> selector shell'
   cmds <- filter filter_cmd . commands . config <$> ask
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
-  if Options.select opts
-    then resolve_command project project_selector cmd >>= liftIO . T.putStrLn
-    else do
-      cmd' <- maybe_wrap_cmd project cmd >>= resolve_command project project_selector
-      -- TODO: Always edit command before executing?
-      log_info (format ("Running command "%w) cmd')
-      project_exec cmd' (cmdIsBg cmd) project
+  (cmd', env') <- maybe_wrap_cmd project cmd >>= resolve_command project project_selector
+  -- TODO: Always edit command before executing?
+  log_info (format ("Running command "%w) cmd')
+  project_exec cmd' (cmdIsBg cmd) project env'
 
-project_exec :: Text -> Bool -> Project -> Nixon ()
-project_exec cmd is_bg project = do
+project_exec :: Text -> Bool -> Project -> Env -> Nixon ()
+project_exec cmd is_bg project env' = do
   isTTY <- (&&) <$> (not . Config.isGuiBackend . backend <$> ask) <*> liftIO (IO.hIsTerminalDevice IO.stdin)
   if isTTY
-    then run [cmd] (Just $ project_path project)
+    then run [cmd] (Just $ project_path project) env'
     else do
       shell' <- fromMaybe "bash" <$> need "SHELL"
       let path' = Just $ project_path project
       if is_bg
-        then spawn (shell' : ["-c", quote cmd]) path'
+        then spawn (shell' : ["-c", quote cmd]) path' env'
         else do
           let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
               cmd' = shell' : ["-c", quote (cmd <> end)]
           term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
              $  MaybeT (terminal . config <$> ask)
             <|> MaybeT (need "TERMINAL")
-          spawn (term : "-e" : cmd') path'
+          spawn (term : "-e" : cmd') path' env'
 
-resolve_command :: Project -> Selector -> Command -> Nixon Text
-resolve_command project selector cmd = expand_placeholders (cmdParts cmd)
+resolve_command :: Project -> Selector -> Command -> Nixon (Text, Env)
+resolve_command project selector cmd = (,) (cmdSource cmd) <$> resolve_args (cmdEnv cmd)
   where
-    expand_placeholders = fmap T.concat . mapM expand_placeholder
-    expand_placeholder (TextPart t) = pure t
-    expand_placeholder (NestedPart ns) = quote <$> expand_placeholders ns
-    expand_placeholder (Placeholder p) = find ((==) p . cmdName) . commands . config <$> ask >>= \case
-      Nothing -> error $ "Invalid placeholder: " <> T.unpack p
-      Just placeholder -> do
-        resolved <- maybe_wrap_cmd project placeholder >>= resolve_command project selector
+    resolve_args = fmap concat . mapM resolve_arg
+    resolve_arg (name, Env p) = find ((==) p . cmdName) . commands . config <$> ask >>= \case
+      Nothing -> error $ "Invalid argument: " <> T.unpack p
+      Just arg' -> do
+        (resolved, _) <- maybe_wrap_cmd project arg' >>= resolve_command project selector
         selection <- liftIO $ selector $ do
-          case cmdOutput placeholder of
+          case cmdOutput arg' of
             Lines -> do
               candidate <- inshell resolved empty
               pure $ Select.Identity (lineToText candidate)
@@ -125,8 +120,8 @@ resolve_command project selector cmd = expand_placeholders (cmdParts cmd)
                 Left err -> error err
                 Right candidates -> select candidates
         case selection of
-          Selection _ result -> pure result
-          _ -> error "Placeholder expansion aborted"
+          Selection _ result -> pure [(name, result)]
+          _ -> error "Argument expansion aborted"
 
 type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
 type CommandSelector = Project -> ProjectOpts -> [Command] -> IO (Maybe Command)
