@@ -176,7 +176,7 @@ nixon_with_config user_config = liftIO $ do
       log_info "Running <project> command"
       cfg' <- config <$> ask
       let ptypes = project_types cfg'
-          srcs = source_dirs cfg'
+          srcs = project_dirs cfg'
       projects <- sort_projects <$> liftIO (find_projects 1 ptypes srcs)
       project_action projects project_opts
     RunCommand run_opts -> do

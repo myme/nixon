@@ -31,7 +31,7 @@ config_tests = describe "config section" $ do
           ,"{"
           ,"  \"exact_match\": true,"
           ,"  \"ignore_case\": true,"
-          ,"  \"source_dirs\": [\"foo\", \"bar\"],"
+          ,"  \"project_dirs\": [\"foo\", \"bar\"],"
           ,"  \"use_direnv\": true,"
           ,"  \"use_nix\": true"
           ,"}"
@@ -40,7 +40,7 @@ config_tests = describe "config section" $ do
     result `shouldSatisfy` \case
       Right Cfg.Config { Cfg.exact_match = Just True
                        , Cfg.ignore_case = Just True
-                       , Cfg.source_dirs = ["foo", "bar"]
+                       , Cfg.project_dirs = ["foo", "bar"]
                        , Cfg.use_direnv = Just True
                        , Cfg.use_nix = Just True
       } -> True

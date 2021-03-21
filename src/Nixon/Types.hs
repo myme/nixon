@@ -4,7 +4,7 @@ module Nixon.Types
   ( Env(..)
   , Nixon
   , NixonError(..)
-  , Config.Config(commands, exact_match, project_types, source_dirs, terminal, use_direnv, use_nix)
+  , Config.Config(commands, exact_match, project_dirs, project_types, terminal, use_direnv, use_nix)
   , ask
   , runNixon
   ) where

@@ -94,9 +94,9 @@ parser default_config = Options
       <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
       <*> maybeSwitch "exact" 'e' "Enable exact match"
       <*> maybeSwitch "ignore-case" 'i' "Case-insensitive match"
+      <*> many (optPath "path" 'p' "Project directory")
       <*> pure [] -- Project types are not CLI args
       <*> pure [] -- Commands are not CLI args
-      <*> many (optPath "path" 'p' "Project directory")
       <*> maybeSwitch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
       <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
       <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")

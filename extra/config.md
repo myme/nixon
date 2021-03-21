@@ -8,9 +8,9 @@
   "ignore_case": true,
   "use_direnv":true,
   "use_nix":true,
-  "source_dirs": [
+  "project_dirs": [
   ],
-  "projects": [
+  "project_types": [
     { "name": "cabal", "test": ["cabal.project"], "desc": "Cabal new-style project"},
     { "name": "npm", "test": ["package.json"], "desc": "NPM project"},
     { "name": "yarn", "test": ["yarn.lock"], "desc": "Yarn project"},
