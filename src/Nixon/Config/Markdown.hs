@@ -62,17 +62,14 @@ extract (P.Header lvl (name, args, kwargs) children) =
           args
         _ -> args
   in [Head lvl name (name, args', kwargs)]
+  where isCommand (P.Code _ _) = True
+        isCommand _            = False
 extract p@(P.Para _) = [Paragraph $ fromRight "" text]
   where text = P.runPure $ do
           let doc = B.doc (B.singleton p)
           P.writePlain P.def doc
 extract (P.CodeBlock (_, args, _) src) = [Source (listToMaybe args) src]
 extract _ = []
-
-
-isCommand :: P.Inline -> Bool
-isCommand (P.Code _ _) = True
-isCommand _            = False
 
 
 data ParseState = S { stateHeaderLevel :: Int
