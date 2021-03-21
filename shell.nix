@@ -9,6 +9,7 @@ let
   };
 
 in haskellPackages.shellFor {
+  withHoogle = true;
   packages = _: [ drv ];
   buildInputs = (with pkgs; [
     cabal-install
