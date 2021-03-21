@@ -115,7 +115,7 @@ resolve_command project selector cmd = (,) (cmdSource cmd) <$> resolve_args (cmd
               candidate <- run_with_output stream [resolved] path' env'
               pure $ Select.Identity (lineToText candidate)
             JSON -> do
-              output <- run_with_output BS.stream [resolved] path' env'
+              output <- BS.strict $ run_with_output BS.stream [resolved] path' env'
               case eitherDecodeStrict output :: Either String [Select.Candidate] of
                 Left err -> error err
                 Right candidates -> select candidates
@@ -161,6 +161,10 @@ run_action opts = do
   (ptypes, _project, find_command, selector) <- get_selectors
   project <- liftIO (find_in_project_or_default ptypes =<< pwd)
   run_cmd find_command project opts selector
+
+-- TODO: Add "dump" command to dump entire config
+-- TODO: Add "add" or "edit" command to create a new or edit command in $EDITOR
+-- TODO: Default to "run" rather than "project" commmands
 
 -- TODO: Launch terminal with nix-shell output if taking a long time.
 -- TODO: Allow changing default command
