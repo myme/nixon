@@ -4,8 +4,9 @@ module Nixon.Config.Options
   , Options(..)
   , SubCommand(..)
   , ProjectOpts(..)
+  , RunOpts(..)
+  , command
   , default_options
-  , merge_opts
   , parse_args
   ) where
 
@@ -37,25 +38,32 @@ data Options = Options
   } deriving Show
 
 data SubCommand = ProjectCommand ProjectOpts
-                | RunCommand ProjectOpts
+                | RunCommand RunOpts
                 deriving Show
 
 data ProjectOpts = ProjectOpts
-  { project :: Maybe Text
-  , command :: Maybe Text
-  , list :: Bool
-  , select :: Bool
+  { proj_project :: Maybe Text
+  , proj_command :: Maybe Text
+  , proj_list :: Bool
+  , proj_select :: Bool
   } deriving Show
+
+data RunOpts = RunOpts
+  { run_command :: Maybe Text
+  , run_list :: Bool
+  } deriving Show
+
+command :: SubCommand -> Maybe Text
+command (ProjectCommand ProjectOpts { proj_command }) = proj_command
+command (RunCommand RunOpts { run_command }) = run_command
 
 default_options :: Options
 default_options = Options
   { config_file = Nothing
   , config = Config.defaultConfig
-  , sub_command = ProjectCommand ProjectOpts
-    { project = Nothing
-    , command = Nothing
-    , list = False
-    , select = False
+  , sub_command = RunCommand RunOpts
+    { run_command = Nothing
+    , run_list = False
     }
   }
 
@@ -75,8 +83,8 @@ parser default_config = Options
   <$> optional (optPath "config" 'C' (config_help default_config))
   <*> parse_config
   <*> ( ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
-        RunCommand <$> subcommand "run" "Run command" project_parser <|>
-        ProjectCommand <$> project_parser)
+        RunCommand <$> subcommand "run" "Run command" run_parser <|>
+        RunCommand <$> run_parser)
   where
     parse_backend = flip lookup
       [("fzf", Fzf)
@@ -109,13 +117,10 @@ project_parser = ProjectOpts
   <*> switch "list" 'l' "List projects"
   <*> switch "select" 's' "Select a project or command and output on stdout"
 
-merge_opts :: ProjectOpts -> ProjectOpts -> ProjectOpts
-merge_opts secondary primary = ProjectOpts
-  { project = project primary <|> project secondary
-  , command = command primary <|> command secondary
-  , list = list primary
-  , select = select primary
-  }
+run_parser :: Parser RunOpts
+run_parser = RunOpts
+  <$> optional (argText "command" "Command to run")
+  <*> switch "list" 'l' "List projects"
 
 -- | Read configuration from config file and command line arguments
 parse_args :: MonadIO m => m (Either ConfigError (SubCommand, Config))
@@ -126,5 +131,5 @@ parse_args = do
   liftIO $ do
     cfg <- read_config config_path
     let mergedConfig = liftA2 (<>) cfg (pure $ config opts)
-        subCmdConfig = liftA2 (,) (pure $ sub_command opts) mergedConfig
+        subCmdConfig = fmap (sub_command opts,) mergedConfig
     pure subCmdConfig

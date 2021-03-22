@@ -14,8 +14,8 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Nixon.Command
 import qualified Nixon.Config as Config
-import           Nixon.Config.Options (Backend(..), ProjectOpts, SubCommand(..))
-import qualified Nixon.Config.Options as Options
+import           Nixon.Config.Options (Backend(..), ProjectOpts(..), RunOpts(..), SubCommand(..))
+import qualified Nixon.Config.Options as Opts
 import           Nixon.Config.Types (ignore_case)
 import qualified Nixon.Config.Types as Config
 import           Nixon.Direnv
@@ -67,7 +67,7 @@ with_local_config project action = do
 -- TODO: Print command before running it (add -q|--quiet)
 run_cmd :: CommandSelector
         -> Project
-        -> ProjectOpts
+        -> RunOpts
         -> Selector
         -> Nixon ()
 run_cmd select_command project opts selector = with_local_config project $ do
@@ -124,7 +124,7 @@ resolve_command project selector cmd = (,) (cmdSource cmd) <$> resolve_args (cmd
           _ -> error "Argument expansion aborted"
 
 type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
-type CommandSelector = Project -> ProjectOpts -> [Command] -> IO (Maybe Command)
+type CommandSelector = Project -> RunOpts -> [Command] -> IO (Maybe Command)
 
 get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, Selector)
 get_selectors = do
@@ -140,7 +140,7 @@ get_selectors = do
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
 project_action projects opts
-  | Options.list opts = Nixon.list projects (Options.project opts)
+  | Opts.proj_list opts = Nixon.list projects (Opts.proj_project opts)
   | otherwise = do
       (ptypes, find_project, find_command, selector) <- get_selectors
 
@@ -150,13 +150,15 @@ project_action projects opts
             <|> MaybeT (find_project Nothing projects)
           find_project' query = find_project query projects
 
-      project <- liftIO $ fail_empty "No project selected." $ find_project' (Options.project opts)
-      if Options.select opts
+      project <- liftIO $ fail_empty "No project selected." $ find_project' (Opts.proj_project opts)
+      if Opts.proj_select opts
         then liftIO $ printf (fp % "\n") (project_path project)
-        else run_cmd find_command project opts selector
+        else
+          let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_list opts)
+          in run_cmd find_command project opts' selector
 
 -- | Run a command from current directory
-run_action :: ProjectOpts -> Nixon ()
+run_action :: RunOpts -> Nixon ()
 run_action opts = do
   (ptypes, _project, find_command, selector) <- get_selectors
   project <- liftIO (find_in_project_or_default ptypes =<< pwd)
@@ -174,7 +176,7 @@ run_action opts = do
 -- showing the progress of starting the environment.
 nixon_with_config :: MonadIO m => Config.Config -> m ()
 nixon_with_config user_config = liftIO $ do
-  (sub_cmd, cfg) <- either die pure =<< Options.parse_args
+  (sub_cmd, cfg) <- either die pure =<< Opts.parse_args
   err <- try $ runNixon (user_config <> cfg) $ case sub_cmd of
     ProjectCommand project_opts -> do
       log_info "Running <project> command"

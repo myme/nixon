@@ -17,7 +17,7 @@ import qualified Data.Map as Map
 import           Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import           Nixon.Command
-import           Nixon.Config.Options (ProjectOpts)
+import           Nixon.Config.Options (RunOpts)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Process
 import           Nixon.Project
@@ -124,14 +124,14 @@ rofi_projects opts query projects = do
         <> maybe mempty rofi_query query
   candidates <- traverse rofi_format_project_name projects
   let map' = Map.fromList (zip candidates projects)
-  rofi opts' (Select.Identity <$> select candidates) >>= pure . \case
+  rofi opts' (Select.Identity <$> select candidates) <&> (\case
     Selection _ key -> Map.lookup key map'
-    _ -> Nothing
+    _ -> Nothing)
 
-rofi_project_command :: MonadIO m => RofiOpts -> ProjectOpts -> [Command] -> m (Maybe Command)
+rofi_project_command :: MonadIO m => RofiOpts -> RunOpts -> [Command] -> m (Maybe Command)
 rofi_project_command opts popts commands = do
-  let candidates = Select.build_map show_command_oneline $ commands
-      opts' = opts <> rofi_prompt "Select command" <> maybe mempty rofi_query (Options.command popts)
-  rofi opts' (Select.Identity <$> select (Map.keys candidates)) >>= pure . \case
+  let candidates = Select.build_map show_command_oneline commands
+      opts' = opts <> rofi_prompt "Select command" <> maybe mempty rofi_query (Options.run_command popts)
+  rofi opts' (Select.Identity <$> select (Map.keys candidates)) <&> (\case
     Selection _ txt -> Map.lookup txt candidates
-    _ -> Nothing
+    _ -> Nothing)
