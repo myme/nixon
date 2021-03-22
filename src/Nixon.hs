@@ -85,7 +85,8 @@ run_cmd select_command project opts selector = with_local_config project $ do
 project_exec :: Text -> Bool -> Project -> Env -> Nixon ()
 project_exec cmd is_bg project env' = do
   isTTY <- (&&) <$> (not . Config.isGuiBackend . backend <$> ask) <*> liftIO (IO.hIsTerminalDevice IO.stdin)
-  if isTTY
+  forceTTY <- fromMaybe False . Config.force_tty . config <$> ask
+  if isTTY || forceTTY
     then run [cmd] (Just $ project_path project) env'
     else do
       shell' <- fromMaybe "bash" <$> need "SHELL"

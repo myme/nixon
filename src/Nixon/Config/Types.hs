@@ -25,6 +25,7 @@ data Config = Config
   { backend :: Maybe Backend
   , exact_match :: Maybe Bool
   , ignore_case :: Maybe Bool
+  , force_tty :: Maybe Bool
   , project_dirs :: [FilePath]
   , project_types :: [ProjectType]
   , commands :: [Command]
@@ -39,6 +40,7 @@ instance Semigroup Config where
     { backend = backend rhs <|> backend lhs
     , exact_match = exact_match rhs <|> exact_match lhs
     , ignore_case = ignore_case rhs <|> ignore_case lhs
+    , force_tty = force_tty rhs <|> force_tty lhs
     , project_dirs = project_dirs lhs ++ project_dirs rhs
     , project_types = project_types lhs ++ project_types rhs
     , commands = commands rhs ++ commands lhs  -- Prioritize local commands first
@@ -53,6 +55,7 @@ defaultConfig = Config
   { backend = Nothing
   , exact_match = Nothing
   , ignore_case = Nothing
+  , force_tty = Nothing
   , project_dirs = []
   , project_types = []
   , commands = []

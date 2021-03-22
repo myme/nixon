@@ -102,6 +102,7 @@ parser default_config = Options
       <$> optional (opt parse_backend "backend" 'b' "Backend to use: fzf, rofi")
       <*> maybeSwitch "exact" 'e' "Enable exact match"
       <*> maybeSwitch "ignore-case" 'i' "Case-insensitive match"
+      <*> maybeSwitch "force-tty" 'T' "Never fork or spawn off separate processes"
       <*> many (optPath "path" 'p' "Project directory")
       <*> pure [] -- Project types are not CLI args
       <*> pure [] -- Commands are not CLI args
