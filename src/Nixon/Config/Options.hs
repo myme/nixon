@@ -51,6 +51,7 @@ data ProjectOpts = ProjectOpts
 data RunOpts = RunOpts
   { run_command :: Maybe Text
   , run_list :: Bool
+  , run_select :: Bool
   } deriving Show
 
 command :: SubCommand -> Maybe Text
@@ -64,6 +65,7 @@ default_options = Options
   , sub_command = RunCommand RunOpts
     { run_command = Nothing
     , run_list = False
+    , run_select = False
     }
   }
 
@@ -116,12 +118,13 @@ project_parser = ProjectOpts
   <$> optional (argText "project" "Project to jump into")
   <*> optional (argText "command" "Command to run")
   <*> switch "list" 'l' "List projects"
-  <*> switch "select" 's' "Select a project or command and output on stdout"
+  <*> switch "select" 's' "Select a project and output on stdout"
 
 run_parser :: Parser RunOpts
 run_parser = RunOpts
   <$> optional (argText "command" "Command to run")
-  <*> switch "list" 'l' "List projects"
+  <*> switch "list" 'l' "List commands"
+  <*> switch "select" 's' "Select a command and output on stdout"
 
 -- | Read configuration from config file and command line arguments
 parse_args :: MonadIO m => m (Either ConfigError (SubCommand, Config))

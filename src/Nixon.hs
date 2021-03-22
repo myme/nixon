@@ -79,53 +79,64 @@ run_cmd :: CommandSelector
 run_cmd select_command project opts selector = with_local_config project $ do
   cmds <- list_commands project
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
-  let project_selector = \shell' -> cd (project_path project) >> selector shell'
-  (cmd', env') <- maybe_wrap_cmd project cmd >>= resolve_command project project_selector
-  -- TODO: Always edit command before executing?
-  log_info (format ("Running command "%w) cmd')
-  project_exec cmd' (cmdIsBg cmd) project env'
+  if Opts.run_select opts
+    then do
+      resolved <- resolve_cmd project selector cmd
+      printf (s%"\n") resolved
+    else do
+      let project_selector = \shell' -> cd (project_path project) >> selector shell'
+      env' <- maybe_wrap_cmd project cmd >>= resolve_env project project_selector
+      project_exec project cmd env'
 
-project_exec :: Text -> Bool -> Project -> Env -> Nixon ()
-project_exec cmd is_bg project env' = do
+-- | Execute a command in the context of a project.
+project_exec :: Project -> Command -> Env -> Nixon ()
+project_exec project cmd env' = do
   isTTY <- (&&) <$> (not . Config.isGuiBackend . backend <$> ask) <*> liftIO (IO.hIsTerminalDevice IO.stdin)
   forceTTY <- fromMaybe False . Config.force_tty . config <$> ask
+  let source = cmdSource cmd
+  log_info (format ("Running command "%w) source)
   if isTTY || forceTTY
-    then run [cmd] (Just $ project_path project) env'
+    then run [source] (Just $ project_path project) env'
     else do
       shell' <- fromMaybe "bash" <$> need "SHELL"
       let path' = Just $ project_path project
-      if is_bg
-        then spawn (shell' : ["-c", quote cmd]) path' env'
+      if cmdIsBg cmd
+        then spawn (shell' : ["-c", quote source]) path' env'
         else do
           let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
-              cmd' = shell' : ["-c", quote (cmd <> end)]
+              cmd' = shell' : ["-c", quote (source <> end)]
           term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
              $  MaybeT (terminal . config <$> ask)
             <|> MaybeT (need "TERMINAL")
           spawn (term : "-e" : cmd') path' env'
 
-resolve_command :: Project -> Selector -> Command -> Nixon (Text, Env)
-resolve_command project selector cmd = (,) (cmdSource cmd) <$> resolve_args (cmdEnv cmd)
+-- | Resolve all command environment variable placeholders.
+resolve_env :: Project -> Selector -> Command -> Nixon Env
+resolve_env project selector cmd = mapM resolve_each (cmdEnv cmd)
   where
-    resolve_args = fmap concat . mapM resolve_arg
-    resolve_arg (name, Env p) = find ((==) p . cmdName) . commands . config <$> ask >>= \case
-      Nothing -> error $ "Invalid argument: " <> T.unpack p
-      Just arg' -> do
-        (resolved, env') <- maybe_wrap_cmd project arg' >>= resolve_command project selector
-        let path' = Just $ project_path project
-        selection <- liftIO $ selector $ do
-          case cmdOutput arg' of
-            Lines -> do
-              candidate <- run_with_output stream [resolved] path' env'
-              pure $ Select.Identity (lineToText candidate)
-            JSON -> do
-              output <- BS.strict $ run_with_output BS.stream [resolved] path' env'
-              case eitherDecodeStrict output :: Either String [Select.Candidate] of
-                Left err -> error err
-                Right candidates -> select candidates
-        case selection of
-          Selection _ result -> pure [(name, result)]
-          _ -> error "Argument expansion aborted"
+    resolve_each (name, Env cmd') = (name,) <$> (assert_command cmd' >>= resolve_cmd project selector)
+    assert_command cmd_name = do
+      cmd' <- find ((==) cmd_name . cmdName) . commands . config <$> ask
+      maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
+
+-- | Resolve command to selectable output.
+resolve_cmd :: Project -> Selector -> Command -> Nixon Text
+resolve_cmd project selector cmd = do
+  env' <- maybe_wrap_cmd project cmd >>= resolve_env project selector
+  let path' = Just $ project_path project
+  selection <- liftIO $ selector $ do
+    case cmdOutput cmd of
+      Lines -> do
+        candidate <- run_with_output stream [cmdSource cmd] path' env'
+        pure $ Select.Identity (lineToText candidate)
+      JSON -> do
+        output <- BS.strict $ run_with_output BS.stream [cmdSource cmd] path' env'
+        case eitherDecodeStrict output :: Either String [Select.Candidate] of
+          Left err -> error err
+          Right candidates -> select candidates
+  case selection of
+    Selection _ result -> pure result
+    _ -> error "Argument expansion aborted"
 
 type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
 type CommandSelector = Project -> RunOpts -> [Command] -> IO (Maybe Command)
@@ -158,7 +169,7 @@ project_action projects opts
       if Opts.proj_select opts
         then liftIO $ printf (fp % "\n") (project_path project)
         else
-          let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_list opts)
+          let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_list opts) (Opts.proj_select opts)
           in run_cmd find_command project opts' selector
 
 -- | Run a command from current directory

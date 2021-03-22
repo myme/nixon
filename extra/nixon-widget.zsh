@@ -1,5 +1,5 @@
 nixon-widget() {
-    LBUFFER="${LBUFFER}$(nixon -b fzf -T run)"
+    LBUFFER="${LBUFFER}$(nixon -b fzf -T run -s)"
     local ret=$?
     zle reset-prompt
     return $ret
