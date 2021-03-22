@@ -18,6 +18,7 @@ import           Nixon.Utils (first_word)
 import qualified Text.Parsec as P
 import           Text.Parsec hiding (parse)
 import           Text.Parsec.Text
+import           Turtle ((%), format, s)
 
 data Command = Command
   { cmdName :: Text
@@ -50,7 +51,10 @@ mkcommand spec lang ptypes src = case parse parse_args spec of
     }
 
 show_command_oneline :: Command -> Text
-show_command_oneline = cmdName
+show_command_oneline cmd = format (s%s) (cmdName cmd) desc
+  where desc = case cmdDesc cmd of
+          Nothing -> ""
+          Just txt -> format (" - "%s) txt
 
 (<!) :: a -> (a -> b) -> b
 (<!) cmd op = op cmd

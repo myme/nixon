@@ -36,8 +36,8 @@ import           Turtle hiding (decimal, die, env, err, find, output, shell, tex
 import qualified Turtle.Bytes as BS
 
 -- | List projects, filtering if a filter is specified.
-list :: [Project] -> Maybe Text -> Nixon ()
-list projects query = do
+list_projects :: [Project] -> Maybe Text -> Nixon ()
+list_projects projects query = do
   let fmt_line = fmap (Select.Identity . format fp)
   paths <- liftIO $ fmt_line <$> traverse (implode_home . project_path) projects
   let fzf_opts = fzf_filter $ fromMaybe "" query
@@ -63,6 +63,12 @@ with_local_config project action = do
     Nothing -> action
     Just cfg -> local (\env -> env { config = config env <> cfg }) action
 
+list_commands :: Project -> Nixon [Command]
+list_commands project = filter filter_cmd . commands . config <$> ask
+  where ptypes = map project_id $ P.project_types project
+        filter_cmd cmd = let ctypes = cmdProjectTypes cmd
+                         in null ctypes || not (null $ intersect ptypes ctypes)
+
 -- | Find and run a command in a project.
 -- TODO: Print command before running it (add -q|--quiet)
 run_cmd :: CommandSelector
@@ -71,12 +77,9 @@ run_cmd :: CommandSelector
         -> Selector
         -> Nixon ()
 run_cmd select_command project opts selector = with_local_config project $ do
-  let ptypes = map project_id $ P.project_types project
-      filter_cmd cmd = let ctypes = cmdProjectTypes cmd
-                       in null ctypes || not (null $ intersect ptypes ctypes)
-      project_selector = \shell' -> cd (project_path project) >> selector shell'
-  cmds <- filter filter_cmd . commands . config <$> ask
+  cmds <- list_commands project
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
+  let project_selector = \shell' -> cd (project_path project) >> selector shell'
   (cmd', env') <- maybe_wrap_cmd project cmd >>= resolve_command project project_selector
   -- TODO: Always edit command before executing?
   log_info (format ("Running command "%w) cmd')
@@ -141,7 +144,7 @@ get_selectors = do
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
 project_action projects opts
-  | Opts.proj_list opts = Nixon.list projects (Opts.proj_project opts)
+  | Opts.proj_list opts = list_projects projects (Opts.proj_project opts)
   | otherwise = do
       (ptypes, find_project, find_command, selector) <- get_selectors
 
@@ -163,7 +166,9 @@ run_action :: RunOpts -> Nixon ()
 run_action opts = do
   (ptypes, _project, find_command, selector) <- get_selectors
   project <- liftIO (find_in_project_or_default ptypes =<< pwd)
-  run_cmd find_command project opts selector
+  if Opts.run_list opts
+    then list_commands project >>= liftIO . mapM_ (T.putStrLn . show_command_oneline)
+    else run_cmd find_command project opts selector
 
 -- TODO: Add "dump" command to dump entire config
 -- TODO: Add "add" or "edit" command to create a new or edit command in $EDITOR
