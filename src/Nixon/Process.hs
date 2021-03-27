@@ -1,5 +1,6 @@
 module Nixon.Process
   ( Env
+  , Run
   , arg
   , arg_fmt
   , build_args
@@ -10,12 +11,13 @@ module Nixon.Process
   ) where
 
 import           Control.Arrow ((***))
+import           Data.List.NonEmpty (NonEmpty((:|)))
 import           Data.Maybe (catMaybes)
 import qualified Data.Text as T
 import           Prelude hiding (FilePath)
 import           System.Posix
 import           System.Process hiding (system)
-import           Turtle hiding (arg, env, shell)
+import           Turtle hiding (arg, env, proc)
 
 type Env = [(Text, Text)]
 
@@ -31,31 +33,34 @@ arg_fmt key f' = pure . ([key] <>) . pure . f'
 build_args :: [Maybe [a]] -> [a]
 build_args = concat . catMaybes
 
-build_cmd :: MonadIO m => [Text] -> Maybe FilePath -> Env -> m CreateProcess
+build_cmd :: MonadIO m => NonEmpty Text -> Maybe FilePath -> Env -> m CreateProcess
 build_cmd cmd cwd' env' = do
   currentEnv <- liftIO getEnvironment
-  let cp' = shell $ T.unpack (T.unwords cmd)
+  let (cmd' :| args) = fmap T.unpack cmd
       cpEnv = Just $ currentEnv ++ map (T.unpack *** T.unpack) env'
-  pure cp' {
+  pure (proc cmd' args) {
     cwd = T.unpack . format fp <$> cwd',
     env = cpEnv
   }
 
+type Run m a = NonEmpty Text -> Maybe FilePath -> Env -> m a
+
 -- | Run a command and wait for it to finish
-run :: MonadIO m => [Text] -> Maybe FilePath -> Env -> m ()
+run :: MonadIO m => Run m ()
 run cmd cwd' env' = sh $ do
   cmd' <- build_cmd cmd cwd' env'
   system cmd' empty
 
-type Runner a = CreateProcess -> Shell a -> Shell a
+type Runner m a = CreateProcess -> m a -> m a
 
-run_with_output :: Runner a -> [Text] -> Maybe FilePath -> Env -> Shell a
+-- | Run a process and return the output
+run_with_output :: (MonadIO m, Alternative m) => Runner m a -> Run m a
 run_with_output stream' cmd cwd' env' = do
   cmd' <- build_cmd cmd cwd' env'
   stream' cmd' empty
 
 -- | Spawn/fork off a command in the background
-spawn :: MonadIO m => [Text] -> Maybe FilePath -> Env -> m ()
+spawn :: MonadIO m => Run m ()
 spawn cmd cwd' env' = liftIO $ void $ forkProcess $ do
   _ <- createSession
   run cmd cwd' env'

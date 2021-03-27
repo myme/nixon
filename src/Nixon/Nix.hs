@@ -8,6 +8,7 @@ module Nixon.Nix
 
 import           Control.Monad (filterM)
 import           Control.Monad.Trans.Maybe
+import           Data.List.NonEmpty (NonEmpty((:|)))
 import           Data.Maybe (listToMaybe)
 import qualified Data.Text as T
 import           Nixon.Command
@@ -36,14 +37,15 @@ nix_shell nix_file cwd' env' = liftIO $ nix_run run nix_file cwd' env'
 nix_shell_spawn :: MonadIO m => FilePath -> Maybe Text -> Env -> m ()
 nix_shell_spawn = nix_run spawn
 
-type Runner = [Text] -> Maybe FilePath -> Env -> IO ()
+type Runner = NonEmpty Text -> Maybe FilePath -> Env -> IO ()
 
 nix_run :: MonadIO m => Runner -> FilePath -> Maybe Text -> Env -> m ()
 nix_run run' nix_file cmd env' = liftIO $
   let nix_file' = format fp nix_file
-      args = build_args [pure [nix_file']
-                        , arg "--run" =<< cmd]
-  in run' ("nix-shell" : args) (Just $ parent nix_file) env'
+      cmd' = "nix-shell" :| build_args [
+        pure [nix_file']
+        , arg "--run" =<< cmd]
+  in run' cmd' (Just $ parent nix_file) env'
 
 nix_cmd :: Command -> FilePath -> Nixon (Maybe Command)
 nix_cmd cmd path' = use_nix . config <$> ask >>= \case

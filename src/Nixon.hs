@@ -9,6 +9,7 @@ import           Control.Monad.Trans.Reader
 import           Data.Aeson
 import           Data.Foldable (find)
 import           Data.List (intersect)
+import           Data.List.NonEmpty (NonEmpty((:|)))
 import           Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -96,19 +97,19 @@ project_exec project cmd env' = do
   let source = cmdSource cmd
   log_info (format ("Running command "%w) source)
   if isTTY || forceTTY
-    then run [source] (Just $ project_path project) env'
+    then run (pure source) (Just $ project_path project) env'
     else do
       shell' <- fromMaybe "bash" <$> need "SHELL"
       let path' = Just $ project_path project
       if cmdIsBg cmd
-        then spawn (shell' : ["-c", quote source]) path' env'
+        then spawn (shell' :| ["-c" <> quote source]) path' env'
         else do
           let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
-              cmd' = shell' : ["-c", quote (source <> end)]
+              cmd' = T.unwords $ shell' : "-c" : [quote (source <> end)]
           term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
              $  MaybeT (terminal . config <$> ask)
             <|> MaybeT (need "TERMINAL")
-          spawn (term : "-e" : cmd') path' env'
+          spawn (term :| "-e" : [cmd']) path' env'
 
 -- | Resolve all command environment variable placeholders.
 resolve_env :: Project -> Selector -> Command -> Nixon Env
@@ -127,10 +128,10 @@ resolve_cmd project selector cmd = do
   selection <- liftIO $ selector $ do
     case cmdOutput cmd of
       Lines -> do
-        candidate <- run_with_output stream [cmdSource cmd] path' env'
+        candidate <- run_with_output stream (pure $ cmdSource cmd) path' env'
         pure $ Select.Identity (lineToText candidate)
       JSON -> do
-        output <- BS.strict $ run_with_output BS.stream [cmdSource cmd] path' env'
+        output <- BS.strict $ run_with_output BS.stream (pure $ cmdSource cmd) path' env'
         case eitherDecodeStrict output :: Either String [Select.Candidate] of
           Left err -> error err
           Right candidates -> select candidates
