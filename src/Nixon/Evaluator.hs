@@ -4,15 +4,15 @@ module Nixon.Evaluator
   , writeCommand
   ) where
 
-import           Crypto.Hash (hash, digestToHexByteString, SHA1)
-import           Crypto.Hash.Types (Digest)
-import           Data.List.NonEmpty (NonEmpty((:|)))
-import           Data.Text.Encoding (decodeUtf8, encodeUtf8)
-import           Nixon.Command (Command(..), Language(..))
-import qualified Nixon.Process as Proc
-import           Prelude hiding (FilePath)
-import           System.Directory (XdgDirectory(..), getXdgDirectory)
-import           Turtle hiding (basename, env, extension)
+import Crypto.Hash (hash, digestToHexByteString, SHA1)
+import Crypto.Hash.Types (Digest)
+import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import Nixon.Command (Command(..), Language(..))
+import Nixon.Process (Cwd, Env, Run)
+import Prelude hiding (FilePath)
+import System.Directory (XdgDirectory(..), getXdgDirectory)
+import Turtle hiding (basename, env, extension)
 
 getCacheDir :: MonadIO m => m FilePath
 getCacheDir = liftIO $ decodeString <$> getXdgDirectory XdgCache "nixon"
@@ -32,7 +32,7 @@ writeCommand cmd = liftIO $ do
   writeTextFile path content
   pure path
 
-evaluate :: MonadIO m => Proc.Run m a -> Command -> Maybe FilePath -> Proc.Env -> m a
+evaluate :: MonadIO m => Run m a -> Command -> Cwd -> Env -> m a
 evaluate run cmd cwd env = do
   path <- writeCommand cmd
   interpreter (cmdLang cmd) >>= \case

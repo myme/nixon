@@ -1,5 +1,6 @@
 module Nixon.Process
-  ( Env
+  ( Cwd
+  , Env
   , Run
   , arg
   , arg_fmt
@@ -19,6 +20,7 @@ import           System.Posix
 import           System.Process hiding (system)
 import           Turtle hiding (arg, env, proc)
 
+type Cwd = Maybe FilePath
 type Env = [(Text, Text)]
 
 flag :: a -> Bool -> Maybe [a]
@@ -33,7 +35,7 @@ arg_fmt key f' = pure . ([key] <>) . pure . f'
 build_args :: [Maybe [a]] -> [a]
 build_args = concat . catMaybes
 
-build_cmd :: MonadIO m => NonEmpty Text -> Maybe FilePath -> Env -> m CreateProcess
+build_cmd :: MonadIO m => NonEmpty Text -> Cwd -> Env -> m CreateProcess
 build_cmd cmd cwd' env' = do
   currentEnv <- liftIO getEnvironment
   let (cmd' :| args) = fmap T.unpack cmd
@@ -43,7 +45,7 @@ build_cmd cmd cwd' env' = do
     env = cpEnv
   }
 
-type Run m a = NonEmpty Text -> Maybe FilePath -> Env -> m a
+type Run m a = NonEmpty Text -> Cwd -> Env -> m a
 
 -- | Run a command and wait for it to finish
 run :: MonadIO m => Run m ()

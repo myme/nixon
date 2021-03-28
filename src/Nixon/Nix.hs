@@ -31,16 +31,14 @@ find_nix_file dir = listToMaybe <$> filter_path nix_files
 
 -- | Evaluate a command in a nix-shell
 nix_shell :: MonadIO m => FilePath -> Maybe Text -> Env -> m ()
-nix_shell nix_file cwd' env' = liftIO $ nix_run run nix_file cwd' env'
+nix_shell = nix_run run
 
 -- | Fork and evaluate a command in a nix-shell
 nix_shell_spawn :: MonadIO m => FilePath -> Maybe Text -> Env -> m ()
 nix_shell_spawn = nix_run spawn
 
-type Runner = NonEmpty Text -> Maybe FilePath -> Env -> IO ()
-
-nix_run :: MonadIO m => Runner -> FilePath -> Maybe Text -> Env -> m ()
-nix_run run' nix_file cmd env' = liftIO $
+nix_run :: MonadIO m => Run m a -> FilePath -> Maybe Text -> Env -> m a
+nix_run run' nix_file cmd env' =
   let nix_file' = format fp nix_file
       cmd' = "nix-shell" :| build_args [
         pure [nix_file']
