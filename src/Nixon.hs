@@ -153,11 +153,8 @@ run_action opts = do
 
 -- TODO: Add "dump" command to dump entire config
 -- TODO: Add "add" or "edit" command to create a new or edit command in $EDITOR
--- TODO: Default to "run" rather than "project" commmands
-
 -- TODO: Launch terminal with nix-shell output if taking a long time.
 -- TODO: Allow changing default command
--- TODO: Project local commands (project/path/.nixon)
 -- TODO: Pingbot integration?
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
