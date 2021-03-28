@@ -1,15 +1,21 @@
 module Nixon.Evaluator
   ( evaluate
   , getCacheDir
+  , getEvaluator
   , writeCommand
   ) where
 
+import Control.Monad.Trans.Maybe (MaybeT(..))
 import Crypto.Hash (hash, digestToHexByteString, SHA1)
 import Crypto.Hash.Types (Digest)
 import Data.List.NonEmpty (NonEmpty((:|)))
+import Data.Maybe (fromMaybe)
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Nixon.Command (Command(..), Language(..))
+import Nixon.Direnv (direnv_cmd)
+import Nixon.Nix (nix_cmd)
 import Nixon.Process (Cwd, Env, Run)
+import Nixon.Types (Nixon)
 import Prelude hiding (FilePath)
 import System.Directory (XdgDirectory(..), getXdgDirectory)
 import Turtle hiding (basename, env, extension)
@@ -32,12 +38,26 @@ writeCommand cmd = liftIO $ do
   writeTextFile path content
   pure path
 
-evaluate :: MonadIO m => Run m a -> Command -> Cwd -> Env -> m a
-evaluate run cmd cwd env = do
+-- | Maybe wrap a command in direnv/nix.
+maybeWrapCmd :: Cwd -> NonEmpty Text -> Nixon (NonEmpty Text)
+maybeWrapCmd Nothing cmd = pure cmd
+maybeWrapCmd (Just path) cmd = fmap (fromMaybe cmd) $ runMaybeT
+   $  MaybeT (direnv_cmd cmd path)
+  <|> MaybeT (nix_cmd cmd path)
+
+-- | Provide an evaluator for a command, possibly in a direnv/nix environment
+getEvaluator :: Run m a -> Command -> Cwd -> Env -> Nixon (m a)
+getEvaluator run cmd cwd env = do
   path <- writeCommand cmd
-  interpreter (cmdLang cmd) >>= \case
+  int  <- interpreter (cmdLang cmd) >>= \case
     Nothing  -> die $ format ("No interpreter for "%w) (cmdLang cmd)
-    Just int -> run (int :| [format fp path]) cwd env
+    Just int -> pure int
+  int_cmd <- maybeWrapCmd cwd (int :| [format fp path])
+  pure $ run int_cmd cwd env
+
+-- | Evaluate a command, possibly in a direnv/nix environment
+evaluate :: Run Nixon a -> Command -> Cwd -> Env -> Nixon a
+evaluate run cmd cwd env = join (getEvaluator run cmd cwd env)
 
 extension :: Language -> Text
 extension = \case

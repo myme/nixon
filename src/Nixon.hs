@@ -19,11 +19,9 @@ import           Nixon.Config.Options (Backend(..), ProjectOpts(..), RunOpts(..)
 import qualified Nixon.Config.Options as Opts
 import           Nixon.Config.Types (ignore_case)
 import qualified Nixon.Config.Types as Config
-import           Nixon.Direnv
 import           Nixon.Evaluator
 import           Nixon.Fzf
 import           Nixon.Logging
-import           Nixon.Nix
 import           Nixon.Process (Env, spawn, run, run_with_output)
 import qualified Nixon.Project as P
 import           Nixon.Project hiding (project_types)
@@ -52,12 +50,6 @@ fail_empty err action = action >>= \case
   Nothing -> liftIO (throwIO $ EmptyError err)
   Just x -> pure x
 
--- | Maybe wrap a command in direnv/nix.
-maybe_wrap_cmd :: Project -> Command -> Nixon Command
-maybe_wrap_cmd project cmd = fmap (fromMaybe cmd) $ runMaybeT
-   $  MaybeT (direnv_cmd cmd (project_path project))
-  <|> MaybeT (nix_cmd cmd (project_path project))
-
 -- | Attempt to parse a local JSON
 with_local_config :: Project -> Nixon () -> Nixon ()
 with_local_config project action = do
@@ -76,7 +68,7 @@ list_commands project = filter filter_cmd . commands . config <$> ask
 run_cmd :: CommandSelector
         -> Project
         -> RunOpts
-        -> Selector
+        -> Selector Nixon
         -> Nixon ()
 run_cmd select_command project opts selector = with_local_config project $ do
   cmds <- list_commands project
@@ -87,7 +79,7 @@ run_cmd select_command project opts selector = with_local_config project $ do
       printf (s%"\n") resolved
     else do
       let project_selector = \shell' -> cd (project_path project) >> selector shell'
-      env' <- maybe_wrap_cmd project cmd >>= resolve_env project project_selector
+      env' <- resolve_env project project_selector cmd
       project_exec project cmd env'
 
 -- | Execute a command in the context of a project.
@@ -112,7 +104,7 @@ project_exec project cmd env' = do
           evaluate (spawn . ((term :| ["-e"]) <>)) cmd' path' env'
 
 -- | Resolve all command environment variable placeholders.
-resolve_env :: Project -> Selector -> Command -> Nixon Env
+resolve_env :: Project -> Selector Nixon -> Command -> Nixon Env
 resolve_env project selector cmd = mapM resolve_each (cmdEnv cmd)
   where
     resolve_each (name, Env cmd') = (name,) <$> (assert_command cmd' >>= resolve_cmd project selector)
@@ -121,17 +113,17 @@ resolve_env project selector cmd = mapM resolve_each (cmdEnv cmd)
       maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
 
 -- | Resolve command to selectable output.
-resolve_cmd :: Project -> Selector -> Command -> Nixon Text
+resolve_cmd :: Project -> Selector Nixon -> Command -> Nixon Text
 resolve_cmd project selector cmd = do
-  env' <- maybe_wrap_cmd project cmd >>= resolve_env project selector
+  env' <- resolve_env project selector cmd
   let path' = Just $ project_path project
-  selection <- liftIO $ selector $ do
+  linesEval <- getEvaluator (run_with_output stream) cmd path' env'
+  jsonEval  <- getEvaluator (run_with_output BS.stream) cmd path' env'
+  selection <- selector $ do
     case cmdOutput cmd of
-      Lines -> do
-        candidate <- evaluate (run_with_output stream) cmd path' env'
-        pure $ Select.Identity (lineToText candidate)
+      Lines -> Select.Identity . lineToText <$> linesEval
       JSON -> do
-        output <- BS.strict $ evaluate (run_with_output BS.stream) cmd path' env'
+        output <- BS.strict jsonEval
         case eitherDecodeStrict output :: Either String [Select.Candidate] of
           Left err -> error err
           Right candidates -> select candidates
@@ -142,7 +134,7 @@ resolve_cmd project selector cmd = do
 type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
 type CommandSelector = Project -> RunOpts -> [Command] -> IO (Maybe Command)
 
-get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, Selector)
+get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, Selector Nixon)
 get_selectors = do
   env <- ask
   let cfg = config env

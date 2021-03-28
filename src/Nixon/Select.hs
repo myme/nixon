@@ -18,6 +18,7 @@ module Nixon.Select
   ) where
 
 import           Control.Arrow ((&&&))
+import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.Trans.Reader
 import           Data.Aeson
 import           Data.Aeson.Types (unexpected)
@@ -57,9 +58,9 @@ instance Functor Selection where
   fmap _ EmptySelection = EmptySelection
   fmap _ CanceledSelection =  CanceledSelection
 
-type Selector = Shell Candidate -> IO (Selection Text)
+type Selector m = Shell Candidate -> m (Selection Text)
 
-type Select m a = ReaderT Selector m a
+type Select m a = ReaderT (Selector m) m a
 
 default_selection :: a -> Selection a -> a
 default_selection _ (Selection _ value) = value
@@ -68,13 +69,13 @@ default_selection def _ = def
 build_map :: (a -> Text) -> [a] -> Map.Map Text a
 build_map f = Map.fromList . map (f &&& id)
 
-runSelect :: Selector -> Select m a -> m a
+runSelect :: Selector m -> Select m a -> m a
 runSelect = flip runReaderT
 
 select :: MonadIO m => Shell Candidate -> Select m (Selection Text)
 select input = do
   selector <- ask
-  liftIO $ selector input
+  lift $ selector input
 
 text_to_line :: Text -> Line
 text_to_line = fromMaybe "" . textToLine

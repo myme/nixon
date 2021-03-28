@@ -8,10 +8,9 @@ module Nixon.Nix
 
 import           Control.Monad (filterM)
 import           Control.Monad.Trans.Maybe
-import           Data.List.NonEmpty (NonEmpty((:|)))
+import           Data.List.NonEmpty (NonEmpty((:|)), toList)
 import           Data.Maybe (listToMaybe)
 import qualified Data.Text as T
-import           Nixon.Command
 import           Nixon.Process
 import           Nixon.Types hiding (Env)
 import           Nixon.Utils
@@ -45,17 +44,11 @@ nix_run run' nix_file cmd env' =
         , arg "--run" =<< cmd]
   in run' cmd' (Just $ parent nix_file) env'
 
-nix_cmd :: Command -> FilePath -> Nixon (Maybe Command)
+nix_cmd :: NonEmpty Text -> FilePath -> Nixon (Maybe (NonEmpty Text))
 nix_cmd cmd path' = use_nix . config <$> ask >>= \case
   Just True -> liftIO $ runMaybeT $ do
     nix_file <-
       MaybeT (find_dominating_file path' "shell.nix") <|>
       MaybeT (find_dominating_file path' "default.nix")
-    pure $ cmd {
-      cmdSource = T.unwords
-        ["nix-shell --command"
-        ,quote $ cmdSource cmd
-        ,format fp nix_file
-        ]
-    }
+    pure ("nix-shell" :| ["--command", quote $ T.unwords $ toList cmd, format fp nix_file])
   _ -> pure Nothing
