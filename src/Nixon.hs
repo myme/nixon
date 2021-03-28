@@ -9,7 +9,6 @@ import           Control.Monad.Trans.Reader
 import           Data.Aeson
 import           Data.Foldable (find)
 import           Data.List (intersect)
-import           Data.List.NonEmpty (NonEmpty((:|)))
 import           Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -22,7 +21,7 @@ import qualified Nixon.Config.Types as Config
 import           Nixon.Evaluator
 import           Nixon.Fzf
 import           Nixon.Logging
-import           Nixon.Process (Env, spawn, run, run_with_output)
+import           Nixon.Process (Env, run_with_output)
 import qualified Nixon.Project as P
 import           Nixon.Project hiding (project_types)
 import           Nixon.Rofi
@@ -31,7 +30,6 @@ import qualified Nixon.Select as Select
 import           Nixon.Types hiding (Env)
 import           Nixon.Utils
 import           Prelude hiding (FilePath, log)
-import qualified System.IO as IO
 import           Turtle hiding (decimal, die, env, err, find, output, shell, text, x)
 import qualified Turtle.Bytes as BS
 
@@ -80,28 +78,7 @@ run_cmd select_command project opts selector = with_local_config project $ do
     else do
       let project_selector = \shell' -> cd (project_path project) >> selector shell'
       env' <- resolve_env project project_selector cmd
-      project_exec project cmd env'
-
--- | Execute a command in the context of a project.
-project_exec :: Project -> Command -> Env -> Nixon ()
-project_exec project cmd env' = do
-  isTTY <- (&&) <$> (not . Config.isGuiBackend . backend <$> ask) <*> liftIO (IO.hIsTerminalDevice IO.stdin)
-  forceTTY <- fromMaybe False . Config.force_tty . config <$> ask
-  let source = cmdSource cmd
-  log_info (format ("Running command "%w) source)
-  if isTTY || forceTTY
-    then evaluate run cmd (Just $ project_path project) env'
-    else do
-      let path' = Just $ project_path project
-      if cmdIsBg cmd
-        then evaluate spawn cmd path' env'
-        else do
-          let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
-              cmd' = cmd { cmdSource = cmdSource cmd <> end }
-          term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
-             $  MaybeT (terminal . config <$> ask)
-            <|> MaybeT (need "TERMINAL")
-          evaluate (spawn . ((term :| ["-e"]) <>)) cmd' path' env'
+      evaluate cmd (Just $ project_path project) env'
 
 -- | Resolve all command environment variable placeholders.
 resolve_env :: Project -> Selector Nixon -> Command -> Nixon Env
