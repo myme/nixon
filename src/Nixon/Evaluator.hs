@@ -12,9 +12,10 @@ import           Crypto.Hash.Types (Digest)
 import           Data.List.NonEmpty (NonEmpty((:|)))
 import           Data.Maybe (fromMaybe)
 import           Data.Text.Encoding (decodeUtf8, encodeUtf8)
-import           Nixon.Command (Command(..), Language(..))
+import           Nixon.Command (Command(..))
 import qualified Nixon.Config.Types as Config
 import           Nixon.Direnv (direnv_cmd)
+import           Nixon.Language (extension, interpreter)
 import           Nixon.Logging (log_info)
 import           Nixon.Nix (nix_cmd)
 import           Nixon.Process (Cwd, Env, Run)
@@ -85,21 +86,3 @@ evaluate cmd path env' = do
              $  MaybeT (Config.terminal . T.config <$> ask)
             <|> MaybeT (need "TERMINAL")
           withEvaluator (Proc.spawn . ((term :| ["-e"]) <>)) cmd' path env'
-
-extension :: Language -> Text
-extension = \case
-  Bash       -> ".sh"
-  None       -> ".sh"
-  Haskell    -> ".hs"
-  JavaScript -> ".js"
-  Python     -> ".py"
-  Unknown _  -> ".txt"
-
-interpreter :: MonadIO m => Language -> m (Maybe Text)
-interpreter = \case
-  Bash       -> pure $ Just "bash"
-  None       -> need "SHELL" <&> (<|> Just "bash")
-  Haskell    -> pure $ Just "runghc"
-  JavaScript -> pure $ Just "node"
-  Python     -> pure $ Just "python3"
-  Unknown _  -> pure Nothing

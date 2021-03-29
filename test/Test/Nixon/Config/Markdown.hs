@@ -4,11 +4,12 @@ module Test.Nixon.Config.Markdown where
 
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Nixon.Command (CommandEnv(Env), Language (Bash))
+import           Nixon.Command (CommandEnv(Env))
 import qualified Nixon.Command as Cmd
 import           Nixon.Config.Markdown (parseMarkdown)
 import           Nixon.Config.Types (defaultConfig)
 import qualified Nixon.Config.Types as Cfg
+import           Nixon.Language (Language(Bash))
 import           Test.Hspec
 
 match_error :: Text -> Either Text b -> Bool

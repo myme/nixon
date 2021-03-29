@@ -40,6 +40,7 @@ library
                      , Nixon.Direnv
                      , Nixon.Evaluator
                      , Nixon.Fzf
+                     , Nixon.Language
                      , Nixon.Logging
                      , Nixon.Nix
                      , Nixon.Process
