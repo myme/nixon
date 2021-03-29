@@ -1,0 +1,25 @@
+#+TITLE: TODOs
+
+* Workflow
+
+** TODO Edit commands in $EDITOR
+
+** TODO Add new commands
+
+** TODO Dump config or selection to file
+
+* Backends (fzf, rofi)
+
+** TODO Pass through backend configuration (for e.g. styles++)
+
+* Shells
+
+** TODO Bash/zsh completion scripts
+
+** TODO Add to bash/zsh history
+
+** TODO Delete from history (alt-delete)
+
+* Integrations
+
+** TODO Pingbot integration

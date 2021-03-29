@@ -184,8 +184,6 @@ fzf_projects opts query projects = do
     Selection _ out -> Map.lookup out candidates
     _ -> Nothing)
 
--- TODO: Add "delete from history" (alt-delete)
--- TODO: Add to shell/zsh/bash history?
 -- | Find commands applicable to a project
 fzf_project_command :: (MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Maybe Command)
 fzf_project_command opts project popts commands = do

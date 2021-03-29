@@ -62,7 +62,6 @@ list_commands project = filter filter_cmd . commands . config <$> ask
                          in null ctypes || not (null $ intersect ptypes ctypes)
 
 -- | Find and run a command in a project.
--- TODO: Print command before running it (add -q|--quiet)
 run_cmd :: CommandSelector
         -> Project
         -> RunOpts
@@ -129,7 +128,6 @@ project_action projects opts
   | otherwise = do
       (ptypes, find_project, find_command, selector) <- get_selectors
 
-      -- TODO: Generalize rofi/fzf_projects and move this to Nixon.Project using `select`
       let find_project' (Just ".") = runMaybeT
              $  MaybeT (find_in_project ptypes =<< pwd)
             <|> MaybeT (find_project Nothing projects)
@@ -151,11 +149,6 @@ run_action opts = do
     then list_commands project >>= liftIO . mapM_ (T.putStrLn . show_command_oneline)
     else run_cmd find_command project opts selector
 
--- TODO: Add "dump" command to dump entire config
--- TODO: Add "add" or "edit" command to create a new or edit command in $EDITOR
--- TODO: Launch terminal with nix-shell output if taking a long time.
--- TODO: Allow changing default command
--- TODO: Pingbot integration?
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
 nixon_with_config :: MonadIO m => Config.Config -> m ()

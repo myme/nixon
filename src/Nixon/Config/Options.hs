@@ -20,16 +20,6 @@ import qualified Options.Applicative as Opts
 import           Prelude hiding (FilePath)
 import           Turtle hiding (err, select)
 
--- TODO: Add CLI opt for outputting bash/zsh completion script.
---       https://github.com/pcapriotti/optparse-applicative#bash-zsh-and-fish-completions
--- TODO: Add support for independent directory/tree of nix files.
---       The idea is that for some projects you don't want to "pollute" the
---       project by adding e.g. nix files. Add support so that "nixon" can find
---       these files and launch the appropriate environment without the files
---       having to be *in* the project root.
--- TODO: Add "Backend" configuration support (for e.g. styles like height)
--- E.g. --backend-arg "fzf: --height 40"
---      --backend-arg "rofi: ..."
 -- | Command line options.
 data Options = Options
   { config_file :: Maybe FilePath
@@ -79,7 +69,6 @@ maybeSwitch long short help =
   Opts.flag Nothing (Just False) (
     Opts.long ("no-" ++ Text.unpack long))
 
--- TODO: Allow switching off "use_direnv" and "use_nix"
 parser :: FilePath -> Parser Options
 parser default_config = Options
   <$> optional (optPath "config" 'C' (config_help default_config))

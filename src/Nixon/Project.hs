@@ -144,7 +144,6 @@ sort_projects :: [Project] -> [Project]
 sort_projects = sortBy (compare `on` project_path)
 
 -- | Given a path, find matching markers/project type.
--- TODO: Follow symbolic links?
 find_project_types :: MonadIO m => FilePath -> [ProjectType] -> m [ProjectType]
 find_project_types path' project_types = liftIO $ testdir path' >>= \case
   False -> pure []
