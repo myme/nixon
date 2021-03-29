@@ -24,7 +24,7 @@ import           Data.List (sort)
 import qualified Data.Map as Map
 import           Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
-import           Nixon.Command (show_command_oneline)
+import           Nixon.Command (show_command_oneline, Command (cmdSource))
 import           Nixon.Config.Options (RunOpts)
 import qualified Nixon.Config.Options as Options
 import           Nixon.Process
@@ -187,16 +187,20 @@ fzf_projects opts query projects = do
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?
 -- | Find commands applicable to a project
-fzf_project_command :: (MonadIO m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Maybe Command)
+fzf_project_command :: (MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Maybe Command)
 fzf_project_command opts project popts commands = do
   let candidates = map (show_command_oneline &&& id) commands
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
       opts' = opts <> fzf_header header <> maybe mempty fzf_query (Options.run_command popts) <> fzf_no_sort
       input' = Select.Identity <$> select (fst <$> candidates)
-  fzf opts' input' >>= (\case
-    Selection Default cmd -> runMaybeT $ MaybeT (pure cmd)
-    Selection (Alternate _) cmd -> pure cmd
-    _ -> pure Nothing) . fmap (`lookup` candidates)
+  selection <- fmap (`lookup` candidates) <$> fzf opts' input'
+  case selection of
+    Selection Default cmd -> pure cmd
+    Selection (Alternate _) cmd -> runMaybeT $ do
+      cmd' <- MaybeT (pure cmd)
+      edited <- MaybeT $ fzf_edit_selection (cmdSource cmd')
+      pure cmd' { cmdSource = edited }
+    _ -> pure Nothing
 
 -- | Use readline to manipulate/change a fzf selection
 fzf_edit_selection :: (MonadIO m, MonadMask m) => Text -> m (Maybe Text)
