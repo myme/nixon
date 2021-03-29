@@ -18,6 +18,7 @@ module Nixon.Fzf
   ) where
 
 import           Control.Arrow ((&&&), second)
+import           Control.Monad.Catch
 import           Control.Monad.Trans.Maybe (MaybeT(..), runMaybeT)
 import           Data.List (sort)
 import qualified Data.Map as Map
@@ -157,7 +158,7 @@ fzf opts candidates = do
     CanceledSelection -> CanceledSelection
     EmptySelection -> EmptySelection
 
-fzf_with_edit :: (MonadIO m, MonadException m) => FzfOpts -> Shell Candidate -> m (Selection Text)
+fzf_with_edit :: (MonadIO m, MonadMask m) => FzfOpts -> Shell Candidate -> m (Selection Text)
 fzf_with_edit opts candidates = fzf opts candidates >>= \case
   Selection (Alternate idx) selection -> fzf_edit_selection selection >>= \case
     Just selection' -> pure $ Selection (Alternate idx) selection'
@@ -186,7 +187,7 @@ fzf_projects opts query projects = do
 -- TODO: Add "delete from history" (alt-delete)
 -- TODO: Add to shell/zsh/bash history?
 -- | Find commands applicable to a project
-fzf_project_command :: (MonadIO m, MonadException m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Maybe Command)
+fzf_project_command :: (MonadIO m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Maybe Command)
 fzf_project_command opts project popts commands = do
   let candidates = map (show_command_oneline &&& id) commands
       header = format ("Select command ["%fp%"] ("%fp%")") (project_name project) (project_dir project)
@@ -198,7 +199,7 @@ fzf_project_command opts project popts commands = do
     _ -> pure Nothing) . fmap (`lookup` candidates)
 
 -- | Use readline to manipulate/change a fzf selection
-fzf_edit_selection :: (MonadIO m, MonadException m) => Text -> m (Maybe Text)
+fzf_edit_selection :: (MonadIO m, MonadMask m) => Text -> m (Maybe Text)
 fzf_edit_selection selection = runInputT defaultSettings $ do
   line <- getInputLineWithInitial "> " (T.unpack selection , "")
   pure $ case line of

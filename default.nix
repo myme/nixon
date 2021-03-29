@@ -21,6 +21,7 @@ in haskellPackages.mkDerivation {
     cryptohash
     directory
     foldl
+    exceptions
     haskeline
     optparse-applicative
     quickcheck-instances
@@ -43,7 +44,7 @@ in haskellPackages.mkDerivation {
   testDepends = with haskellPackages; [
     hspec
   ];
-  license = pkgs.stdenv.lib.licenses.mit;
+  license = pkgs.lib.licenses.mit;
   postInstall = ''
     # Install widgets into share/nixon
     mkdir -p $out/share/nixon

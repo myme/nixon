@@ -54,6 +54,7 @@ library
                      , containers
                      , cryptohash
                      , directory
+                     , exceptions
                      , foldl
                      , haskeline
                      , optparse-applicative
