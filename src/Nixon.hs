@@ -12,7 +12,7 @@ import           Data.List (intersect)
 import           Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import           Nixon.Command hiding (empty)
+import           Nixon.Command (Command(..), CommandEnv(..), CommandOutput(..), show_command_oneline)
 import qualified Nixon.Config as Config
 import           Nixon.Config.Options (Backend(..), ProjectOpts(..), RunOpts(..), SubCommand(..))
 import qualified Nixon.Config.Options as Opts
@@ -30,6 +30,7 @@ import qualified Nixon.Select as Select
 import           Nixon.Types hiding (Env)
 import           Nixon.Utils
 import           Prelude hiding (FilePath, log)
+import           System.Environment (withArgs)
 import           Turtle hiding (decimal, die, env, err, find, output, shell, text, x)
 import qualified Turtle.Bytes as BS
 
@@ -149,11 +150,14 @@ run_action opts = do
     then list_commands project >>= liftIO . mapM_ (T.putStrLn . show_command_oneline)
     else run_cmd find_command project opts selector
 
+die :: (Show a, MonadIO m) => a -> m b
+die err = liftIO $ log_error (format w err) >> exit (ExitFailure 1)
+
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
 nixon_with_config :: MonadIO m => Config.Config -> m ()
 nixon_with_config user_config = liftIO $ do
-  (sub_cmd, cfg) <- either die pure =<< Opts.parse_args
+  (sub_cmd, cfg) <- either die pure =<< Opts.parse_args (nixon_completer user_config)
   err <- try $ runNixon (user_config <> cfg) $ case sub_cmd of
     ProjectCommand project_opts -> do
       log_info "Running <project> command"
@@ -168,7 +172,23 @@ nixon_with_config user_config = liftIO $ do
   case err of
     Left (EmptyError msg) -> die msg
     Right _ -> pure ()
-  where die err = liftIO $ log_error (format w err) >> exit (ExitFailure 1)
+
+nixon_completer :: Config.Config -> [String] -> IO [String]
+nixon_completer user_config args = do
+  let parse_args = Opts.parse_args $ nixon_completer user_config
+  (sub_cmd, cfg) <- either die pure =<< withArgs args parse_args
+  runNixon (user_config <> cfg) $ case sub_cmd of
+    ProjectCommand _ -> do
+      cfg' <- config <$> ask
+      let ptypes = project_types cfg'
+          srcs = project_dirs cfg'
+      projects <- liftIO (find_projects 1 ptypes srcs)
+      pure $ map (T.unpack . format fp . project_name) $ sort_projects projects
+    RunCommand _ -> do
+      (ptypes, _, _, _) <- get_selectors
+      project <- liftIO (find_in_project_or_default ptypes =<< pwd)
+      commands <- list_commands project
+      pure $ map (T.unpack . cmdName) commands
 
 -- | Nixon with default configuration
 nixon :: MonadIO m => m ()

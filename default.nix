@@ -54,5 +54,6 @@ in haskellPackages.mkDerivation {
     # Install zsh widget into share/zsh/site-functions
     mkdir -p $out/share/zsh/site-functions
     install ${src}/extra/nixon-widget.zsh $out/share/zsh/site-functions/_nixon_widget
+    $out/bin/nixon --zsh-completion-script $out/bin/nixon > $out/share/zsh/site-functions/_nixon_completion
   '';
 }

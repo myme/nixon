@@ -18,6 +18,7 @@ import qualified Nixon.Config.Types as Config
 import           Nixon.Utils (implode_home)
 import qualified Options.Applicative as Opts
 import           Prelude hiding (FilePath)
+import           System.Environment (getArgs)
 import           Turtle hiding (err, select)
 
 -- | Command line options.
@@ -69,13 +70,13 @@ maybeSwitch long short help =
   Opts.flag Nothing (Just False) (
     Opts.long ("no-" ++ Text.unpack long))
 
-parser :: FilePath -> Parser Options
-parser default_config = Options
+parser :: FilePath -> Opts.Completer -> Parser Options
+parser default_config completer = Options
   <$> optional (optPath "config" 'C' (config_help default_config))
   <*> parse_config
-  <*> ( ProjectCommand <$> subcommand "project" "Project actions" project_parser <|>
-        RunCommand <$> subcommand "run" "Run command" run_parser <|>
-        RunCommand <$> run_parser)
+  <*> ( ProjectCommand <$> subcommand "project" "Project actions" (project_parser completer) <|>
+        RunCommand <$> subcommand "run" "Run command" (run_parser completer) <|>
+        RunCommand <$> run_parser completer)
   where
     parse_backend = flip lookup
       [("fzf", Fzf)
@@ -102,27 +103,34 @@ parser default_config = Options
       <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")
       <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
 
-project_parser :: Parser ProjectOpts
-project_parser = ProjectOpts
-  <$> optional (argText "project" "Project to jump into")
+project_parser :: Opts.Completer -> Parser ProjectOpts
+project_parser completer = ProjectOpts
+  <$> optional (Opts.strArgument $ Opts.metavar "project" <> Opts.help "Project to jump into" <> Opts.completer completer)
   <*> optional (argText "command" "Command to run")
   <*> switch "list" 'l' "List projects"
   <*> switch "select" 's' "Select a project and output on stdout"
 
-run_parser :: Parser RunOpts
-run_parser = RunOpts
-  <$> optional (argText "command" "Command to run")
+run_parser :: Opts.Completer -> Parser RunOpts
+run_parser completer = RunOpts
+  <$> optional (Opts.strArgument $ Opts.metavar "command" <> Opts.help "Command to run" <> Opts.completer completer)
   <*> switch "list" 'l' "List commands"
   <*> switch "select" 's' "Select a command and output on stdout"
 
 -- | Read configuration from config file and command line arguments
-parse_args :: MonadIO m => m (Either ConfigError (SubCommand, Config))
-parse_args = do
+parse_args :: MonadIO m => ([String] -> IO [String]) -> m (Either ConfigError (SubCommand, Config))
+parse_args completer = do
   default_config <- implode_home =<< MD.defaultPath
-  opts <- Turtle.options "Launch project environment" (parser default_config)
+  let completer' = Opts.listIOCompleter $ completion_args completer
+  opts <- Turtle.options "Launch project environment" (parser default_config completer')
   config_path <- maybe MD.defaultPath pure (config_file opts)
   liftIO $ do
     cfg <- read_config config_path
     let mergedConfig = liftA2 (<>) cfg (pure $ config opts)
         subCmdConfig = fmap (sub_command opts,) mergedConfig
     pure subCmdConfig
+
+completion_args :: ([String] -> IO [String]) -> IO [String]
+completion_args completer = completer . drop 1 . extract_words =<< getArgs
+  where extract_words ("--bash-completion-word" : w' : ws) = w' : extract_words ws
+        extract_words (_ : ws) = extract_words ws
+        extract_words [] = []
