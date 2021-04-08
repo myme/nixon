@@ -1,5 +1,7 @@
 module Nixon.Config.Options
-  ( Backend(..)
+  ( Completer
+  , CompletionType(..)
+  , Backend(..)
   , LogLevel(..)
   , Options(..)
   , SubCommand(..)
@@ -20,6 +22,9 @@ import qualified Options.Applicative as Opts
 import           Prelude hiding (FilePath)
 import           System.Environment (getArgs)
 import           Turtle hiding (err, select)
+
+type Completer = [String] -> IO [String]
+data CompletionType = Project | Run
 
 -- | Command line options.
 data Options = Options
@@ -70,13 +75,13 @@ maybeSwitch long short help =
   Opts.flag Nothing (Just False) (
     Opts.long ("no-" ++ Text.unpack long))
 
-parser :: FilePath -> Opts.Completer -> Parser Options
-parser default_config completer = Options
+parser :: FilePath -> (CompletionType -> Opts.Completer) -> Parser Options
+parser default_config mkcompleter = Options
   <$> optional (optPath "config" 'C' (config_help default_config))
   <*> parse_config
-  <*> ( ProjectCommand <$> subcommand "project" "Project actions" (project_parser completer) <|>
-        RunCommand <$> subcommand "run" "Run command" (run_parser completer) <|>
-        RunCommand <$> run_parser completer)
+  <*> ( ProjectCommand <$> subcommand "project" "Project actions" (project_parser mkcompleter) <|>
+        RunCommand <$> subcommand "run" "Run command" (run_parser $ mkcompleter Run) <|>
+        RunCommand <$> run_parser (mkcompleter Run))
   where
     parse_backend = flip lookup
       [("fzf", Fzf)
@@ -103,10 +108,16 @@ parser default_config completer = Options
       <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")
       <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
 
-project_parser :: Opts.Completer -> Parser ProjectOpts
-project_parser completer = ProjectOpts
-  <$> optional (Opts.strArgument $ Opts.metavar "project" <> Opts.help "Project to jump into" <> Opts.completer completer)
-  <*> optional (argText "command" "Command to run")
+project_parser :: (CompletionType -> Opts.Completer) -> Parser ProjectOpts
+project_parser mkcompleter = ProjectOpts
+  <$> optional (Opts.strArgument
+                $ Opts.metavar "project"
+                <> Opts.help "Project to jump into"
+                <> Opts.completer (mkcompleter Project))
+  <*> optional (Opts.strArgument
+                $ Opts.metavar "command"
+                <> Opts.help "Command to run"
+                <> Opts.completer (mkcompleter Run))
   <*> switch "list" 'l' "List projects"
   <*> switch "select" 's' "Select a project and output on stdout"
 
@@ -117,11 +128,11 @@ run_parser completer = RunOpts
   <*> switch "select" 's' "Select a command and output on stdout"
 
 -- | Read configuration from config file and command line arguments
-parse_args :: MonadIO m => ([String] -> IO [String]) -> m (Either ConfigError (SubCommand, Config))
-parse_args completer = do
+parse_args :: MonadIO m => (CompletionType -> Completer) -> m (Either ConfigError (SubCommand, Config))
+parse_args mkcompleter = do
   default_config <- implode_home =<< MD.defaultPath
-  let completer' = Opts.listIOCompleter $ completion_args completer
-  opts <- Turtle.options "Launch project environment" (parser default_config completer')
+  let completer = Opts.listIOCompleter . completion_args . mkcompleter
+  opts <- Turtle.options "Launch project environment" (parser default_config completer)
   config_path <- maybe MD.defaultPath pure (config_file opts)
   liftIO $ do
     cfg <- read_config config_path
@@ -129,8 +140,8 @@ parse_args completer = do
         subCmdConfig = fmap (sub_command opts,) mergedConfig
     pure subCmdConfig
 
-completion_args :: ([String] -> IO [String]) -> IO [String]
-completion_args completer = completer . drop 1 . extract_words =<< getArgs
+completion_args :: Completer -> IO [String]
+completion_args completer = completer . drop 1 . extract_words =<< liftIO getArgs
   where extract_words ("--bash-completion-word" : w' : ws) = w' : extract_words ws
         extract_words (_ : ws) = extract_words ws
         extract_words [] = []

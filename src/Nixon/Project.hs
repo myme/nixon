@@ -7,6 +7,7 @@ module Nixon.Project
   , find_in_project_or_default
   , find_projects
   , find_projects_by_name
+  , from_path
   , mkproject
   , parents
   , proj
@@ -17,8 +18,7 @@ module Nixon.Project
 import qualified Control.Foldl as Fold
 import           Control.Monad (filterM)
 import           Data.Function (on)
-import           Data.List (intercalate)
-import           Data.List (sortBy)
+import           Data.List ( intercalate, sortBy )
 import           Data.Maybe (fromMaybe)
 import           Data.Text (isInfixOf)
 import qualified Data.Text as T
