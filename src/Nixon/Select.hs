@@ -58,7 +58,7 @@ instance Functor Selection where
   fmap _ EmptySelection = EmptySelection
   fmap _ CanceledSelection =  CanceledSelection
 
-type Selector m = Shell Candidate -> m (Selection Text)
+type Selector m = Maybe Text -> Shell Candidate -> m (Selection Text)
 
 type Select m a = ReaderT (Selector m) m a
 
@@ -72,10 +72,10 @@ build_map f = Map.fromList . map (f &&& id)
 runSelect :: Selector m -> Select m a -> m a
 runSelect = flip runReaderT
 
-select :: MonadIO m => Shell Candidate -> Select m (Selection Text)
-select input = do
+select :: MonadIO m => Maybe Text -> Shell Candidate -> Select m (Selection Text)
+select search input = do
   selector <- ask
-  lift $ selector input
+  lift $ selector search input
 
 text_to_line :: Text -> Line
 text_to_line = fromMaybe "" . textToLine

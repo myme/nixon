@@ -40,12 +40,14 @@ data SubCommand = ProjectCommand ProjectOpts
 data ProjectOpts = ProjectOpts
   { proj_project :: Maybe Text
   , proj_command :: Maybe Text
+  , proj_args :: [Text]
   , proj_list :: Bool
   , proj_select :: Bool
   } deriving Show
 
 data RunOpts = RunOpts
   { run_command :: Maybe Text
+  , run_args :: [Text]
   , run_list :: Bool
   , run_select :: Bool
   } deriving Show
@@ -60,6 +62,7 @@ default_options = Options
   , config = Config.defaultConfig
   , sub_command = RunCommand RunOpts
     { run_command = Nothing
+    , run_args = []
     , run_list = False
     , run_select = False
     }
@@ -118,12 +121,14 @@ project_parser mkcompleter = ProjectOpts
                 $ Opts.metavar "command"
                 <> Opts.help "Command to run"
                 <> Opts.completer (mkcompleter Run))
+  <*> many (Opts.strArgument $ Opts.metavar "args..." <> Opts.help "Arguments to command")
   <*> switch "list" 'l' "List projects"
   <*> switch "select" 's' "Select a project and output on stdout"
 
 run_parser :: Opts.Completer -> Parser RunOpts
 run_parser completer = RunOpts
   <$> optional (Opts.strArgument $ Opts.metavar "command" <> Opts.help "Command to run" <> Opts.completer completer)
+  <*> many (Opts.strArgument $ Opts.metavar "args..." <> Opts.help "Arguments to command")
   <*> switch "list" 'l' "List commands"
   <*> switch "select" 's' "Select a command and output on stdout"
 

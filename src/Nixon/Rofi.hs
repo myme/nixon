@@ -8,6 +8,7 @@ module Nixon.Rofi
   , rofi_projects
   , rofi_prompt
   , rofi_project_command
+  , rofi_query
   , RofiResult(..)
   ) where
 
