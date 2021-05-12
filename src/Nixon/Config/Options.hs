@@ -109,7 +109,7 @@ parser default_config mkcompleter = Options
       <*> maybeSwitch "direnv" 'd' "Evaluate .envrc files using `direnv exec`"
       <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
       <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")
-      <*> optional (opt parse_loglevel "loglevel" 'l' "Loglevel: debug, info, warning, error")
+      <*> optional (opt parse_loglevel "loglevel" 'L' "Loglevel: debug, info, warning, error")
 
 project_parser :: (CompletionType -> Opts.Completer) -> Parser ProjectOpts
 project_parser mkcompleter = ProjectOpts
