@@ -22,7 +22,6 @@ import qualified Text.Pandoc as P
 import qualified Text.Pandoc.Builder as B
 import           Text.Pandoc.Walk
 import           Turtle hiding (Header, err, filename, find, text, l, x)
-import Debug.Trace
 
 
 defaultPath :: MonadIO m => m FilePath
@@ -143,4 +142,4 @@ parseCommand name projectTypes (Paragraph desc : rest) =
   in  (Cmd.description (strip desc) <$> cmd, rest')
 parseCommand name projectTypes (Source lang src : rest) = (cmd, rest)
   where cmd = Cmd.mkcommand name lang projectTypes src
-parseCommand name _ rest = traceShow rest (Left $ format ("Expecting source block for "%s) name, rest)
+parseCommand name _ rest = (Left $ format ("Expecting source block for "%s) name, rest)
