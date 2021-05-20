@@ -82,8 +82,11 @@ run_cmd select_command project opts selector = with_local_config project $ do
 
 -- | Resolve all command environment variable placeholders.
 resolve_env :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Env
-resolve_env project selector cmd args = mapM resolve_each $ zip (cmdEnv cmd) (map Just args <> repeat Nothing)
+resolve_env project selector cmd args = do
+  vars <- mapM resolve_each $ zip (cmdEnv cmd) (map Just args <> repeat Nothing)
+  pure $ nixon_envs ++ vars
   where
+    nixon_envs = [("nixon_project_path", format fp $ project_path project)]
     resolve_each ((name, Env cmd'), search) = (name,) <$> (assert_command cmd' >>= \c -> resolve_cmd project selector c search)
     assert_command cmd_name = do
       cmd' <- find ((==) cmd_name . cmdName) . commands . config <$> ask
