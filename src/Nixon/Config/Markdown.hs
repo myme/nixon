@@ -3,14 +3,19 @@
 module Nixon.Config.Markdown
   ( defaultPath
   , parseMarkdown
+  , parseMarkdown'
+  , parseHeaderArgs
   ) where
 
+import           CMark (commonmarkToNode)
+import qualified CMark as M
 import           Data.Aeson (eitherDecodeStrict)
 import           Data.Bifunctor (Bifunctor(first))
-import           Data.Either (fromRight)
+import           Data.Either (fromRight, partitionEithers)
 import           Data.List (find)
 import           Data.Maybe (listToMaybe)
 import           Data.Text (isSuffixOf, pack, strip)
+import qualified Data.Text as T
 import           Data.Text.Encoding (encodeUtf8)
 import           Nixon.Command ((<!), bg, json)
 import qualified Nixon.Command as Cmd
@@ -21,7 +26,9 @@ import           System.Directory (XdgDirectory(..), getXdgDirectory)
 import qualified Text.Pandoc as P
 import qualified Text.Pandoc.Builder as B
 import           Text.Pandoc.Walk
-import           Turtle hiding (Header, err, filename, find, text, l, x)
+import qualified Text.Parsec as P
+import           Text.Parsec.Text (Parser)
+import           Turtle hiding (Header, Parser, err, filename, find, input, text, l, x)
 
 
 defaultPath :: MonadIO m => m FilePath
@@ -34,16 +41,76 @@ parseMarkdown markdown = do
   nodes <- first (pack . show) . P.runPure $ query extract <$> P.readMarkdown mdOpts markdown
   buildConfig <$> parse nodes
   where mdOpts = P.def { P.readerExtensions = P.pandocExtensions }
-        buildConfig :: (JSON.Config, [Cmd.Command]) -> Config
-        buildConfig (cfg, cmds) = defaultConfig
-          { exact_match = JSON.exact_match cfg
-          , ignore_case = JSON.ignore_case cfg
-          , project_dirs = JSON.project_dirs cfg
-          , project_types = JSON.project_types cfg
-          , use_direnv = JSON.use_direnv cfg
-          , use_nix = JSON.use_nix cfg
-          , commands = cmds
-          }
+
+
+buildConfig :: (JSON.Config, [Cmd.Command]) -> Config
+buildConfig (cfg, cmds) = defaultConfig
+  { exact_match = JSON.exact_match cfg
+  , ignore_case = JSON.ignore_case cfg
+  , project_dirs = JSON.project_dirs cfg
+  , project_types = JSON.project_types cfg
+  , use_direnv = JSON.use_direnv cfg
+  , use_nix = JSON.use_nix cfg
+  , commands = cmds
+  }
+
+
+parseMarkdown' :: Text -> Either Text Config
+parseMarkdown' markdown = buildConfig <$> parse (extract' (commonmarkToNode [] markdown))
+
+
+extract' :: M.Node -> [Node]
+extract' (M.Node _ nodeType children) = case nodeType of
+  M.HEADING level -> let name = getText children
+                         (args, kwargs) = parseHeaderArgs name
+                         (isCommand, isBg) = case find isCode children of
+                           Just (M.Node _ (M.CODE text) _) -> (True, "&" `T.isSuffixOf` T.strip text)
+                           _ -> (False, False)
+                         args' = ["bg" | isBg && "bg" `notElem` args] ++
+                                 ["command" | isCommand && "command" `notElem` args] ++
+                                 args
+                     in [Head level name (name, args', kwargs)]
+  M.CODE_BLOCK info text -> let lang = case T.words info of
+                                  [] -> Nothing
+                                  (l:_) -> Just l
+                            in [Source lang text]
+  M.PARAGRAPH -> [Paragraph $ getText children]
+  _ -> concatMap extract' children
+  where isCode (M.Node _ (M.CODE _) _) = True
+        isCode _ =  False
+
+
+parseHeaderArgs :: Text -> ([Text], [(Text, Text)])
+parseHeaderArgs input = case P.parse parser "" input of
+  Left _   -> ([], [])
+  Right xs -> xs
+  where parser :: Parser ([Text], [(Text, Text)])
+        parser = do
+          P.skipMany $ P.noneOf ['{']
+          args <- braces (P.sepBy (parseArg <|> parseKwArg) P.spaces)
+          pure $ partitionEithers args
+        parseArg = do
+          name <- T.pack <$> (P.char '.' *> letters)
+          pure $ Left name
+        parseKwArg = do
+          name  <- T.pack <$> P.many1 P.letter
+          value <- T.pack <$> (P.char '=' *> (quotes letters <|> letters))
+          pure $ Right (name, value)
+        letters = P.many1 P.letter
+        braces = P.between (P.char '{') (P.char '}')
+        quotes = P.between (P.char '"') (P.char '"')
+
+
+getText :: [M.Node] -> Text
+getText [] = ""
+getText (M.Node _ nodeType children : xs) = T.strip $ T.intercalate " " [nodeText, getText children, getText xs]
+  where nodeText = case nodeType of
+          M.TEXT txt -> txt
+          M.HTML_BLOCK txt -> txt
+          M.HTML_INLINE txt -> txt
+          M.CODE txt -> txt
+          M.CODE_BLOCK _ txt -> txt
+          _ -> ""
 
 
 data Node = Head Int Text P.Attr -- ^ level name command type

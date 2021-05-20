@@ -6,7 +6,7 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import           Nixon.Command (CommandEnv(Env))
 import qualified Nixon.Command as Cmd
-import           Nixon.Config.Markdown (parseMarkdown)
+import           Nixon.Config.Markdown (parseMarkdown, parseMarkdown', parseHeaderArgs)
 import           Nixon.Config.Types (defaultConfig)
 import qualified Nixon.Config.Types as Cfg
 import           Nixon.Language (Language(Bash))
@@ -206,8 +206,265 @@ command_tests = describe "commands section" $ do
           } -> True
         _ -> False
 
+cmark_tests :: SpecWith ()
+cmark_tests = do
+  describe "parseMarkdown" $ do
+    describe "config" $ do
+      it "parses empty config" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# Config"
+              ,"```json"
+              ,"````"
+              ]
+        result `shouldBe` Right defaultConfig
+
+      it "parses JSON structure" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# Config {.config}"
+              ,"```"
+              ,"{"
+              ,"  \"exact_match\": true,"
+              ,"  \"ignore_case\": true,"
+              ,"  \"project_dirs\": [\"foo\", \"bar\"],"
+              ,"  \"use_direnv\": true,"
+              ,"  \"use_nix\": true"
+              ,"}"
+              ,"```"
+              ]
+        result `shouldBe` Right defaultConfig
+          { Cfg.exact_match = Just True
+          , Cfg.ignore_case = Just True
+          , Cfg.project_dirs = ["foo", "bar"]
+          , Cfg.use_direnv = Just True
+          , Cfg.use_nix = Just True
+          }
+
+      describe "errors" $ do
+        it "without config block" $ do
+          let result = parseMarkdown' $ T.unlines
+                ["# Config {.config}"
+                ]
+          result `shouldBe` Left "Expecting config source after header"
+
+        it "on empty JSON config block" $ do
+          let result = parseMarkdown $ T.unlines
+                ["# Config {.config}"
+                ,"```json"
+                ,"```"
+                ]
+          result `shouldSatisfy` match_error "not enough input"
+
+        it "with unexpected bash config block" $ do
+          let result = parseMarkdown' $ T.unlines
+                ["# Config {.config}"
+                ,"```bash"
+                ,"```"
+                ]
+          result `shouldBe` Left "Invalid config language: bash"
+
+        it "on config JSON syntax error" $ do
+          let result = parseMarkdown' $ T.unlines
+                ["# Config {.config}"
+                ,"```json"
+                ,"{,}"
+                ,"```"
+                ]
+          result `shouldSatisfy` match_error "object key"
+
+    describe "commands" $ do
+      describe "errors" $ do
+        it "without source block" $ do
+          let result = parseMarkdown' $ T.unlines
+                ["# `command`"
+                ]
+          result `shouldBe` Left "Expecting source block for command"
+
+      it "simple command name with arg" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# hello {.command}"
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands =
+              [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
+          _ -> False
+
+      it "simple command name with ticks" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# `hello`"
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands =
+              [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
+          _ -> False
+
+      it "command name is first word" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# `hello ${foo} ${bar}`"
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands =
+              [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
+          _ -> False
+
+      it "extracts source block" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# `hello &`"
+              ,""
+              ,"Command description."
+              ,""
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands = [Cmd.Command
+              { Cmd.cmdName = "hello"
+              , Cmd.cmdLang = Bash
+              , Cmd.cmdDesc = Just "Command description."
+              , Cmd.cmdSource = "echo Hello World\n"
+              , Cmd.cmdEnv = []
+              , Cmd.cmdIsBg = True
+              }]
+            } -> True
+          _ -> False
+
+      it "detects command by code block" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# `hello`"
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands = [Cmd.Command
+              { Cmd.cmdName = "hello"
+              , Cmd.cmdLang = Bash
+              , Cmd.cmdSource = "echo Hello World\n"
+              , Cmd.cmdEnv = []
+              , Cmd.cmdIsBg = False
+              }]
+            } -> True
+          _ -> False
+
+      it "detects json output format" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# `hello` {.json}"
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands = [Cmd.Command
+              { Cmd.cmdName = "hello"
+              , Cmd.cmdOutput = Cmd.JSON
+              }]
+            } -> True
+          _ -> False
+
+      it "detects project type" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# `hello` {type=\"git\"}"
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands = [Cmd.Command
+              { Cmd.cmdName = "hello"
+              , Cmd.cmdProjectTypes = ["git"]
+              }]
+            } -> True
+          _ -> False
+
+      it "detects background commands by &" $ do
+        let result = parseMarkdown' $ T.unlines
+              ["# `hello &`"
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config
+            { Cfg.commands = [Cmd.Command
+              { Cmd.cmdName = "hello"
+              , Cmd.cmdIsBg = True
+              }]
+            } -> True
+          _ -> False
+
+      it "supports alternate header format" $ do
+        let result = parseMarkdown $ T.unlines
+              ["`hello`"
+              ,"======="
+              ,"```bash"
+              ,"echo Hello World"
+              ,"```"
+              ]
+        result `shouldSatisfy` \case
+          Right Cfg.Config { Cfg.commands = [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
+          _ -> False
+
+      describe "extracts environment placeholders" $ do
+        it "fails" $ do
+          let result = parseMarkdown $ T.unlines
+                ["# `hello ${arg} ${another-arg} &`"
+                ,"```bash"
+                ,"echo Hello \"$arg\" \"$another_arg\""
+                ,"```"
+                ]
+          result `shouldSatisfy` \case
+            Right Cfg.Config
+              { Cfg.commands = [Cmd.Command
+                { Cmd.cmdName = "hello"
+                , Cmd.cmdIsBg = True
+                , Cmd.cmdEnv = [("arg", Env "arg"), ("another_arg", Env "another-arg")]
+                }]
+              } -> True
+            _ -> False
+
+parse_header_tests :: SpecWith ()
+parse_header_tests = describe "parseHeaderArgs" $ do
+  it "extracts .bg" $ do
+    parseHeaderArgs "{.bg}" `shouldBe` (["bg"], [])
+
+  it "extracts .config" $ do
+    parseHeaderArgs "{.config}" `shouldBe` (["config"], [])
+
+  it "extracts .command" $ do
+    parseHeaderArgs "{.command}" `shouldBe` (["command"], [])
+
+  it "extracts .json" $ do
+    parseHeaderArgs "{.json}" `shouldBe` (["json"], [])
+
+  it "extracts type" $ do
+    parseHeaderArgs "{type=git}" `shouldBe` ([], [("type", "git")])
+
+  it "extracts type with quotes" $ do
+    parseHeaderArgs "{type=\"git\"}" `shouldBe` ([], [("type", "git")])
+
+  it "mix args and kwargs" $ do
+    parseHeaderArgs "{.command type=\"git\"}" `shouldBe` (["command"], [("type", "git")])
+
 markdown_tests :: SpecWith ()
 markdown_tests = do
   describe "parseMarkdown" $ do
     config_tests
     command_tests
+    cmark_tests
+    parse_header_tests

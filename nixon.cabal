@@ -52,6 +52,7 @@ library
   build-depends:       base >=4.12
                      , aeson
                      , bytestring
+                     , cmark
                      , containers
                      , cryptohash
                      , directory

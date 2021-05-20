@@ -17,6 +17,7 @@ in haskellPackages.mkDerivation {
     aeson
     base
     bytestring
+    cmark
     containers
     cryptohash
     directory

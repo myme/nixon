@@ -87,7 +87,8 @@ resolve_env project selector cmd args = do
   pure $ nixon_envs ++ vars
   where
     nixon_envs = [("nixon_project_path", format fp $ project_path project)]
-    resolve_each ((name, Env cmd'), search) = (name,) <$> (assert_command cmd' >>= \c -> resolve_cmd project selector c search)
+    resolve_each ((name, Env cmd'), search) = (name,) <$> (
+      assert_command cmd' >>= \c -> resolve_cmd project selector c search)
     assert_command cmd_name = do
       cmd' <- find ((==) cmd_name . cmdName) . commands . config <$> ask
       maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
