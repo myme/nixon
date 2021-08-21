@@ -77,13 +77,14 @@ parseHeaderArgs input = case P.parse parser "" input of
           (args, kwargs) <- partitionEithers <$> braces (P.sepBy (parseArg <|> parseKwArg) P.spaces)
           pure (name, args, kwargs)
         parseArg = do
-          name <- T.pack <$> (P.char '.' *> letters)
+          name <- T.pack <$> (P.char '.' *> identifier)
           pure $ Left name
         parseKwArg = do
-          name  <- T.pack <$> P.many1 P.letter
+          name  <- T.pack <$> identifier
           value <- T.pack <$> (P.char '=' *> (quotes letters <|> letters))
           pure $ Right (name, value)
         letters = P.many1 P.letter
+        identifier = P.many1 (P.letter <|> P.char '_' <|> P.char '-')
         braces = P.between (P.char '{') (P.char '}')
         quotes = P.between (P.char '"') (P.char '"')
 

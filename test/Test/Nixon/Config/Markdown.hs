@@ -250,6 +250,13 @@ command_tests = describe "commands section" $ do
 
 parse_header_tests :: SpecWith ()
 parse_header_tests = describe "parseHeaderArgs" $ do
+  it "extracts name" $ do
+    parseHeaderArgs "some header" `shouldBe` ("some header", [], [])
+
+  it "extracts name, arg and kwarg" $ do
+    parseHeaderArgs "some header {.some-arg some-kw=\"value\"}" `shouldBe`
+      ("some header", ["some-arg"], [("some-kw", "value")])
+
   it "extracts .bg" $ do
     parseHeaderArgs "{.bg}" `shouldBe` ("", ["bg"], [])
 
