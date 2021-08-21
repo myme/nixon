@@ -8,7 +8,7 @@ import           Control.Monad.Trans.Maybe
 import           Data.Bifunctor
 import           Data.Char
 import qualified Data.Text as T
-import           Nixon.Config.Markdown (parseMarkdown')
+import           Nixon.Config.Markdown (parseMarkdown)
 import           Nixon.Config.Types (Config, ConfigError(..))
 import           Nixon.Utils
 import           Prelude hiding (FilePath)
@@ -29,4 +29,4 @@ read_config path = do
     Left err | isDoesNotExistError err -> pure (Left NoSuchFile)
              | otherwise -> ioError err
     Right c  | T.dropWhile isSpace c == "" -> pure (Left EmptyFile)
-             | otherwise -> pure $ first ParseError (parseMarkdown' c)
+             | otherwise -> pure $ first ParseError (parseMarkdown c)

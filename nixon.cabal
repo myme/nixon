@@ -60,8 +60,6 @@ library
                      , foldl
                      , haskeline
                      , optparse-applicative
-                     , pandoc
-                     , pandoc-types
                      , parsec
                      , process
                      , strip-ansi-escape
