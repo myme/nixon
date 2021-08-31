@@ -6,6 +6,7 @@ module Nixon.Select
   , Selection (..)
   , SelectionType (..)
   , Selector
+  , SelectorOpts (..)
   , Candidate (..)
   , build_map
   , candidate_title
@@ -15,7 +16,9 @@ module Nixon.Select
   , select
   , selection
   , text_to_line
-  ) where
+  , search
+  , title
+  , defaults) where
 
 import           Control.Arrow ((&&&))
 import           Control.Monad.Trans.Class (lift)
@@ -25,7 +28,7 @@ import           Data.Aeson.Types (unexpected)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (fromMaybe)
 import           GHC.Generics (Generic)
-import           Turtle hiding (f, x, input, select)
+import           Turtle hiding (f, x, input, select, s)
 
 data SelectionType = Default | Alternate Int deriving (Eq, Show)
 data Selection a = EmptySelection
@@ -58,7 +61,27 @@ instance Functor Selection where
   fmap _ EmptySelection = EmptySelection
   fmap _ CanceledSelection =  CanceledSelection
 
-type Selector m = Maybe Text -> Shell Candidate -> m (Selection Text)
+data SelectorOpts = SelectorOpts
+  { selector_title :: Maybe Text
+  , selector_search :: Maybe Text
+  }
+
+defaults :: SelectorOpts
+defaults = SelectorOpts
+  { selector_title = Nothing
+  , selector_search = Nothing
+  }
+
+instance Semigroup SelectorOpts where
+  (<>) lhs rhs = SelectorOpts
+    { selector_title = selector_title rhs <|> selector_title lhs
+    , selector_search = selector_search rhs <|> selector_search lhs
+    }
+
+instance Monoid SelectorOpts where
+  mempty = defaults
+
+type Selector m = SelectorOpts -> Shell Candidate -> m (Selection Text)
 
 type Select m a = ReaderT (Selector m) m a
 
@@ -66,16 +89,22 @@ default_selection :: a -> Selection a -> a
 default_selection _ (Selection _ value) = value
 default_selection def _ = def
 
+title :: Text -> SelectorOpts
+title t = defaults { selector_title = Just t }
+
+search :: Text -> SelectorOpts
+search s = defaults { selector_search = Just s }
+
 build_map :: (a -> Text) -> [a] -> Map.Map Text a
 build_map f = Map.fromList . map (f &&& id)
 
 runSelect :: Selector m -> Select m a -> m a
 runSelect = flip runReaderT
 
-select :: MonadIO m => Maybe Text -> Shell Candidate -> Select m (Selection Text)
-select search input = do
+select :: MonadIO m => SelectorOpts -> Shell Candidate -> Select m (Selection Text)
+select opts input = do
   selector <- ask
-  lift $ selector search input
+  lift $ selector opts input
 
 text_to_line :: Text -> Line
 text_to_line = fromMaybe "" . textToLine

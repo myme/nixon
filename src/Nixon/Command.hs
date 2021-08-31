@@ -12,10 +12,12 @@ module Nixon.Command
   , description
   , bg
   , json
-  , show_command_oneline
+  , show_command
+  , show_command_with_description
   ) where
 
-import           Data.Text (Text, pack, replace)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Nixon.Language (Language(None), parseLang)
 import           Nixon.Utils (first_word)
 import qualified Text.Parsec as P
@@ -65,8 +67,11 @@ mkcommand spec lang ptypes src = case parse parse_args spec of
     , cmdOutput = Lines
     }
 
-show_command_oneline :: Command -> Text
-show_command_oneline cmd = format (s%s) (cmdName cmd) desc
+show_command :: Command -> Text
+show_command cmd = T.unwords $ cmdName cmd : map (format ("${"%s%"}") . fst) (cmdEnv cmd)
+
+show_command_with_description :: Command -> Text
+show_command_with_description cmd = format (s%s) (cmdName cmd) desc
   where desc = case cmdDesc cmd of
           Nothing -> ""
           Just txt -> format (" - "%s) txt
@@ -88,7 +93,7 @@ is_bg_command _ = False
 
 parse :: Show a => Parser a -> Text -> Either Text a
 parse parser input = case P.parse parser "" input of
-  Left err -> Left (pack $ show err)
+  Left err -> Left (T.pack $ show err)
   Right result -> Right result
 
 parse_args :: Parser [(Text, CommandEnv)]
@@ -102,5 +107,5 @@ parse_arg :: Parser (Text, CommandEnv)
 parse_arg = do
   let prefix = try $ string "${"
       suffix = string "}"
-  placeholder <- pack <$> between prefix suffix (many1 $ noneOf "}")
-  pure (replace "-" "_" placeholder, Env placeholder)
+  placeholder <- T.pack <$> between prefix suffix (many1 $ noneOf "}")
+  pure (T.replace "-" "_" placeholder, Env placeholder)

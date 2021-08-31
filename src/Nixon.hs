@@ -12,7 +12,7 @@ import           Data.List (intersect)
 import           Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import           Nixon.Command (Command(..), CommandEnv(..), CommandOutput(..), show_command_oneline)
+import           Nixon.Command (Command(..), CommandEnv(..), CommandOutput(..), show_command_with_description, show_command)
 import qualified Nixon.Config as Config
 import           Nixon.Config.Options (Backend(..), CompletionType, ProjectOpts(..), RunOpts(..), SubCommand(..))
 import qualified Nixon.Config.Options as Opts
@@ -73,34 +73,36 @@ run_cmd select_command project opts selector = with_local_config project $ do
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
   if Opts.run_select opts
     then do
-      resolved <- resolve_cmd project selector cmd Nothing
+      resolved <- resolve_cmd project selector cmd Select.defaults
       printf (s%"\n") resolved
     else do
-      let project_selector = \search shell' -> cd (project_path project) >> selector search shell'
+      let project_selector = \select_opts shell' ->
+            cd (project_path project) >>
+            selector (select_opts <> Select.title (show_command cmd)) shell'
       env' <- resolve_env project project_selector cmd (Opts.run_args opts)
       evaluate cmd (Just $ project_path project) env'
 
 -- | Resolve all command environment variable placeholders.
 resolve_env :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Env
 resolve_env project selector cmd args = do
-  vars <- mapM resolve_each $ zip (cmdEnv cmd) (map Just args <> repeat Nothing)
+  vars <- mapM resolve_each $ zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
   pure $ nixon_envs ++ vars
   where
     nixon_envs = [("nixon_project_path", format fp $ project_path project)]
-    resolve_each ((name, Env cmd'), search) = (name,) <$> (
-      assert_command cmd' >>= \c -> resolve_cmd project selector c search)
+    resolve_each ((name, Env cmd'), select_opts) = (name,) <$> (
+      assert_command cmd' >>= \c -> resolve_cmd project selector c select_opts)
     assert_command cmd_name = do
       cmd' <- find ((==) cmd_name . cmdName) . commands . config <$> ask
       maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
 
 -- | Resolve command to selectable output.
-resolve_cmd :: Project -> Selector Nixon -> Command -> Maybe Text -> Nixon Text
-resolve_cmd project selector cmd search = do
+resolve_cmd :: Project -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon Text
+resolve_cmd project selector cmd select_opts = do
   env' <- resolve_env project selector cmd []
   let path' = Just $ project_path project
   linesEval <- getEvaluator (run_with_output stream) cmd path' env'
   jsonEval  <- getEvaluator (run_with_output BS.stream) cmd path' env'
-  selection <- selector search $ do
+  selection <- selector select_opts $ do
     case cmdOutput cmd of
       Lines -> Select.Identity . lineToText <$> linesEval
       JSON -> do
@@ -120,18 +122,20 @@ get_selectors = do
   env <- ask
   let cfg = config env
       ptypes = project_types cfg
-      fzf_opts query = mconcat $ catMaybes
+      fzf_opts opts = mconcat $ catMaybes
         [ fzf_exact <$> exact_match cfg
         , fzf_ignore_case <$> ignore_case cfg
-        , fzf_query <$> query
+        , fzf_query <$> Select.selector_search opts
+        , fzf_header <$> Select.selector_title opts
         ]
-      fzf_opts' = fzf_opts Nothing
-      rofi_opts query = mconcat $ catMaybes
+      fzf_opts' = fzf_opts Select.defaults
+      rofi_opts opts = mconcat $ catMaybes
         [ rofi_exact <$> exact_match cfg
         , rofi_ignore_case <$> ignore_case cfg
-        , rofi_query <$> query
+        , rofi_query <$> Select.selector_search opts
+        , rofi_prompt <$> Select.selector_title opts
         ]
-      rofi_opts' = rofi_opts Nothing
+      rofi_opts' = rofi_opts Select.defaults
   pure $ case backend env of
     Fzf -> (ptypes, fzf_projects fzf_opts', fzf_project_command fzf_opts', fzf_with_edit . fzf_opts)
     Rofi -> (ptypes, rofi_projects rofi_opts', const $ rofi_project_command rofi_opts', rofi . rofi_opts)
@@ -161,7 +165,7 @@ run_action opts = do
   (ptypes, _project, find_command, selector) <- get_selectors
   project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
   if Opts.run_list opts
-    then list_commands project >>= liftIO . mapM_ (T.putStrLn . show_command_oneline)
+    then list_commands project >>= liftIO . mapM_ (T.putStrLn . show_command_with_description)
     else run_cmd find_command project opts selector
 
 die :: (Show a, MonadIO m) => a -> m b

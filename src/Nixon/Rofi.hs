@@ -131,7 +131,7 @@ rofi_projects opts query projects = do
 
 rofi_project_command :: MonadIO m => RofiOpts -> RunOpts -> [Command] -> m (Maybe Command)
 rofi_project_command opts popts commands = do
-  let candidates = Select.build_map show_command_oneline commands
+  let candidates = Select.build_map show_command_with_description commands
       opts' = opts <> rofi_prompt "Select command" <> maybe mempty rofi_query (Options.run_command popts)
   rofi opts' (Select.Identity <$> select (Map.keys candidates)) <&> (\case
     Selection _ txt -> Map.lookup txt candidates
