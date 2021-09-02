@@ -11,6 +11,7 @@ import           Crypto.Hash (hash, digestToHexByteString, SHA1)
 import           Crypto.Hash.Types (Digest)
 import           Data.List.NonEmpty (NonEmpty((:|)))
 import           Data.Maybe (fromMaybe)
+import qualified Data.Text as T
 import           Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import           Nixon.Command (Command(..))
 import qualified Nixon.Config.Types as Config
@@ -76,13 +77,16 @@ evaluate cmd path env' = do
   log_info (format ("Running command "%w) source)
   if isTTY || forceTTY
     then withEvaluator Proc.run cmd path env'
-    else do
-      if cmdIsBg cmd
-        then withEvaluator Proc.spawn cmd path env'
-        else do
-          let end = "; echo -e " <> quote "\n[Press Return to exit]" <> "; read"
-              cmd' = cmd { cmdSource = cmdSource cmd <> end }
-          term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
-             $  MaybeT (Config.terminal . T.config <$> ask)
-            <|> MaybeT (need "TERMINAL")
-          withEvaluator (Proc.spawn . ((term :| ["-e"]) <>)) cmd' path env'
+    else if cmdIsBg cmd
+      then withEvaluator Proc.spawn cmd path env'
+      else do
+        let end = T.unlines
+                    [""
+                    ,"echo -e " <> quote "\n[Press Return to exit]\n"
+                    ,"read"
+                    ]
+            cmd' = cmd { cmdSource = cmdSource cmd <> end }
+        term <- fmap (fromMaybe "x-terminal-emulator") $ runMaybeT
+           $  MaybeT (Config.terminal . T.config <$> ask)
+          <|> MaybeT (need "TERMINAL")
+        withEvaluator (Proc.spawn . ((term :| ["-e"]) <>)) cmd' path env'
