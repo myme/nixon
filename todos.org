@@ -16,7 +16,8 @@
 
 * Shells
 
-** TODO Bash/zsh completion scripts
+** DONE Bash/zsh completion scripts
+CLOSED: [2021-04-09 Fri 21:31]
 
 ** TODO Add to bash/zsh history
 
