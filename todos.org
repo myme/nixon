@@ -8,6 +8,8 @@
 
 ** TODO Dump config or selection to file
 
+** TODO Bookmarks / recent commands
+
 * Backends (fzf, rofi)
 
 ** TODO Pass through backend configuration (for e.g. styles++)
