@@ -14,6 +14,7 @@ in haskellPackages.shellFor {
   buildInputs = (with pkgs; [
     cabal-install
     cabal2nix
+    haskell-language-server
     hlint
     python3
   ]) ++ (with haskellPackages; [

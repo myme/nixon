@@ -1,11 +1,27 @@
 {
   description = "Nixon nix flake";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/master";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.11";
 
-  outputs = { self, nixpkgs }: {
+  outputs = { self, nixpkgs }:
+    let system = "x86_64-linux";
+        pkgs = import nixpkgs {
+          system = "x86_64-linux";
+          overlays = [self.overlay];
+        };
+    in {
+      overlay = (final: prev: {
+        nixon = import ./default.nix {
+          pkgs = final;
+          inherit (final) haskellPackages;
+        };
+      });
 
-    defaultPackage.x86_64-linux = (import nixpkgs { system = "x86_64-linux"; }).callPackage ./default.nix {};
+      defaultPackage.${system} = pkgs.nixon;
 
+      devShell.${system} = import ./shell.nix {
+        inherit pkgs;
+        inherit (pkgs) haskellPackages;
+      };
   };
 }
