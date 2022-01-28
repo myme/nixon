@@ -50,7 +50,11 @@ in haskellPackages.mkDerivation {
     install ${src}/extra/nixon-widget.bash $out/share/nixon
     install ${src}/extra/nixon-widget.zsh $out/share/nixon
 
-    # Install zsh widget into share/zsh/site-functions
+    # Bash completions
+    mkdir -p $out/share/bash-completion/completions
+    $out/bin/nixon --bash-completion-script $out/bin/nixon > $out/share/bash-completion/completions/nixon.bash
+
+    # Install zsh widget + completions into share/zsh/site-functions
     mkdir -p $out/share/zsh/site-functions
     install ${src}/extra/nixon-widget.zsh $out/share/zsh/site-functions/_nixon_widget
     $out/bin/nixon --zsh-completion-script $out/bin/nixon > $out/share/zsh/site-functions/_nixon_completion
