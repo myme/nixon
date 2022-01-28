@@ -15,6 +15,7 @@ data Language = Bash
               | Haskell
               | JavaScript
               | JSON
+              | Plain
               | Python
               | Unknown Text
               | None
@@ -26,6 +27,7 @@ instance Show Language where
     Haskell    -> "haskell"
     JavaScript -> "javascript"
     JSON       -> "json"
+    Plain      -> "plain"
     Python     -> "python"
     Unknown l  -> unpack l
     None       -> ""
@@ -37,6 +39,7 @@ parseLang = \case
   "js"         -> JavaScript
   "javascript" -> JavaScript
   "json"       -> JSON
+  "plain"      -> Plain
   "python"     -> Python
   ""           -> None
   lang         -> Unknown lang
@@ -48,6 +51,7 @@ extension = \case
   Haskell    -> ".hs"
   JavaScript -> ".js"
   JSON       -> ".json"
+  Plain      -> ".txt"
   Python     -> ".py"
   Unknown _  -> ".txt"
 
@@ -60,6 +64,7 @@ interpreter = \case
   Haskell    -> pure $ Just (singleton "runghc")
   JavaScript -> pure $ Just (singleton "node")
   JSON       -> pure $ Just ("jq" :| ["-r", ".[]"])
+  Plain      -> pure $ Just (singleton "cat")
   Python     -> pure $ Just (singleton "python3")
   Unknown _  -> pure Nothing
   where singleton = (:| [])
