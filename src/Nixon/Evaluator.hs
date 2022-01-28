@@ -61,7 +61,7 @@ getEvaluator run cmd cwd env = do
   int  <- interpreter (cmdLang cmd) >>= \case
     Nothing  -> die $ format ("No interpreter for "%w) (cmdLang cmd)
     Just int -> pure int
-  int_cmd <- maybeWrapCmd cwd (int :| [format fp path])
+  int_cmd <- maybeWrapCmd cwd (int <> (format fp path :| []))
   pure $ run int_cmd cwd env
 
 -- | Run the evaluator for a command
