@@ -50,9 +50,9 @@ fail_empty err action = action >>= \case
   Just x -> pure x
 
 -- | Attempt to parse a local JSON
-with_local_config :: Project -> Nixon () -> Nixon ()
-with_local_config project action = do
-  liftIO (Config.find_local_config (project_path project)) >>= \case
+with_local_config :: FilePath -> Nixon a -> Nixon a
+with_local_config filepath action = do
+  liftIO (Config.find_local_config filepath) >>= \case
     Nothing -> action
     Just cfg -> local (\env -> env { config = config env <> cfg }) action
 
@@ -68,7 +68,7 @@ run_cmd :: CommandSelector
         -> RunOpts
         -> Selector Nixon
         -> Nixon ()
-run_cmd select_command project opts selector = with_local_config project $ do
+run_cmd select_command project opts selector = with_local_config (project_path project) $ do
   cmds <- list_commands project
   cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
   if Opts.run_select opts
@@ -209,7 +209,7 @@ nixon_completer user_config comp_type args = do
             let p' = find ((==) p . T.unpack . format fp . P.project_name) projects
             pure $ fromMaybe current p'
           _ -> liftIO $ P.find_in_project_or_default ptypes =<< pwd
-        commands <- list_commands project
+        commands <- with_local_config (project_path project) $ list_commands project
         pure $ map (T.unpack . cmdName) commands
 
 -- | Nixon with default configuration
