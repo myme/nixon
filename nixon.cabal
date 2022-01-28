@@ -75,7 +75,7 @@ library
                      , LambdaCase
                      , NamedFieldPuns
                      , TupleSections
-  ghc-options:         -Wall
+  ghc-options:         -Wall -Wextra
 
 
 executable nixon
@@ -89,7 +89,7 @@ executable nixon
                      , LambdaCase
                      , NamedFieldPuns
                      , TupleSections
-  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall -Wextra -threaded -rtsopts -with-rtsopts=-N
 
 
 test-suite nixon-test
