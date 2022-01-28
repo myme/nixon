@@ -44,7 +44,7 @@ list_projects projects query = do
     Selection _ matching -> liftIO $ T.putStr matching
     _ -> log_error "No projects."
 
-fail_empty :: (MonadIO m) => Text -> m (Maybe a) -> m a
+fail_empty :: MonadIO m => Text -> m (Maybe a) -> m a
 fail_empty err action = action >>= \case
   Nothing -> liftIO (throwIO $ EmptyError err)
   Just x -> pure x
@@ -191,11 +191,11 @@ nixon_with_config user_config = liftIO $ do
     Left (EmptyError msg) -> die msg
     Right _ -> pure ()
 
-nixon_completer :: Config.Config -> CompletionType -> [String] -> IO [String]
+nixon_completer :: MonadIO m => Config.Config -> CompletionType -> [String] -> m [String]
 nixon_completer user_config comp_type args = do
   let parse_args = Opts.parse_args $ nixon_completer user_config
-  (_, cfg) <- either die pure =<< withArgs args parse_args
-  runNixon (user_config <> cfg) $ do
+  (_, cfg) <- liftIO $ either die pure =<< withArgs args parse_args
+  liftIO $ runNixon (user_config <> cfg) $ do
     cfg' <- config <$> ask
     let ptypes = project_types cfg'
         srcs = project_dirs cfg'
