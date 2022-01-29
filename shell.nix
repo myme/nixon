@@ -16,6 +16,7 @@ in haskellPackages.shellFor {
     cabal2nix
     haskell-language-server
     hlint
+    hpack
     python3
   ]) ++ (with haskellPackages; [
     ghcid

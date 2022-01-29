@@ -84,31 +84,31 @@ parents path'
 
 -- | Find/filter out a project in which path is a subdirectory.
 find_in_project :: MonadIO m => [ProjectType] -> FilePath -> m (Maybe Project)
-find_in_project project_types path' = liftIO $ find_project project_types path' >>= \case
+find_in_project ptypes path' = liftIO $ find_project ptypes path' >>= \case
     Nothing -> if parent path' == root path'
       then pure Nothing
-      else find_in_project project_types (parent path')
+      else find_in_project ptypes (parent path')
     project -> pure project
 
 find_in_project_or_default :: MonadIO m => [ProjectType] -> FilePath -> m Project
-find_in_project_or_default project_types path' = do
-  types <- liftIO $ find_project_types path' project_types
+find_in_project_or_default ptypes path' = do
+  types <- liftIO $ find_project_types path' ptypes
   let current = (from_path path') { project_types = types }
-  fromMaybe current <$> find_in_project project_types path'
+  fromMaybe current <$> find_in_project ptypes path'
 
 find_projects_by_name :: MonadIO m => FilePath -> [ProjectType] -> [FilePath] -> m [Project]
-find_projects_by_name project project_types = liftIO . fmap find_matching . find_projects 1 project_types
+find_projects_by_name project ptypes = liftIO . fmap find_matching . find_projects 1 ptypes
   where find_matching = filter ((project `isInfix`) . toText . project_name)
         isInfix p = isInfixOf (toText p)
         toText = format fp
 
 find_project :: MonadIO m => [ProjectType] -> FilePath -> m (Maybe Project)
-find_project project_types source_dir = do
+find_project ptypes source_dir = do
   isdir <- testdir source_dir
   if not isdir
     then pure Nothing
     else do
-      types <- find_project_types source_dir project_types
+      types <- find_project_types source_dir ptypes
       if all (null . project_markers) types
         then pure Nothing
         else pure $ Just Project
@@ -122,16 +122,16 @@ find_project project_types source_dir = do
 -- Filepath expansion is done on each source directory. For each source
 -- directory not a project, look for subdirs being projects.
 find_projects :: MonadIO m => Integer -> [ProjectType] -> [FilePath] -> m [Project]
-find_projects max_depth project_types source_dirs
+find_projects max_depth ptypes source_dirs
   | max_depth < 0 = pure []
   | otherwise = reduce Fold.list $ do
     expanded <- liftIO $ concat <$> traverse expand_path source_dirs
     candidate <- select expanded
     guard =<< testdir candidate
-    liftIO (find_project project_types candidate) >>= \case
+    liftIO (find_project ptypes candidate) >>= \case
       Nothing -> do
         children <- ls candidate
-        projects <- liftIO $ find_projects (max_depth - 1) project_types [children]
+        projects <- liftIO $ find_projects (max_depth - 1) ptypes [children]
         select projects
       Just project -> pure project
 
@@ -145,9 +145,9 @@ sort_projects = sortBy (compare `on` project_path)
 
 -- | Given a path, find matching markers/project type.
 find_project_types :: MonadIO m => FilePath -> [ProjectType] -> m [ProjectType]
-find_project_types path' project_types = liftIO $ testdir path' >>= \case
+find_project_types path' ptypes = liftIO $ testdir path' >>= \case
   False -> pure []
-  True  -> filterM has_markers project_types
+  True  -> filterM has_markers ptypes
   where has_markers project = case project_markers project of
           [] -> pure True
           xs -> fmap and . traverse (test_marker path') $ xs

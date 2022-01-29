@@ -1,0 +1,64 @@
+name: nixon
+version: '0.1.0.0'
+
+executables:
+  nixon:
+    main: Main.hs
+    source-dirs:
+    - app
+    dependencies:
+    - base
+    - nixon
+
+library:
+  source-dirs:
+  - src
+  dependencies:
+  - base
+  - aeson
+  - bytestring
+  - cmark
+  - containers
+  - cryptohash
+  - directory
+  - exceptions
+  - foldl
+  - haskeline
+  - optparse-applicative
+  - parsec
+  - process
+  - strip-ansi-escape
+  - text
+  - transformers
+  - turtle
+  - unix
+  - unordered-containers
+  - wordexp
+
+tests:
+  nixon-test:
+    main: Main.hs
+    source-dirs:
+    - test
+    dependencies:
+    - base
+    - hspec
+    - nixon
+    - QuickCheck
+    - quickcheck-instances
+    - text
+    - transformers
+
+default-extensions:
+  - GeneralizedNewtypeDeriving
+  - LambdaCase
+  - NamedFieldPuns
+  - OverloadedStrings
+  - TupleSections
+
+ghc-options:
+  - -Wall
+  - -Werror
+  - -threaded
+  - -rtsopts
+  - -with-rtsopts=-N
