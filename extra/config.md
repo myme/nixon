@@ -88,10 +88,10 @@ npm install
 
 ## yarn stuff {type="yarn"}
 
-### `yarn-run`
+### `yarn-run ${npm-scripts}`
 
 ```bash
-yarn run "$(nixon npm-scripts)"
+yarn run "$npm_scripts"
 ```
 
 ### `yarn-install`
@@ -134,6 +134,18 @@ git log --oneline --color
 git ls-files
 ```
 
+### `git-rev ${git-log}`
+
+```bash
+echo $git_log
+```
+
+### `git-show ${git-log}`
+
+```bash
+git show $(echo $git_log | cut -f1 -d' ')
+```
+
 ## Files
 
 ### `rg-files`
@@ -142,8 +154,8 @@ git ls-files
 rg --files
 ```
 
-### `vim-file`
+### `vim-file ${rg-files}`
 
 ```bash
-vim "$(nixon rg-files)"
+vim "$rg_files"
 ```
