@@ -9,6 +9,14 @@
 ** TODO Dump config or selection to file
 
 ** TODO Bookmarks / recent commands
+** TODO Support ~nix-shell~-like build inputs
+
+Allow code blocks to somehow define which dependencies they need to run, similar
+to the ~nix-shell~ shebang.
+
+** TODO Support some kind of parallel composition feature
+
+Allow defining tasks/scripts that can run multiple other tasks in parallel.
 
 * Backends (fzf, rofi)
 
