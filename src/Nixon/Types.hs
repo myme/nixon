@@ -1,34 +1,35 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module Nixon.Types
-  ( Env(..)
-  , Nixon
-  , NixonError(..)
-  , Config.Config(commands, exact_match, project_dirs, project_types, terminal, use_direnv, use_nix)
-  , ask
-  , runNixon
-  ) where
+  ( Env (..),
+    Nixon,
+    NixonError (..),
+    Config.Config (commands, exact_match, project_dirs, project_types, terminal, use_direnv, use_nix),
+    ask,
+    runNixon,
+  )
+where
 
-import           Control.Exception
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Reader
-import           Data.Bool (bool)
-import           Data.Maybe (fromMaybe)
-import           Nixon.Config.Types (Backend(..), Config)
+import Control.Exception (Exception)
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
+import Data.Bool (bool)
+import Data.Maybe (fromMaybe)
+import Nixon.Config.Types (Backend (..), Config)
 import qualified Nixon.Config.Types as Config
-import           Nixon.Logging (HasLogging)
+import Nixon.Logging (HasLogging)
 import qualified Nixon.Logging as Logging
-import           Nixon.Utils
-import           Prelude hiding (FilePath)
+import Nixon.Utils (printErr)
 import qualified System.IO as IO
-import           Turtle hiding (env)
+import Turtle (Text)
+import Prelude hiding (FilePath)
 
 data Env = Env
-  { backend :: Backend
-  , config :: Config
+  { backend :: Backend,
+    config :: Config
   }
 
-newtype NixonError = EmptyError Text deriving Show
+newtype NixonError = EmptyError Text deriving (Show)
 
 instance Exception NixonError
 
@@ -41,7 +42,7 @@ get_backend backend = do
 build_env :: MonadIO m => Config -> m Env
 build_env config = do
   backend <- get_backend (Config.backend config)
-  pure Env { backend, config = config }
+  pure Env {backend, config = config}
 
 type Nixon = ReaderT Env IO
 

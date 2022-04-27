@@ -1,30 +1,49 @@
 module Nixon.Utils
- ( escape
- , find_dominating_file
- , first_word
- , quote
- , printErr
- , shell_to_list
- , toLines
- , takeToSpace
- , filter_elems
- , implode_home
- ) where
+  ( escape,
+    find_dominating_file,
+    first_word,
+    quote,
+    printErr,
+    shell_to_list,
+    toLines,
+    takeToSpace,
+    filter_elems,
+    implode_home,
+  )
+where
 
-import           Data.Char (isSpace)
-import           Data.List.NonEmpty (toList)
-import           Data.Maybe (fromMaybe, listToMaybe)
+import Data.Char (isSpace)
+import Data.List.NonEmpty (toList)
+import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import           Prelude hiding (FilePath)
 import qualified System.IO as IO
-import           Turtle hiding (input, x, toLines)
+import Turtle
+  ( FilePath,
+    Fold (Fold),
+    Line,
+    MonadIO (..),
+    Shell,
+    Text,
+    fold,
+    home,
+    parent,
+    root,
+    select,
+    stripPrefix,
+    testdir,
+    testpath,
+    textToLines,
+    (</>),
+  )
+import Prelude hiding (FilePath)
 
 escape :: Text -> Text
 escape = T.concatMap convert
-  where convert '"' = "\\\""
-        convert '\\' = "\\\\"
-        convert x = T.singleton x
+  where
+    convert '"' = "\\\""
+    convert '\\' = "\\\\"
+    convert x = T.singleton x
 
 quote :: Text -> Text
 quote input = "\"" <> escape input <> "\""
@@ -36,8 +55,9 @@ find_dominating_file path' name = do
       is_root = parent path' == root path'
   (&&) <$> testdir path' <*> testpath candidate >>= \case
     True -> pure $ Just candidate
-    False | is_root -> pure Nothing
-          | otherwise -> find_dominating_file (parent path') name
+    False
+      | is_root -> pure Nothing
+      | otherwise -> find_dominating_file (parent path') name
 
 first_word :: Text -> Text
 first_word txt = fromMaybe txt $ listToMaybe $ T.words txt

@@ -1,16 +1,17 @@
 module Nixon.Logging
-  ( LogLevel(..)
-  , HasLogging(..)
-  , log
-  , log_debug
-  , log_error
-  , log_info
-  , log_warn
-  ) where
+  ( LogLevel (..),
+    HasLogging (..),
+    log,
+    log_debug,
+    log_error,
+    log_info,
+    log_warn,
+  )
+where
 
-import Control.Monad
-import Data.Text
-import Nixon.Utils
+import Control.Monad (when)
+import Data.Text (Text)
+import Nixon.Utils (printErr)
 import Prelude hiding (log)
 
 data LogLevel = LogDebug | LogInfo | LogWarning | LogError

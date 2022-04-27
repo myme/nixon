@@ -20,5 +20,6 @@ in haskellPackages.shellFor {
     python3
   ]) ++ (with haskellPackages; [
     ghcid
+    ormolu
   ]);
 }

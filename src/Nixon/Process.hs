@@ -1,26 +1,38 @@
 module Nixon.Process
-  ( Cwd
-  , Env
-  , Run
-  , arg
-  , arg_fmt
-  , build_args
-  , flag
-  , run
-  , run_with_output
-  , spawn
-  ) where
+  ( Cwd,
+    Env,
+    Run,
+    arg,
+    arg_fmt,
+    build_args,
+    flag,
+    run,
+    run_with_output,
+    spawn,
+  )
+where
 
-import           Control.Arrow ((***))
-import           Data.List.NonEmpty (NonEmpty((:|)))
-import           Data.Maybe (catMaybes)
+import Control.Arrow ((***))
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Maybe (catMaybes)
 import qualified Data.Text as T
-import           Prelude hiding (FilePath)
-import           System.Posix
-import           System.Process hiding (system)
-import           Turtle hiding (arg, env, proc)
+import System.Posix (createSession, forkProcess, getEnvironment)
+import System.Process (CreateProcess (cwd, env), proc)
+import Turtle
+  ( Alternative (empty),
+    FilePath,
+    MonadIO (..),
+    Text,
+    format,
+    fp,
+    sh,
+    system,
+    void,
+  )
+import Prelude hiding (FilePath)
 
 type Cwd = Maybe FilePath
+
 type Env = [(Text, Text)]
 
 flag :: a -> Bool -> Maybe [a]
@@ -40,10 +52,11 @@ build_cmd cmd cwd' env' = do
   currentEnv <- liftIO getEnvironment
   let (cmd' :| args) = fmap T.unpack cmd
       cpEnv = Just $ currentEnv ++ map (T.unpack *** T.unpack) env'
-  pure (proc cmd' args) {
-    cwd = T.unpack . format fp <$> cwd',
-    env = cpEnv
-  }
+  pure
+    (proc cmd' args)
+      { cwd = T.unpack . format fp <$> cwd',
+        env = cpEnv
+      }
 
 type Run m a = NonEmpty Text -> Cwd -> Env -> m a
 
@@ -63,6 +76,8 @@ run_with_output stream' cmd cwd' env' = do
 
 -- | Spawn/fork off a command in the background
 spawn :: MonadIO m => Run m ()
-spawn cmd cwd' env' = liftIO $ void $ forkProcess $ do
-  _ <- createSession
-  run cmd cwd' env'
+spawn cmd cwd' env' = liftIO $
+  void $
+    forkProcess $ do
+      _ <- createSession
+      run cmd cwd' env'
