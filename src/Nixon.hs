@@ -4,10 +4,10 @@ module Nixon
   )
 where
 
-import Control.Exception hiding (evaluate)
-import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.Reader
-import Data.Aeson
+import Control.Exception ( try, throwIO )
+import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
+import Control.Monad.Trans.Reader ( ask, local )
+import Data.Aeson ( eitherDecodeStrict )
 import Data.Foldable (find)
 import Data.List (intersect)
 import Data.Maybe (catMaybes, fromMaybe)
@@ -46,10 +46,32 @@ import Nixon.Rofi
   )
 import Nixon.Select (Selection (..), Selector)
 import qualified Nixon.Select as Select
-import Nixon.Types hiding (Env)
-import Nixon.Utils
+import Nixon.Types
+    ( Config(commands, exact_match, project_types, project_dirs),
+      Nixon,
+      NixonError(EmptyError),
+      Env(backend, config),
+      runNixon )
+import Nixon.Utils ( implode_home )
 import System.Environment (withArgs)
-import Turtle hiding (decimal, die, env, err, find, output, shell, text, x)
+import Turtle
+    ( Alternative((<|>)),
+      MonadIO(..),
+      Text,
+      (%),
+      format,
+      fp,
+      printf,
+      s,
+      w,
+      lineToText,
+      cd,
+      exit,
+      pwd,
+      stream,
+      select,
+      ExitCode(ExitFailure),
+      FilePath )
 import qualified Turtle.Bytes as BS
 import Prelude hiding (FilePath, log)
 
@@ -106,7 +128,7 @@ run_cmd select_command project opts selector = with_local_config (project_path p
       evaluate cmd (Just $ project_path project) env'
 
 -- | Resolve all command environment variable placeholders.
-resolve_env :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Env
+resolve_env :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Nixon.Process.Env
 resolve_env project selector cmd args = do
   vars <- mapM resolve_each $ zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
   pure $ nixon_envs ++ vars
