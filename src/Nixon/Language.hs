@@ -36,6 +36,7 @@ instance Show Language where
 
 parseLang :: Text -> Language
 parseLang = \case
+  "sh" -> Bash
   "bash" -> Bash
   "haskell" -> Haskell
   "js" -> JavaScript
