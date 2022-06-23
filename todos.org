@@ -17,6 +17,10 @@ to the ~nix-shell~ shebang.
 ** TODO Support some kind of parallel composition feature
 
 Allow defining tasks/scripts that can run multiple other tasks in parallel.
+** TODO Select multiple
+
+E.g. for a `docker-compose` command select which services to start/stop.
+** TODO Default set of selection for multiple select
 
 * Backends (fzf, rofi)
 
