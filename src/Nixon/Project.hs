@@ -168,12 +168,11 @@ find_projects max_depth ptypes source_dirs
     expanded <- liftIO $ concat <$> traverse expand_path source_dirs
     candidate <- select expanded
     guard =<< testdir candidate
-    liftIO (find_project ptypes candidate) >>= \case
-      Nothing -> do
-        children <- ls candidate
-        projects <- liftIO $ find_projects (max_depth - 1) ptypes [children]
-        select projects
-      Just project -> pure project
+    subprojects <- do
+      children <- ls candidate
+      liftIO $ find_projects (max_depth - 1) ptypes [children]
+    project <- liftIO (find_project ptypes candidate)
+    select $ maybe subprojects (: subprojects) project
 
 expand_path :: MonadIO m => FilePath -> m [FilePath]
 expand_path path' = do
