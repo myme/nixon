@@ -20,7 +20,7 @@ jobs:
     - name: Hpack
       run: |
         sudo apt-get update
-        sudo apt-get install hpack
+        sudo apt-get install hpack libffi
         hpack
     
     - uses: haskell/actions/setup@v2
