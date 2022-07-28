@@ -30,7 +30,7 @@ library:
   - strip-ansi-escape
   - text
   - transformers
-  - turtle
+  - turtle == 1.5.*
   - unix
   - unordered-containers
   - wordexp
