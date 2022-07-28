@@ -24,6 +24,8 @@ jobs:
         hpack
     
     - uses: haskell/actions/setup@v2
+      with:
+        ghc-version: '9.0'
 
     - name: Cache
       uses: actions/cache@v3
