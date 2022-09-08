@@ -47,6 +47,11 @@ import Turtle
   )
 import Prelude hiding (FilePath)
 
+data PosInfo = PosInfo
+  { posName :: FilePath,
+    posLocation :: Maybe M.PosInfo
+  }
+
 defaultPath :: MonadIO m => m FilePath
 defaultPath = liftIO $ fromString <$> getXdgDirectory XdgConfig "nixon.md"
 
@@ -62,11 +67,13 @@ buildConfig (cfg, cmds) =
       commands = cmds
     }
 
-parseMarkdown :: Text -> Either Text Config
-parseMarkdown markdown = buildConfig <$> parse (extract (commonmarkToNode [] markdown))
+parseMarkdown :: FilePath -> Text -> Either Text Config
+parseMarkdown fileName markdown =
+  buildConfig
+    <$> parse fileName (extract (commonmarkToNode [] markdown))
 
 extract :: M.Node -> [Node]
-extract (M.Node _ nodeType children) = case nodeType of
+extract (M.Node pos nodeType children) = case nodeType of
   M.HEADING level ->
     let (name, args, kwargs) = parseHeaderArgs $ getText children
         (isCommand, isBg) = case find isCode children of
@@ -76,7 +83,7 @@ extract (M.Node _ nodeType children) = case nodeType of
           ["bg" | isBg && "bg" `notElem` args]
             ++ ["command" | isCommand && "command" `notElem` args]
             ++ args
-     in [Head level name (name, args', kwargs)]
+     in [Head pos level name (name, args', kwargs)]
   M.CODE_BLOCK info text ->
     let lang = case T.words info of
           [] -> Nothing
@@ -126,9 +133,11 @@ getText (M.Node _ nodeType children : xs) = T.strip $ T.intercalate " " [nodeTex
       M.CODE_BLOCK _ txt -> txt
       _ -> ""
 
+type Pos = Maybe M.PosInfo
+
 data Node
   = -- | level name command type
-    Head Int Text Attrs
+    Head Pos Int Text Attrs
   | -- | lang src
     Source (Maybe Text) Text
   | Paragraph Text
@@ -140,11 +149,11 @@ data ParseState = S
   }
 
 -- | Parse Command blocks from a list of nodes
-parse :: [Node] -> Either Text (JSON.Config, [Cmd.Command])
-parse = go (S 0 []) (JSON.empty, [])
+parse :: FilePath -> [Node] -> Either Text (JSON.Config, [Cmd.Command])
+parse fileName = go (S 0 []) (JSON.empty, [])
   where
     go _ ps [] = Right ps
-    go st ps nodes'@(Head l name _ : _)
+    go st ps nodes'@(Head _ l name _ : _)
       -- Going back up or next sibling
       | l < stateHeaderLevel st = go (S l []) ps nodes'
       -- Skipping levels on the way down
@@ -155,7 +164,7 @@ parse = go (S 0 []) (JSON.empty, [])
             (stateHeaderLevel st)
             l
             name
-    go st (cfg, ps) (Head l name attr : rest)
+    go st (cfg, ps) (Head pos l name attr : rest)
       -- We found a config
       | hasArgs "config" attr = case parseConfig rest of
         (Left err, _) -> Left err
@@ -165,7 +174,7 @@ parse = go (S 0 []) (JSON.empty, [])
         let pt = getKwargs "type" attr <> stateProjectTypes st
             isBg = hasArgs "bg" attr
             isJson = hasArgs "json" attr
-         in case parseCommand name pt rest of
+         in case parseCommand (PosInfo fileName pos) name pt rest of
               (Left err, _) -> Left err
               (Right p, rest') -> go st (cfg, p <! bg isBg <! json isJson : ps) rest'
       -- Pick up project type along the way
@@ -199,11 +208,16 @@ parseConfig (Source lang src : rest') = case lang of
     parsed = first pack (eitherDecodeStrict $ encodeUtf8 src)
 parseConfig rest = (Left "Expecting config source after header", rest)
 
-parseCommand :: Text -> [Text] -> [Node] -> (Either Text Cmd.Command, [Node])
-parseCommand name projectTypes (Paragraph desc : rest) =
-  let (cmd, rest') = parseCommand name projectTypes rest
+parseCommand :: PosInfo -> Text -> [Text] -> [Node] -> (Either Text Cmd.Command, [Node])
+parseCommand pos name projectTypes (Paragraph desc : rest) =
+  let (cmd, rest') = parseCommand pos name projectTypes rest
    in (Cmd.description (strip desc) <$> cmd, rest')
-parseCommand name projectTypes (Source lang src : rest) = (cmd, rest)
+parseCommand pos name projectTypes (Source lang src : rest) = (cmd, rest)
   where
-    cmd = Cmd.mkcommand name lang projectTypes src
-parseCommand name _ rest = (Left $ format ("Expecting source block for " % s) name, rest)
+    loc =
+      Cmd.CommandLocation
+        { Cmd.cmdFilePath = posName pos,
+          Cmd.cmdLineNr = maybe (-1) M.startLine (posLocation pos)
+        }
+    cmd = Cmd.mkcommand loc name lang projectTypes src
+parseCommand _ name _ rest = (Left $ format ("Expecting source block for " % s) name, rest)

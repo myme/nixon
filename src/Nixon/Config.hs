@@ -38,4 +38,4 @@ read_config path = do
         | otherwise -> ioError err
       Right c
         | T.dropWhile isSpace c == "" -> pure (Left EmptyFile)
-        | otherwise -> pure $ first ParseError (parseMarkdown c)
+        | otherwise -> pure $ first ParseError (parseMarkdown path c)

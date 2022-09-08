@@ -1,6 +1,7 @@
 module Nixon.Command
   ( Command (..),
     CommandEnv (..),
+    CommandLocation (..),
     CommandOutput (..),
     Language (..),
     empty,
@@ -24,7 +25,9 @@ import Nixon.Utils (first_word)
 import Text.Parsec (anyChar, between, choice, eof, many1, noneOf, string, try)
 import qualified Text.Parsec as P
 import Text.Parsec.Text (Parser)
-import Turtle (format, s, (%))
+import Turtle (FilePath, format, s, (%))
+
+import Prelude hiding (FilePath)
 
 data Command = Command
   { cmdName :: Text,
@@ -34,7 +37,14 @@ data Command = Command
     cmdSource :: Text,
     cmdEnv :: [(Text, CommandEnv)],
     cmdIsBg :: Bool,
-    cmdOutput :: CommandOutput
+    cmdOutput :: CommandOutput,
+    cmdLocation :: Maybe CommandLocation
+  }
+  deriving (Eq, Show)
+
+data CommandLocation = CommandLocation
+  { cmdFilePath :: FilePath,
+    cmdLineNr :: Int
   }
   deriving (Eq, Show)
 
@@ -48,7 +58,8 @@ empty =
       cmdSource = "",
       cmdEnv = [],
       cmdIsBg = False,
-      cmdOutput = Lines
+      cmdOutput = Lines,
+      cmdLocation = Nothing
     }
 
 -- | Placeholders for environment variables
@@ -56,8 +67,8 @@ newtype CommandEnv = Env Text deriving (Eq, Show)
 
 data CommandOutput = Lines | JSON deriving (Eq, Show)
 
-mkcommand :: Text -> Maybe Text -> [Text] -> Text -> Either Text Command
-mkcommand spec lang ptypes src = case parse parse_args spec of
+mkcommand :: CommandLocation -> Text -> Maybe Text -> [Text] -> Text -> Either Text Command
+mkcommand loc spec lang ptypes src = case parse parse_args spec of
   Left err -> Left err
   Right args ->
     Right $
@@ -69,7 +80,8 @@ mkcommand spec lang ptypes src = case parse parse_args spec of
           cmdSource = src,
           cmdEnv = args,
           cmdIsBg = False,
-          cmdOutput = Lines
+          cmdOutput = Lines,
+          cmdLocation = Just loc
         }
 
 show_command :: Command -> Text
