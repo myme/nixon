@@ -66,7 +66,7 @@ interpreter = \case
     pure $ (pure <$> shell) <|> Just (pure "bash")
   Haskell -> pure $ Just (pure "runghc")
   JavaScript -> pure $ Just (pure "node")
-  JSON -> pure $ Just ("jq" :| ["-r", ".[]"])
+  JSON -> pure $ Just ("jq" :| ["-r", "."])
   Plain -> pure $ Just (pure "cat")
   Python -> pure $ Just (pure "python3")
   Unknown _ -> pure Nothing

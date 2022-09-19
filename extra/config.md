@@ -38,6 +38,22 @@ x-terminal-emulator
 emacs
 ```
 
+### `json-greetings` {.json}
+
+```json
+[
+ {"title": "Norwegian", "value": "Hei, Verden!"},
+ {"title": "English", "value": "Hello, World!"},
+ {"title": "French", "value": "Bonjour, Monde!"}
+]
+```
+
+### `hello-world ${json-greetings}`
+
+```bash
+echo ${json_greetings}
+```
+
 ### `networks`
 
 ```bash
