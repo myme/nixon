@@ -24,13 +24,13 @@ where
 
 import Control.Arrow (second, (&&&))
 import Control.Monad.Catch (MonadMask)
-import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.List (sort)
 import qualified Data.Map as Map
+import Data.Maybe (catMaybes)
 import Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
 import Nixon.Backend (Backend (..))
-import Nixon.Command (Command (cmdSource), show_command_with_description)
+import Nixon.Command (Command (), show_command_with_description)
 import Nixon.Config.Options (RunOpts)
 import qualified Nixon.Config.Options as Options
 import Nixon.Config.Types (Config)
@@ -67,10 +67,8 @@ import Turtle
     s,
     select,
     (%),
-    (<&>),
   )
 import Prelude hiding (FilePath, filter)
-import Data.Maybe (catMaybes)
 
 fzfBackend :: Config -> Backend
 fzfBackend cfg =
@@ -245,7 +243,7 @@ fzfFormatProjectName project = do
   pure (format fp path, project)
 
 -- | Find projects
-fzfProjects :: MonadIO m => FzfOpts -> Maybe Text -> [Project] -> m (Maybe Project)
+fzfProjects :: MonadIO m => FzfOpts -> Maybe Text -> [Project] -> m (Selection Project)
 fzfProjects opts query projects = do
   candidates <- Map.fromList <$> traverse fzfFormatProjectName projects
   let opts' =
@@ -255,27 +253,18 @@ fzfProjects opts query projects = do
           -- <> fzfHeight 40
           <> maybe mempty fzfQuery query
   -- <> fzfPreview "ls $(eval echo {})"
-  fzf opts' (Select.Identity <$> (select . sort $ Map.keys candidates))
-    <&> ( \case
-            Selection _ out -> Map.lookup out candidates
-            _ -> Nothing
-        )
+  selection <- fzf opts' (Select.Identity <$> (select . sort $ Map.keys candidates))
+  pure $ Select.unwrapMaybeSelection ((`Map.lookup` candidates) <$> selection)
 
 -- | Find commands applicable to a project
-fzfProjectCommand :: (MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Maybe Command)
+fzfProjectCommand :: (MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Selection Command)
 fzfProjectCommand opts project popts commands = do
   let candidates = map (show_command_with_description &&& id) commands
       header = format ("Select command [" % fp % "] (" % fp % ")") (project_name project) (project_dir project)
       opts' = opts <> fzfHeader header <> maybe mempty fzfQuery (Options.run_command popts) <> fzfNoSort
       input' = Select.Identity <$> select (fst <$> candidates)
   selection <- fmap (`lookup` candidates) <$> fzf opts' input'
-  case selection of
-    Selection Default cmd -> pure cmd
-    Selection (Alternate _) cmd -> runMaybeT $ do
-      cmd' <- MaybeT (pure cmd)
-      edited <- MaybeT $ fzfEditSelection (cmdSource cmd')
-      pure cmd' {cmdSource = edited}
-    _ -> pure Nothing
+  pure $ Select.unwrapMaybeSelection selection
 
 -- | Use readline to manipulate/change a fzf selection
 fzfEditSelection :: (MonadIO m, MonadMask m) => Text -> m (Maybe Text)

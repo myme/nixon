@@ -42,7 +42,6 @@ import Turtle
     procStrict,
     select,
     (%),
-    (<&>),
   )
 import qualified Turtle as Tu
 import Prelude hiding (FilePath)
@@ -161,7 +160,7 @@ rofiFormatProjectName project = do
   pure $ fmt name_padded dir
 
 -- | Launch rofi with a list of projects as candidates
-rofiProjects :: MonadIO m => RofiOpts -> Maybe Text -> [Project] -> m (Maybe Project)
+rofiProjects :: MonadIO m => RofiOpts -> Maybe Text -> [Project] -> m (Selection Project)
 rofiProjects opts query projects = do
   let opts' =
         opts
@@ -170,18 +169,12 @@ rofiProjects opts query projects = do
           <> maybe mempty rofiQuery query
   candidates <- traverse rofiFormatProjectName projects
   let map' = Map.fromList (zip candidates projects)
-  rofi opts' (Select.Identity <$> select candidates)
-    <&> ( \case
-            Selection _ key -> Map.lookup key map'
-            _ -> Nothing
-        )
+  selection <- rofi opts' (Select.Identity <$> select candidates)
+  pure $ Select.unwrapMaybeSelection ((`Map.lookup` map') <$> selection)
 
-rofiProjectCommand :: MonadIO m => RofiOpts -> RunOpts -> [Command] -> m (Maybe Command)
+rofiProjectCommand :: MonadIO m => RofiOpts -> RunOpts -> [Command] -> m (Selection Command)
 rofiProjectCommand opts popts commands = do
   let candidates = Select.build_map show_command_with_description commands
       opts' = opts <> rofiPrompt "Select command" <> maybe mempty rofiQuery (Options.run_command popts)
-  rofi opts' (Select.Identity <$> select (Map.keys candidates))
-    <&> ( \case
-            Selection _ txt -> Map.lookup txt candidates
-            _ -> Nothing
-        )
+  selection <- rofi opts' (Select.Identity <$> select (Map.keys candidates))
+  pure $ Select.unwrapMaybeSelection ((`Map.lookup` candidates) <$> selection)

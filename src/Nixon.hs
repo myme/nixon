@@ -6,7 +6,6 @@ where
 
 import Control.Arrow ((&&&))
 import Control.Exception (throwIO, try)
-import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Control.Monad.Trans.Reader (ask, local)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
@@ -44,8 +43,7 @@ import Nixon.Types
 import Nixon.Utils (implode_home)
 import System.Environment (withArgs)
 import Turtle
-  ( Alternative ((<|>)),
-    ExitCode (ExitFailure),
+  ( ExitCode (ExitFailure),
     FilePath,
     MonadIO (..),
     Text,
@@ -63,7 +61,7 @@ import Turtle
     (%),
   )
 import qualified Turtle.Bytes as BS
-import Prelude hiding (FilePath, log)
+import Prelude hiding (FilePath, fail, log)
 
 -- | List projects, filtering if a filter is specified.
 list_projects :: [Project] -> Maybe Text -> Nixon ()
@@ -75,11 +73,8 @@ list_projects projects query = do
     Selection _ matching -> liftIO $ T.putStr matching
     _ -> log_error "No projects."
 
-fail_empty :: MonadIO m => Text -> m (Maybe a) -> m a
-fail_empty err action =
-  action >>= \case
-    Nothing -> liftIO (throwIO $ EmptyError err)
-    Just x -> pure x
+fail :: MonadIO m => NixonError -> m a
+fail err = liftIO (throwIO err)
 
 -- | Attempt to parse a local JSON
 with_local_config :: FilePath -> Nixon a -> Nixon a
@@ -101,17 +96,21 @@ run_cmd :: Project -> RunOpts -> Nixon ()
 run_cmd project opts = with_local_config (project_path project) $ do
   (find_command, selector) <- (Backend.commandSelector &&& Backend.selector) <$> getBackend
   cmds <- list_commands project
-  cmd <- liftIO $ fail_empty "No command selected." $ find_command project opts cmds
-  if Opts.run_select opts
-    then do
-      resolved <- resolve_cmd project selector cmd Select.defaults
-      printf (s % "\n") resolved
-    else do
-      let project_selector = \select_opts shell' ->
-            cd (project_path project)
-              >> selector (select_opts <> Select.title (show_command cmd)) shell'
-      env' <- resolve_env project project_selector cmd (Opts.run_args opts)
-      evaluate cmd (Just $ project_path project) env'
+  cmd <- liftIO $ find_command project opts cmds
+  case cmd of
+    EmptySelection -> fail $ EmptyError "No command selected."
+    CanceledSelection -> fail $ EmptyError "Command selection canceled."
+    Selection _selectionType cmd' ->
+      if Opts.run_select opts
+        then do
+          resolved <- resolve_cmd project selector cmd' Select.defaults
+          printf (s % "\n") resolved
+        else do
+          let project_selector select_opts shell' =
+                cd (project_path project)
+                  >> selector (select_opts <> Select.title (show_command cmd')) shell'
+          env' <- resolve_env project project_selector cmd' (Opts.run_args opts)
+          evaluate cmd' (Just $ project_path project) env'
 
 -- | Resolve all command environment variable placeholders.
 resolve_env :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Nixon.Process.Env
@@ -163,18 +162,23 @@ project_action projects opts
     ptypes <- project_types . config <$> ask
     projectSelector <- Backend.projectSelector <$> getBackend
 
-    let find_project' (Just ".") =
-          runMaybeT $
-            MaybeT (P.find_in_project ptypes =<< pwd)
-              <|> MaybeT (projectSelector Nothing projects)
+    let find_project' (Just ".") = do
+          inProject <- P.find_in_project ptypes =<< pwd
+          case inProject of
+            Nothing -> projectSelector Nothing projects
+            Just project -> pure $ Selection Select.Default project
         find_project' query = projectSelector query projects
 
-    project <- liftIO $ fail_empty "No project selected." $ find_project' (Opts.proj_project opts)
-    if Opts.proj_select opts
-      then liftIO $ printf (fp % "\n") (project_path project)
-      else
-        let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_args opts) (Opts.proj_list opts) (Opts.proj_select opts)
-         in run_cmd project opts'
+    selection <- liftIO $ find_project' (Opts.proj_project opts)
+    case selection of
+      EmptySelection -> liftIO (throwIO $ EmptyError "No command selected.")
+      CanceledSelection -> liftIO (throwIO $ EmptyError "Command selection canceled.")
+      Selection _selectionType project ->
+        if Opts.proj_select opts
+          then liftIO $ printf (fp % "\n") (project_path project)
+          else
+            let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_args opts) (Opts.proj_list opts) (Opts.proj_select opts)
+             in run_cmd project opts'
 
 -- | Run a command from current directory
 run_action :: RunOpts -> Nixon ()

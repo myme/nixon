@@ -19,6 +19,7 @@ module Nixon.Select
     search,
     title,
     defaults,
+    unwrapMaybeSelection,
   )
 where
 
@@ -53,6 +54,13 @@ data Selection a
 
 selection :: s -> Selection s
 selection = Selection Default
+
+unwrapMaybeSelection :: Selection (Maybe a) -> Selection a
+unwrapMaybeSelection maybeSelection = case maybeSelection of
+  Selection _ Nothing -> EmptySelection
+  Selection selectionType (Just inner) -> Selection selectionType inner
+  EmptySelection -> EmptySelection
+  CanceledSelection -> CanceledSelection
 
 data Candidate
   = Identity Text
