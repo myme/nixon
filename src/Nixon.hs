@@ -16,7 +16,11 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Nixon.Backend (Backend)
 import qualified Nixon.Backend as Backend
-import Nixon.Backend.Fzf (fzfBackend)
+import Nixon.Backend.Fzf
+  ( fzf,
+    fzfBackend,
+    fzf_filter,
+  )
 import Nixon.Backend.Rofi (rofiBackend)
 import Nixon.Command (Command (..), CommandEnv (..), CommandOutput (..), show_command, show_command_with_description)
 import qualified Nixon.Config as Config
@@ -24,10 +28,6 @@ import Nixon.Config.Options (BackendType (..), CompletionType, ProjectOpts (..),
 import qualified Nixon.Config.Options as Opts
 import qualified Nixon.Config.Types as Config
 import Nixon.Evaluator (evaluate, getEvaluator)
-import Nixon.Fzf
-  ( fzf,
-    fzf_filter,
-  )
 import Nixon.Logging (log_error, log_info)
 import Nixon.Process (Env, run_with_output)
 import Nixon.Project (Project, ProjectType (..), project_path)
