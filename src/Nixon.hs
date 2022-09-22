@@ -4,50 +4,38 @@ module Nixon
   )
 where
 
+import Control.Arrow ((&&&))
 import Control.Exception (throwIO, try)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Control.Monad.Trans.Reader (ask, local)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
 import Data.List (intersect)
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Nixon.Backend (Backend)
+import qualified Nixon.Backend as Backend
+import Nixon.Backend.Fzf (fzfBackend)
+import Nixon.Backend.Rofi (rofiBackend)
 import Nixon.Command (Command (..), CommandEnv (..), CommandOutput (..), show_command, show_command_with_description)
 import qualified Nixon.Config as Config
 import Nixon.Config.Options (BackendType (..), CompletionType, ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
-import Nixon.Config.Types (ignore_case)
 import qualified Nixon.Config.Types as Config
 import Nixon.Evaluator (evaluate, getEvaluator)
 import Nixon.Fzf
   ( fzf,
-    fzf_exact,
     fzf_filter,
-    fzf_header,
-    fzf_ignore_case,
-    fzf_project_command,
-    fzf_projects,
-    fzf_query,
-    fzf_with_edit,
   )
 import Nixon.Logging (log_error, log_info)
 import Nixon.Process (Env, run_with_output)
 import Nixon.Project (Project, ProjectType (..), project_path)
 import qualified Nixon.Project as P
-import Nixon.Rofi
-  ( rofi,
-    rofi_exact,
-    rofi_ignore_case,
-    rofi_project_command,
-    rofi_projects,
-    rofi_prompt,
-    rofi_query,
-  )
 import Nixon.Select (Selection (..), Selector)
 import qualified Nixon.Select as Select
 import Nixon.Types
-  ( Config (commands, exact_match, project_dirs, project_types),
+  ( Config (commands, project_dirs, project_types),
     Env (backend, config),
     Nixon,
     NixonError (EmptyError),
@@ -109,15 +97,11 @@ list_commands project = filter filter_cmd . commands . config <$> ask
        in null ctypes || not (null $ intersect ptypes ctypes)
 
 -- | Find and run a command in a project.
-run_cmd ::
-  CommandSelector ->
-  Project ->
-  RunOpts ->
-  Selector Nixon ->
-  Nixon ()
-run_cmd select_command project opts selector = with_local_config (project_path project) $ do
+run_cmd :: Project -> RunOpts -> Nixon ()
+run_cmd project opts = with_local_config (project_path project) $ do
+  (find_command, selector) <- (Backend.commandSelector &&& Backend.selectionEdit) <$> getBackend
   cmds <- list_commands project
-  cmd <- liftIO $ fail_empty "No command selected." $ select_command project opts cmds
+  cmd <- liftIO $ fail_empty "No command selected." $ find_command project opts cmds
   if Opts.run_select opts
     then do
       resolved <- resolve_cmd project selector cmd Select.defaults
@@ -163,35 +147,13 @@ resolve_cmd project selector cmd select_opts = do
     Selection _ result -> pure result
     _ -> error "Argument expansion aborted"
 
-type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
-
-type CommandSelector = Project -> RunOpts -> [Command] -> IO (Maybe Command)
-
-get_selectors :: Nixon (ProjectSelector, CommandSelector, Selector Nixon)
-get_selectors = do
+getBackend :: Nixon Backend
+getBackend = do
   env <- ask
   let cfg = config env
-      fzf_opts opts =
-        mconcat $
-          catMaybes
-            [ fzf_exact <$> exact_match cfg,
-              fzf_ignore_case <$> ignore_case cfg,
-              fzf_query <$> Select.selector_search opts,
-              fzf_header <$> Select.selector_title opts
-            ]
-      fzf_opts' = fzf_opts Select.defaults
-      rofi_opts opts =
-        mconcat $
-          catMaybes
-            [ rofi_exact <$> exact_match cfg,
-              rofi_ignore_case <$> ignore_case cfg,
-              rofi_query <$> Select.selector_search opts,
-              rofi_prompt <$> Select.selector_title opts
-            ]
-      rofi_opts' = rofi_opts Select.defaults
   pure $ case backend env of
-    Fzf -> (fzf_projects fzf_opts', fzf_project_command fzf_opts', fzf_with_edit . fzf_opts)
-    Rofi -> (rofi_projects rofi_opts', const $ rofi_project_command rofi_opts', rofi . rofi_opts)
+    Fzf -> fzfBackend cfg
+    Rofi -> rofiBackend cfg
 
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
@@ -199,30 +161,29 @@ project_action projects opts
   | Opts.proj_list opts = list_projects projects (Opts.proj_project opts)
   | otherwise = do
     ptypes <- project_types . config <$> ask
-    (find_project, find_command, selector) <- get_selectors
+    projectSelector <- Backend.projectSelector <$> getBackend
 
     let find_project' (Just ".") =
           runMaybeT $
             MaybeT (P.find_in_project ptypes =<< pwd)
-              <|> MaybeT (find_project Nothing projects)
-        find_project' query = find_project query projects
+              <|> MaybeT (projectSelector Nothing projects)
+        find_project' query = projectSelector query projects
 
     project <- liftIO $ fail_empty "No project selected." $ find_project' (Opts.proj_project opts)
     if Opts.proj_select opts
       then liftIO $ printf (fp % "\n") (project_path project)
       else
         let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_args opts) (Opts.proj_list opts) (Opts.proj_select opts)
-         in run_cmd find_command project opts' selector
+         in run_cmd project opts'
 
 -- | Run a command from current directory
 run_action :: RunOpts -> Nixon ()
 run_action opts = do
   ptypes <- project_types . config <$> ask
-  (_project, find_command, selector) <- get_selectors
   project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
   if Opts.run_list opts
     then list_commands project >>= liftIO . mapM_ (T.putStrLn . show_command_with_description)
-    else run_cmd find_command project opts selector
+    else run_cmd project opts
 
 die :: (Show a, MonadIO m) => a -> m b
 die err = liftIO $ log_error (format w err) >> exit (ExitFailure 1)
