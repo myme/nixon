@@ -4,10 +4,10 @@ module Nixon
   )
 where
 
-import Control.Exception ( try, throwIO )
-import Control.Monad.Trans.Maybe ( MaybeT(MaybeT, runMaybeT) )
-import Control.Monad.Trans.Reader ( ask, local )
-import Data.Aeson ( eitherDecodeStrict )
+import Control.Exception (throwIO, try)
+import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
+import Control.Monad.Trans.Reader (ask, local)
+import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
 import Data.List (intersect)
 import Data.Maybe (catMaybes, fromMaybe)
@@ -47,31 +47,33 @@ import Nixon.Rofi
 import Nixon.Select (Selection (..), Selector)
 import qualified Nixon.Select as Select
 import Nixon.Types
-    ( Config(commands, exact_match, project_types, project_dirs),
-      Nixon,
-      NixonError(EmptyError),
-      Env(backend, config),
-      runNixon )
-import Nixon.Utils ( implode_home )
+  ( Config (commands, exact_match, project_dirs, project_types),
+    Env (backend, config),
+    Nixon,
+    NixonError (EmptyError),
+    runNixon,
+  )
+import Nixon.Utils (implode_home)
 import System.Environment (withArgs)
 import Turtle
-    ( Alternative((<|>)),
-      MonadIO(..),
-      Text,
-      (%),
-      format,
-      fp,
-      printf,
-      s,
-      w,
-      lineToText,
-      cd,
-      exit,
-      pwd,
-      stream,
-      select,
-      ExitCode(ExitFailure),
-      FilePath )
+  ( Alternative ((<|>)),
+    ExitCode (ExitFailure),
+    FilePath,
+    MonadIO (..),
+    Text,
+    cd,
+    exit,
+    format,
+    fp,
+    lineToText,
+    printf,
+    pwd,
+    s,
+    select,
+    stream,
+    w,
+    (%),
+  )
 import qualified Turtle.Bytes as BS
 import Prelude hiding (FilePath, log)
 
