@@ -61,7 +61,7 @@ rofiBackend cfg =
    in Backend
         { projectSelector = rofi_projects rofi_opts',
           commandSelector = const $ rofi_project_command rofi_opts',
-          selectionEdit = rofi . rofi_opts
+          selector = rofi . rofi_opts
         }
 
 -- | Data type for command line options to rofi

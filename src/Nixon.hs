@@ -99,7 +99,7 @@ list_commands project = filter filter_cmd . commands . config <$> ask
 -- | Find and run a command in a project.
 run_cmd :: Project -> RunOpts -> Nixon ()
 run_cmd project opts = with_local_config (project_path project) $ do
-  (find_command, selector) <- (Backend.commandSelector &&& Backend.selectionEdit) <$> getBackend
+  (find_command, selector) <- (Backend.commandSelector &&& Backend.selector) <$> getBackend
   cmds <- list_commands project
   cmd <- liftIO $ fail_empty "No command selected." $ find_command project opts cmds
   if Opts.run_select opts

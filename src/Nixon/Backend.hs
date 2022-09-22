@@ -14,5 +14,5 @@ type CommandSelector = Project -> RunOpts -> [Command] -> IO (Maybe Command)
 data Backend = Backend
   { projectSelector :: ProjectSelector,
     commandSelector :: CommandSelector,
-    selectionEdit :: Selector Nixon
+    selector :: Selector Nixon
   }

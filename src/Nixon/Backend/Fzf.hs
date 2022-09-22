@@ -83,7 +83,7 @@ fzfBackend cfg =
    in Backend
         { projectSelector = fzf_projects fzf_opts',
           commandSelector = fzf_project_command fzf_opts',
-          selectionEdit = fzf_with_edit . fzf_opts
+          selector = fzf_with_edit . fzf_opts
         }
 
 data FzfOpts = FzfOpts
