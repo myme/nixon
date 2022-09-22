@@ -1,7 +1,7 @@
 module Nixon.Config.Options
   ( Completer,
     CompletionType (..),
-    Backend (..),
+    BackendType (..),
     LogLevel (..),
     Options (..),
     SubCommand (..),
@@ -16,7 +16,7 @@ where
 import qualified Data.Text as Text
 import Nixon.Config (read_config)
 import qualified Nixon.Config.Markdown as MD
-import Nixon.Config.Types (Backend (..), Config, ConfigError (..), LogLevel (..))
+import Nixon.Config.Types (BackendType (..), Config, ConfigError (..), LogLevel (..))
 import qualified Nixon.Config.Types as Config
 import Nixon.Utils (implode_home)
 import qualified Options.Applicative as Opts

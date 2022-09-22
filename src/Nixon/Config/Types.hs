@@ -1,5 +1,5 @@
 module Nixon.Config.Types
-  ( Backend (..),
+  ( BackendType (..),
     LogLevel (..),
     Config (..),
     ConfigError (..),
@@ -16,14 +16,14 @@ import Nixon.Project (ProjectType)
 import Turtle (FilePath, Text)
 import Prelude hiding (FilePath)
 
-data Backend = Fzf | Rofi deriving (Eq, Show)
+data BackendType = Fzf | Rofi deriving (Eq, Show)
 
-isGuiBackend :: Backend -> Bool
+isGuiBackend :: BackendType -> Bool
 isGuiBackend Fzf = False
 isGuiBackend Rofi = True
 
 data Config = Config
-  { backend :: Maybe Backend,
+  { backend :: Maybe BackendType,
     exact_match :: Maybe Bool,
     ignore_case :: Maybe Bool,
     force_tty :: Maybe Bool,

@@ -15,7 +15,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Nixon.Command (Command (..), CommandEnv (..), CommandOutput (..), show_command, show_command_with_description)
 import qualified Nixon.Config as Config
-import Nixon.Config.Options (Backend (..), CompletionType, ProjectOpts (..), RunOpts (..), SubCommand (..))
+import Nixon.Config.Options (BackendType (..), CompletionType, ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
 import Nixon.Config.Types (ignore_case)
 import qualified Nixon.Config.Types as Config

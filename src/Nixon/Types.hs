@@ -15,7 +15,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.Bool (bool)
 import Data.Maybe (fromMaybe)
-import Nixon.Config.Types (Backend (..), Config)
+import Nixon.Config.Types (BackendType (..), Config)
 import qualified Nixon.Config.Types as Config
 import Nixon.Logging (HasLogging)
 import qualified Nixon.Logging as Logging
@@ -25,7 +25,7 @@ import Turtle (Text)
 import Prelude hiding (FilePath)
 
 data Env = Env
-  { backend :: Backend,
+  { backend :: BackendType,
     config :: Config
   }
 
@@ -33,7 +33,7 @@ newtype NixonError = EmptyError Text deriving (Show)
 
 instance Exception NixonError
 
-get_backend :: MonadIO m => Maybe Backend -> m Backend
+get_backend :: MonadIO m => Maybe BackendType -> m BackendType
 get_backend backend = do
   def_backend <- liftIO $ bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
   pure $ fromMaybe def_backend backend
