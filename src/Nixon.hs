@@ -167,11 +167,10 @@ type ProjectSelector = Maybe Text -> [Project] -> IO (Maybe Project)
 
 type CommandSelector = Project -> RunOpts -> [Command] -> IO (Maybe Command)
 
-get_selectors :: Nixon ([ProjectType], ProjectSelector, CommandSelector, Selector Nixon)
+get_selectors :: Nixon (ProjectSelector, CommandSelector, Selector Nixon)
 get_selectors = do
   env <- ask
   let cfg = config env
-      ptypes = project_types cfg
       fzf_opts opts =
         mconcat $
           catMaybes
@@ -191,15 +190,16 @@ get_selectors = do
             ]
       rofi_opts' = rofi_opts Select.defaults
   pure $ case backend env of
-    Fzf -> (ptypes, fzf_projects fzf_opts', fzf_project_command fzf_opts', fzf_with_edit . fzf_opts)
-    Rofi -> (ptypes, rofi_projects rofi_opts', const $ rofi_project_command rofi_opts', rofi . rofi_opts)
+    Fzf -> (fzf_projects fzf_opts', fzf_project_command fzf_opts', fzf_with_edit . fzf_opts)
+    Rofi -> (rofi_projects rofi_opts', const $ rofi_project_command rofi_opts', rofi . rofi_opts)
 
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
 project_action projects opts
   | Opts.proj_list opts = list_projects projects (Opts.proj_project opts)
   | otherwise = do
-    (ptypes, find_project, find_command, selector) <- get_selectors
+    ptypes <- project_types . config <$> ask
+    (find_project, find_command, selector) <- get_selectors
 
     let find_project' (Just ".") =
           runMaybeT $
@@ -217,7 +217,8 @@ project_action projects opts
 -- | Run a command from current directory
 run_action :: RunOpts -> Nixon ()
 run_action opts = do
-  (ptypes, _project, find_command, selector) <- get_selectors
+  ptypes <- project_types . config <$> ask
+  (_project, find_command, selector) <- get_selectors
   project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
   if Opts.run_list opts
     then list_commands project >>= liftIO . mapM_ (T.putStrLn . show_command_with_description)
