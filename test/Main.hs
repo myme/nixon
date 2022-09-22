@@ -11,6 +11,7 @@ import           Test.Nixon.Config.Markdown
 import           Test.Nixon.Logging
 import           Test.QuickCheck
 import           Test.QuickCheck.Instances.Text ()
+import Test.Nixon.Backend.Fzf (fzf)
 
 empty :: Monad m => a -> m (Selection Text)
 empty = const (pure EmptySelection)
@@ -33,9 +34,13 @@ instance Arbitrary NonWsText where
 
 main :: IO ()
 main = hspec $ do
+  describe "Backend.Fzf" fzf
+
   describe "Command" command
-  describe "Command" $ do
+
+  describe "Config" $ do
     describe "Markdown" markdown_tests
+
   describe "Logging" logging
 
   describe "Utils" $ do

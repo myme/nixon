@@ -1,5 +1,6 @@
 module Nixon.Backend.Fzf
   ( FzfOpts,
+    FieldIndex (..),
     fzfBackend,
     fzf,
     fzf_border,
@@ -16,6 +17,8 @@ module Nixon.Backend.Fzf
     fzf_with_edit,
     fzf_with_nth,
     fzf_no_sort,
+    fzfDefaults,
+    fzfBuildArgs,
   )
 where
 
@@ -98,6 +101,7 @@ data FzfOpts = FzfOpts
     _with_nth :: Maybe FieldIndex,
     _no_sort :: Bool
   }
+  deriving (Eq, Show)
 
 data FieldIndex
   = FieldIndex Integer
@@ -105,6 +109,7 @@ data FieldIndex
   | FieldFrom Integer
   | FieldRange Integer Integer
   | AllFields
+  deriving (Eq, Show)
 
 instance Semigroup FzfOpts where
   left <> right =
@@ -121,50 +126,53 @@ instance Semigroup FzfOpts where
         _no_sort = _no_sort right || _no_sort left
       }
 
+fzfDefaults :: FzfOpts
+fzfDefaults =
+  FzfOpts
+    { _border = False,
+      _exact = Nothing,
+      _ignore_case = Nothing,
+      _header = Nothing,
+      _height = Nothing,
+      _query = Nothing,
+      _filter = Nothing,
+      _preview = Nothing,
+      _with_nth = Nothing,
+      _no_sort = False
+    }
+
 instance Monoid FzfOpts where
-  mempty =
-    FzfOpts
-      { _border = False,
-        _exact = Nothing,
-        _ignore_case = Nothing,
-        _header = Nothing,
-        _height = Nothing,
-        _query = Nothing,
-        _filter = Nothing,
-        _preview = Nothing,
-        _with_nth = Nothing,
-        _no_sort = False
-      }
+  mempty = fzfDefaults
 
 fzf_border :: FzfOpts
-fzf_border = mempty {_border = True}
+fzf_border = fzfDefaults {_border = True}
 
 fzf_exact :: Bool -> FzfOpts
-fzf_exact enable = mempty {_exact = Just enable}
+fzf_exact enable = fzfDefaults {_exact = Just enable}
 
 fzf_ignore_case :: Bool -> FzfOpts
-fzf_ignore_case enable = mempty {_ignore_case = Just enable}
+fzf_ignore_case enable = fzfDefaults {_ignore_case = Just enable}
 
 fzf_header :: Text -> FzfOpts
-fzf_header header = mempty {_header = Just header}
+fzf_header header = fzfDefaults {_header = Just header}
 
 fzf_height :: Integer -> FzfOpts
-fzf_height height = mempty {_height = Just height}
+fzf_height height = fzfDefaults {_height = Just height}
 
 fzf_query :: Text -> FzfOpts
-fzf_query query = mempty {_query = Just query}
+fzf_query query = fzfDefaults {_query = Just query}
 
 fzf_filter :: Text -> FzfOpts
-fzf_filter filter = mempty {_filter = Just filter}
+fzf_filter filter = fzfDefaults {_filter = Just filter}
 
 fzf_preview :: Text -> FzfOpts
-fzf_preview cmd = mempty {_preview = Just cmd}
+fzf_preview cmd = fzfDefaults {_preview = Just cmd}
 
 fzf_with_nth :: FieldIndex -> FzfOpts
-fzf_with_nth with_nth = mempty {_with_nth = Just with_nth}
+fzf_with_nth with_nth = fzfDefaults {_with_nth = Just with_nth}
 
 fzf_no_sort :: FzfOpts
-fzf_no_sort = mempty {_no_sort = True}
+fzf_no_sort = fzfDefaults {_no_sort = True}
 
 format_field_index :: FieldIndex -> Text
 format_field_index (FieldIndex idx) = format d idx
@@ -172,6 +180,21 @@ format_field_index (FieldTo idx) = format (".." % d) idx
 format_field_index (FieldFrom idx) = format (d % "..") idx
 format_field_index (FieldRange start stop) = format (d % ".." % d) start stop
 format_field_index AllFields = ".."
+
+fzfBuildArgs :: FzfOpts -> [Text]
+fzfBuildArgs opts =
+  build_args
+    [ flag "--border" (_border opts),
+      flag "--exact" =<< _exact opts,
+      flag "-i" =<< _ignore_case opts,
+      arg "--header" =<< _header opts,
+      arg "--height" . format (d % "%") =<< _height opts,
+      arg "--query" =<< _query opts,
+      arg "--filter" =<< _filter opts,
+      arg "--preview" =<< _preview opts,
+      arg "--with-nth" . format_field_index =<< _with_nth opts,
+      flag "--no-sort" (_no_sort opts)
+    ]
 
 fzf_raw :: MonadIO m => FzfOpts -> Shell Line -> m (Selection Text)
 fzf_raw opts candidates = do
@@ -181,17 +204,7 @@ fzf_raw opts candidates = do
           "-1" :
           "--expect=alt-enter" :
           "--ansi" :
-          build_args
-            [ flag "--border" (_border opts),
-              flag "--exact" =<< _exact opts,
-              flag "-i" =<< _ignore_case opts,
-              arg "--header" =<< _header opts,
-              arg "--height" . format (d % "%") =<< _height opts,
-              arg "--query" =<< _query opts,
-              arg "--preview" =<< _preview opts,
-              arg "--with-nth" . format_field_index =<< _with_nth opts,
-              flag "--no-sort" (_no_sort opts)
-            ]
+          fzfBuildArgs opts
   (code, out) <- procStrict "fzf" args candidates
   pure $ case _filter opts of
     Just _ -> Selection Default out
