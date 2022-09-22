@@ -1,14 +1,14 @@
 module Nixon.Backend.Rofi
   ( rofi,
-    rofi_format_project_name,
-    rofi_exact,
-    rofi_ignore_case,
-    rofi_markup,
-    rofi_msg,
-    rofi_projects,
-    rofi_prompt,
-    rofi_project_command,
-    rofi_query,
+    rofiFormatProjectName,
+    rofiExact,
+    rofiIgnoreCase,
+    rofiMarkup,
+    rofiMsg,
+    rofiProjects,
+    rofiPrompt,
+    rofiProjectCommand,
+    rofiQuery,
     RofiResult (..),
     rofiBackend,
   )
@@ -52,15 +52,15 @@ rofiBackend cfg =
   let rofi_opts opts =
         mconcat $
           catMaybes
-            [ rofi_exact <$> Config.exact_match cfg,
-              rofi_ignore_case <$> Config.ignore_case cfg,
-              rofi_query <$> Select.selector_search opts,
-              rofi_prompt <$> Select.selector_title opts
+            [ rofiExact <$> Config.exact_match cfg,
+              rofiIgnoreCase <$> Config.ignore_case cfg,
+              rofiQuery <$> Select.selector_search opts,
+              rofiPrompt <$> Select.selector_title opts
             ]
       rofi_opts' = rofi_opts Select.defaults
    in Backend
-        { projectSelector = rofi_projects rofi_opts',
-          commandSelector = const $ rofi_project_command rofi_opts',
+        { projectSelector = rofiProjects rofi_opts',
+          commandSelector = const $ rofiProjectCommand rofi_opts',
           selector = rofi . rofi_opts
         }
 
@@ -97,25 +97,25 @@ instance Monoid RofiOpts where
         _query = Nothing
       }
 
-rofi_exact :: Bool -> RofiOpts
-rofi_exact exact = mempty {_exact = Just exact}
+rofiExact :: Bool -> RofiOpts
+rofiExact exact = mempty {_exact = Just exact}
 
-rofi_ignore_case :: Bool -> RofiOpts
-rofi_ignore_case ignore_case = mempty {_ignore_case = Just ignore_case}
+rofiIgnoreCase :: Bool -> RofiOpts
+rofiIgnoreCase ignore_case = mempty {_ignore_case = Just ignore_case}
 
-rofi_markup :: RofiOpts
-rofi_markup = mempty {_markup = True}
+rofiMarkup :: RofiOpts
+rofiMarkup = mempty {_markup = True}
 
 -- | Set -mesg command line option
-rofi_msg :: Text -> RofiOpts
-rofi_msg msg = mempty {_msg = Just msg}
+rofiMsg :: Text -> RofiOpts
+rofiMsg msg = mempty {_msg = Just msg}
 
 -- | Set -p|--prompt command line option
-rofi_prompt :: Text -> RofiOpts
-rofi_prompt prompt = mempty {_prompt = Just prompt}
+rofiPrompt :: Text -> RofiOpts
+rofiPrompt prompt = mempty {_prompt = Just prompt}
 
-rofi_query :: Text -> RofiOpts
-rofi_query query = mempty {_query = Just query}
+rofiQuery :: Text -> RofiOpts
+rofiQuery query = mempty {_query = Just query}
 
 data RofiResult
   = RofiCancel
@@ -150,8 +150,8 @@ rofi opts candidates = do
     mkselection type' (Just selection) = Selection type' selection
 
 -- | Format project names suited to rofi selection list
-rofi_format_project_name :: MonadIO m => Project -> m Text
-rofi_format_project_name project = do
+rofiFormatProjectName :: MonadIO m => Project -> m Text
+rofiFormatProjectName project = do
   path <- implode_home (project_dir project)
   let pad_width = 30
       name = format fp (project_name project)
@@ -161,14 +161,14 @@ rofi_format_project_name project = do
   pure $ fmt name_padded dir
 
 -- | Launch rofi with a list of projects as candidates
-rofi_projects :: MonadIO m => RofiOpts -> Maybe Text -> [Project] -> m (Maybe Project)
-rofi_projects opts query projects = do
+rofiProjects :: MonadIO m => RofiOpts -> Maybe Text -> [Project] -> m (Maybe Project)
+rofiProjects opts query projects = do
   let opts' =
         opts
-          <> rofi_prompt "Select project"
-          <> rofi_markup
-          <> maybe mempty rofi_query query
-  candidates <- traverse rofi_format_project_name projects
+          <> rofiPrompt "Select project"
+          <> rofiMarkup
+          <> maybe mempty rofiQuery query
+  candidates <- traverse rofiFormatProjectName projects
   let map' = Map.fromList (zip candidates projects)
   rofi opts' (Select.Identity <$> select candidates)
     <&> ( \case
@@ -176,10 +176,10 @@ rofi_projects opts query projects = do
             _ -> Nothing
         )
 
-rofi_project_command :: MonadIO m => RofiOpts -> RunOpts -> [Command] -> m (Maybe Command)
-rofi_project_command opts popts commands = do
+rofiProjectCommand :: MonadIO m => RofiOpts -> RunOpts -> [Command] -> m (Maybe Command)
+rofiProjectCommand opts popts commands = do
   let candidates = Select.build_map show_command_with_description commands
-      opts' = opts <> rofi_prompt "Select command" <> maybe mempty rofi_query (Options.run_command popts)
+      opts' = opts <> rofiPrompt "Select command" <> maybe mempty rofiQuery (Options.run_command popts)
   rofi opts' (Select.Identity <$> select (Map.keys candidates))
     <&> ( \case
             Selection _ txt -> Map.lookup txt candidates
