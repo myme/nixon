@@ -19,7 +19,7 @@ import qualified Nixon.Backend as Backend
 import Nixon.Backend.Fzf
   ( fzf,
     fzfBackend,
-    fzf_filter,
+    fzfFilter,
   )
 import Nixon.Backend.Rofi (rofiBackend)
 import Nixon.Command (Command (..), CommandEnv (..), CommandOutput (..), show_command, show_command_with_description)
@@ -70,7 +70,7 @@ list_projects :: [Project] -> Maybe Text -> Nixon ()
 list_projects projects query = do
   let fmt_line = fmap (Select.Identity . format fp)
   paths <- liftIO $ fmt_line <$> traverse (implode_home . project_path) projects
-  let fzf_opts = fzf_filter $ fromMaybe "" query
+  let fzf_opts = fzfFilter $ fromMaybe "" query
   liftIO (fzf fzf_opts (Turtle.select paths)) >>= \case
     Selection _ matching -> liftIO $ T.putStr matching
     _ -> log_error "No projects."

@@ -3,20 +3,20 @@ module Nixon.Backend.Fzf
     FieldIndex (..),
     fzfBackend,
     fzf,
-    fzf_border,
-    fzf_exact,
-    fzf_ignore_case,
-    fzf_header,
-    fzf_height,
-    fzf_format_project_name,
-    fzf_projects,
-    fzf_query,
-    fzf_filter,
-    fzf_preview,
-    fzf_project_command,
-    fzf_with_edit,
-    fzf_with_nth,
-    fzf_no_sort,
+    fzfBorder,
+    fzfExact,
+    fzfIgnoreCase,
+    fzfHeader,
+    fzfHeight,
+    fzfFormatProjectName,
+    fzfProjects,
+    fzfQuery,
+    fzfFilter,
+    fzfPreview,
+    fzfProjectCommand,
+    fzfWithEdit,
+    fzfWithNth,
+    fzfNoSort,
     fzfDefaults,
     fzfBuildArgs,
   )
@@ -77,29 +77,29 @@ fzfBackend cfg =
   let fzf_opts opts =
         mconcat $
           catMaybes
-            [ fzf_exact <$> Config.exact_match cfg,
-              fzf_ignore_case <$> Config.ignore_case cfg,
-              fzf_query <$> Select.selector_search opts,
-              fzf_header <$> Select.selector_title opts
+            [ fzfExact <$> Config.exact_match cfg,
+              fzfIgnoreCase <$> Config.ignore_case cfg,
+              fzfQuery <$> Select.selector_search opts,
+              fzfHeader <$> Select.selector_title opts
             ]
       fzf_opts' = fzf_opts Select.defaults
    in Backend
-        { projectSelector = fzf_projects fzf_opts',
-          commandSelector = fzf_project_command fzf_opts',
-          selector = fzf_with_edit . fzf_opts
+        { projectSelector = fzfProjects fzf_opts',
+          commandSelector = fzfProjectCommand fzf_opts',
+          selector = fzfWithEdit . fzf_opts
         }
 
 data FzfOpts = FzfOpts
   { _border :: Bool,
     _exact :: Maybe Bool,
-    _ignore_case :: Maybe Bool,
+    _ignoreCase :: Maybe Bool,
     _header :: Maybe Text,
     _height :: Maybe Integer,
     _query :: Maybe Text,
     _filter :: Maybe Text,
     _preview :: Maybe Text,
-    _with_nth :: Maybe FieldIndex,
-    _no_sort :: Bool
+    _withNth :: Maybe FieldIndex,
+    _noSort :: Bool
   }
   deriving (Eq, Show)
 
@@ -116,14 +116,14 @@ instance Semigroup FzfOpts where
     FzfOpts
       { _border = _border right || _border left,
         _exact = _exact right <|> _exact left,
-        _ignore_case = _ignore_case right <|> _ignore_case left,
+        _ignoreCase = _ignoreCase right <|> _ignoreCase left,
         _header = _header right <|> _header left,
         _height = _height right <|> _height left,
         _query = _query right <|> _query left,
         _filter = _filter right <|> _filter left,
         _preview = _preview right <|> _preview left,
-        _with_nth = _with_nth right <|> _with_nth left,
-        _no_sort = _no_sort right || _no_sort left
+        _withNth = _withNth right <|> _withNth left,
+        _noSort = _noSort right || _noSort left
       }
 
 fzfDefaults :: FzfOpts
@@ -131,73 +131,73 @@ fzfDefaults =
   FzfOpts
     { _border = False,
       _exact = Nothing,
-      _ignore_case = Nothing,
+      _ignoreCase = Nothing,
       _header = Nothing,
       _height = Nothing,
       _query = Nothing,
       _filter = Nothing,
       _preview = Nothing,
-      _with_nth = Nothing,
-      _no_sort = False
+      _withNth = Nothing,
+      _noSort = False
     }
 
 instance Monoid FzfOpts where
   mempty = fzfDefaults
 
-fzf_border :: FzfOpts
-fzf_border = fzfDefaults {_border = True}
+fzfBorder :: FzfOpts
+fzfBorder = fzfDefaults {_border = True}
 
-fzf_exact :: Bool -> FzfOpts
-fzf_exact enable = fzfDefaults {_exact = Just enable}
+fzfExact :: Bool -> FzfOpts
+fzfExact enable = fzfDefaults {_exact = Just enable}
 
-fzf_ignore_case :: Bool -> FzfOpts
-fzf_ignore_case enable = fzfDefaults {_ignore_case = Just enable}
+fzfIgnoreCase :: Bool -> FzfOpts
+fzfIgnoreCase enable = fzfDefaults {_ignoreCase = Just enable}
 
-fzf_header :: Text -> FzfOpts
-fzf_header header = fzfDefaults {_header = Just header}
+fzfHeader :: Text -> FzfOpts
+fzfHeader header = fzfDefaults {_header = Just header}
 
-fzf_height :: Integer -> FzfOpts
-fzf_height height = fzfDefaults {_height = Just height}
+fzfHeight :: Integer -> FzfOpts
+fzfHeight height = fzfDefaults {_height = Just height}
 
-fzf_query :: Text -> FzfOpts
-fzf_query query = fzfDefaults {_query = Just query}
+fzfQuery :: Text -> FzfOpts
+fzfQuery query = fzfDefaults {_query = Just query}
 
-fzf_filter :: Text -> FzfOpts
-fzf_filter filter = fzfDefaults {_filter = Just filter}
+fzfFilter :: Text -> FzfOpts
+fzfFilter filter = fzfDefaults {_filter = Just filter}
 
-fzf_preview :: Text -> FzfOpts
-fzf_preview cmd = fzfDefaults {_preview = Just cmd}
+fzfPreview :: Text -> FzfOpts
+fzfPreview cmd = fzfDefaults {_preview = Just cmd}
 
-fzf_with_nth :: FieldIndex -> FzfOpts
-fzf_with_nth with_nth = fzfDefaults {_with_nth = Just with_nth}
+fzfWithNth :: FieldIndex -> FzfOpts
+fzfWithNth with_nth = fzfDefaults {_withNth = Just with_nth}
 
-fzf_no_sort :: FzfOpts
-fzf_no_sort = fzfDefaults {_no_sort = True}
+fzfNoSort :: FzfOpts
+fzfNoSort = fzfDefaults {_noSort = True}
 
-format_field_index :: FieldIndex -> Text
-format_field_index (FieldIndex idx) = format d idx
-format_field_index (FieldTo idx) = format (".." % d) idx
-format_field_index (FieldFrom idx) = format (d % "..") idx
-format_field_index (FieldRange start stop) = format (d % ".." % d) start stop
-format_field_index AllFields = ".."
+formatFieldIndex :: FieldIndex -> Text
+formatFieldIndex (FieldIndex idx) = format d idx
+formatFieldIndex (FieldTo idx) = format (".." % d) idx
+formatFieldIndex (FieldFrom idx) = format (d % "..") idx
+formatFieldIndex (FieldRange start stop) = format (d % ".." % d) start stop
+formatFieldIndex AllFields = ".."
 
 fzfBuildArgs :: FzfOpts -> [Text]
 fzfBuildArgs opts =
   build_args
     [ flag "--border" (_border opts),
       flag "--exact" =<< _exact opts,
-      flag "-i" =<< _ignore_case opts,
+      flag "-i" =<< _ignoreCase opts,
       arg "--header" =<< _header opts,
       arg "--height" . format (d % "%") =<< _height opts,
       arg "--query" =<< _query opts,
       arg "--filter" =<< _filter opts,
       arg "--preview" =<< _preview opts,
-      arg "--with-nth" . format_field_index =<< _with_nth opts,
-      flag "--no-sort" (_no_sort opts)
+      arg "--with-nth" . formatFieldIndex =<< _withNth opts,
+      flag "--no-sort" (_noSort opts)
     ]
 
-fzf_raw :: MonadIO m => FzfOpts -> Shell Line -> m (Selection Text)
-fzf_raw opts candidates = do
+fzfRaw :: MonadIO m => FzfOpts -> Shell Line -> m (Selection Text)
+fzfRaw opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
         Nothing ->
@@ -223,38 +223,38 @@ fzf opts candidates = do
       mkout = map (uncurry (format (s % " " % s)) . second Select.candidate_title)
       mkmap = Map.fromList . map (second Select.candidate_value)
   (cs_input, cs) <- (mkout &&& mkmap) . mkidx <$> shell_to_list candidates
-  selection <- fzf_raw (opts <> fzf_with_nth (FieldFrom 2)) (toLines $ select cs_input)
+  selection <- fzfRaw (opts <> fzfWithNth (FieldFrom 2)) (toLines $ select cs_input)
   let selected = fmap stripAnsiEscapeCodes . flip Map.lookup cs . takeToSpace <$> selection
   pure $ case selected of
     Selection t sel -> maybe EmptySelection (Selection t) sel
     CanceledSelection -> CanceledSelection
     EmptySelection -> EmptySelection
 
-fzf_with_edit :: (MonadIO m, MonadMask m) => FzfOpts -> Shell Candidate -> m (Selection Text)
-fzf_with_edit opts candidates =
+fzfWithEdit :: (MonadIO m, MonadMask m) => FzfOpts -> Shell Candidate -> m (Selection Text)
+fzfWithEdit opts candidates =
   fzf opts candidates >>= \case
     Selection (Alternate idx) selection ->
-      fzf_edit_selection selection >>= \case
+      fzfEditSelection selection >>= \case
         Just selection' -> pure $ Selection (Alternate idx) selection'
         Nothing -> pure EmptySelection
     x -> pure x
 
-fzf_format_project_name :: MonadIO m => Project -> m (Text, Project)
-fzf_format_project_name project = do
+fzfFormatProjectName :: MonadIO m => Project -> m (Text, Project)
+fzfFormatProjectName project = do
   path <- implode_home (project_path project)
   pure (format fp path, project)
 
 -- | Find projects
-fzf_projects :: MonadIO m => FzfOpts -> Maybe Text -> [Project] -> m (Maybe Project)
-fzf_projects opts query projects = do
-  candidates <- Map.fromList <$> traverse fzf_format_project_name projects
+fzfProjects :: MonadIO m => FzfOpts -> Maybe Text -> [Project] -> m (Maybe Project)
+fzfProjects opts query projects = do
+  candidates <- Map.fromList <$> traverse fzfFormatProjectName projects
   let opts' =
         opts
-          <> fzf_header "Select project"
-          <> fzf_border
-          -- <> fzf_height 40
-          <> maybe mempty fzf_query query
-  -- <> fzf_preview "ls $(eval echo {})"
+          <> fzfHeader "Select project"
+          <> fzfBorder
+          -- <> fzfHeight 40
+          <> maybe mempty fzfQuery query
+  -- <> fzfPreview "ls $(eval echo {})"
   fzf opts' (Select.Identity <$> (select . sort $ Map.keys candidates))
     <&> ( \case
             Selection _ out -> Map.lookup out candidates
@@ -262,24 +262,24 @@ fzf_projects opts query projects = do
         )
 
 -- | Find commands applicable to a project
-fzf_project_command :: (MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Maybe Command)
-fzf_project_command opts project popts commands = do
+fzfProjectCommand :: (MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Maybe Command)
+fzfProjectCommand opts project popts commands = do
   let candidates = map (show_command_with_description &&& id) commands
       header = format ("Select command [" % fp % "] (" % fp % ")") (project_name project) (project_dir project)
-      opts' = opts <> fzf_header header <> maybe mempty fzf_query (Options.run_command popts) <> fzf_no_sort
+      opts' = opts <> fzfHeader header <> maybe mempty fzfQuery (Options.run_command popts) <> fzfNoSort
       input' = Select.Identity <$> select (fst <$> candidates)
   selection <- fmap (`lookup` candidates) <$> fzf opts' input'
   case selection of
     Selection Default cmd -> pure cmd
     Selection (Alternate _) cmd -> runMaybeT $ do
       cmd' <- MaybeT (pure cmd)
-      edited <- MaybeT $ fzf_edit_selection (cmdSource cmd')
+      edited <- MaybeT $ fzfEditSelection (cmdSource cmd')
       pure cmd' {cmdSource = edited}
     _ -> pure Nothing
 
 -- | Use readline to manipulate/change a fzf selection
-fzf_edit_selection :: (MonadIO m, MonadMask m) => Text -> m (Maybe Text)
-fzf_edit_selection selection = runInputT defaultSettings $ do
+fzfEditSelection :: (MonadIO m, MonadMask m) => Text -> m (Maybe Text)
+fzfEditSelection selection = runInputT defaultSettings $ do
   line <- getInputLineWithInitial "> " (T.unpack selection, "")
   pure $ case line of
     Just "" -> Nothing
