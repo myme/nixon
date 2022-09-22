@@ -142,7 +142,9 @@ rofi opts candidates = do
     ExitSuccess -> mkselection Default out
     ExitFailure 1 -> CanceledSelection
     ExitFailure c
-      | c >= 10 && c < 20 -> mkselection (Alternate (c - 10)) out
+      | c == 10 -> mkselection Edit out
+      | c == 11 -> mkselection Show out
+      | c == 12 -> mkselection Visit out
       | otherwise -> error $ "Exit error: " <> show c
   where
     mkselection _ Nothing = EmptySelection

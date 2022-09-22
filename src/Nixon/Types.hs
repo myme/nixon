@@ -29,7 +29,10 @@ data Env = Env
     config :: Config
   }
 
-newtype NixonError = EmptyError Text deriving (Show)
+data NixonError
+  = EmptyError Text
+  | NixonError Text
+  deriving (Show)
 
 instance Exception NixonError
 

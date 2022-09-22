@@ -4,12 +4,13 @@ module Nixon
   )
 where
 
-import Control.Arrow ((&&&))
 import Control.Exception (throwIO, try)
+import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Reader (ask, local)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
 import Data.List (intersect)
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -22,13 +23,14 @@ import Nixon.Backend.Fzf
   )
 import Nixon.Backend.Rofi (rofiBackend)
 import Nixon.Command (Command (..), CommandEnv (..), CommandOutput (..), show_command, show_command_with_description)
+import qualified Nixon.Command as Cmd
 import qualified Nixon.Config as Config
 import Nixon.Config.Options (BackendType (..), CompletionType, ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
 import qualified Nixon.Config.Types as Config
 import Nixon.Evaluator (evaluate, getEvaluator)
 import Nixon.Logging (log_error, log_info)
-import Nixon.Process (Env, run_with_output)
+import Nixon.Process (Env, run, run_with_output)
 import Nixon.Project (Project, ProjectType (..), project_path)
 import qualified Nixon.Project as P
 import Nixon.Select (Selection (..), Selector)
@@ -37,10 +39,11 @@ import Nixon.Types
   ( Config (commands, project_dirs, project_types),
     Env (backend, config),
     Nixon,
-    NixonError (EmptyError),
+    NixonError (EmptyError, NixonError),
     runNixon,
   )
 import Nixon.Utils (implode_home)
+import System.Console.Haskeline (defaultSettings, getInputLineWithInitial, runInputT)
 import System.Environment (withArgs)
 import Turtle
   ( ExitCode (ExitFailure),
@@ -48,6 +51,7 @@ import Turtle
     MonadIO (..),
     Text,
     cd,
+    d,
     exit,
     format,
     fp,
@@ -91,26 +95,67 @@ list_commands project = filter filter_cmd . commands . config <$> ask
       let ctypes = cmdProjectTypes cmd
        in null ctypes || not (null $ intersect ptypes ctypes)
 
--- | Find and run a command in a project.
-run_cmd :: Project -> RunOpts -> Nixon ()
-run_cmd project opts = with_local_config (project_path project) $ do
-  (find_command, selector) <- (Backend.commandSelector &&& Backend.selector) <$> getBackend
+-- | Find and handle a command in a project.
+findAndHandleCmd :: Project -> RunOpts -> Nixon ()
+findAndHandleCmd project opts = with_local_config (project_path project) $ do
+  find_command <- Backend.commandSelector <$> getBackend
   cmds <- list_commands project
   cmd <- liftIO $ find_command project opts cmds
+  handleCmd project cmd opts
+
+-- | Find and run a command in a project.
+handleCmd :: Project -> Selection Command -> RunOpts -> Nixon ()
+handleCmd project cmd opts = do
+  selector <- Backend.selector <$> getBackend
   case cmd of
     EmptySelection -> fail $ EmptyError "No command selected."
     CanceledSelection -> fail $ EmptyError "Command selection canceled."
-    Selection _selectionType cmd' ->
+    Selection selectionType cmd' ->
       if Opts.run_select opts
         then do
           resolved <- resolve_cmd project selector cmd' Select.defaults
           printf (s % "\n") resolved
         else do
-          let project_selector select_opts shell' =
-                cd (project_path project)
-                  >> selector (select_opts <> Select.title (show_command cmd')) shell'
-          env' <- resolve_env project project_selector cmd' (Opts.run_args opts)
-          evaluate cmd' (Just $ project_path project) env'
+          case selectionType of
+            Select.Default -> runCmd project cmd' (Opts.run_args opts)
+            Select.Edit -> editCmd project cmd' (Opts.run_args opts)
+            Select.Show -> showCmd cmd'
+            Select.Visit -> visitCmd cmd'
+
+-- | Actually run a command
+runCmd :: Project -> Command -> [Text] -> Nixon ()
+runCmd project cmd args = do
+  selector <- Backend.selector <$> getBackend
+  let project_selector select_opts shell' =
+        cd (project_path project)
+          >> selector (select_opts <> Select.title (show_command cmd)) shell'
+  env' <- resolve_env project project_selector cmd args
+  evaluate cmd (Just $ project_path project) env'
+
+-- | Edit the command source before execution
+editCmd :: Project -> Command -> [Text] -> Nixon ()
+editCmd project cmd args = do
+  edited <- editSelection (T.strip $ Cmd.cmdSource cmd)
+  case edited of
+    Nothing -> fail $ EmptyError "Empty command."
+    Just source -> runCmd project (cmd {Cmd.cmdSource = source}) args
+
+-- | Print the command
+showCmd :: Command -> Nixon ()
+showCmd = liftIO . T.putStrLn . Cmd.cmdSource
+
+-- | "Visit" the command where it's defined
+visitCmd :: Command -> Nixon ()
+visitCmd cmd =
+  case Cmd.cmdLocation cmd of
+    Nothing -> fail $ NixonError "Unable to find command location."
+    Just loc -> do
+      let args =
+            [ format fp $ Cmd.cmdFilePath loc,
+              format ("+" % d) $ Cmd.cmdLineNr loc
+            ]
+      -- TODO: Replace with $EDITOR
+      run ("vim" :| args) Nothing []
 
 -- | Resolve all command environment variable placeholders.
 resolve_env :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Nixon.Process.Env
@@ -154,6 +199,14 @@ getBackend = do
     Fzf -> fzfBackend cfg
     Rofi -> rofiBackend cfg
 
+-- | Use readline to manipulate/change a fzf selection
+editSelection :: (MonadIO m, MonadMask m) => Text -> m (Maybe Text)
+editSelection selection = runInputT defaultSettings $ do
+  line <- getInputLineWithInitial "> " (T.unpack selection, "")
+  pure $ case line of
+    Just "" -> Nothing
+    line' -> T.pack <$> line'
+
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
 project_action projects opts
@@ -178,7 +231,7 @@ project_action projects opts
           then liftIO $ printf (fp % "\n") (project_path project)
           else
             let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_args opts) (Opts.proj_list opts) (Opts.proj_select opts)
-             in run_cmd project opts'
+             in findAndHandleCmd project opts'
 
 -- | Run a command from current directory
 run_action :: RunOpts -> Nixon ()
@@ -187,7 +240,7 @@ run_action opts = do
   project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
   if Opts.run_list opts
     then list_commands project >>= liftIO . mapM_ (T.putStrLn . show_command_with_description)
-    else run_cmd project opts
+    else findAndHandleCmd project opts
 
 die :: (Show a, MonadIO m) => a -> m b
 die err = liftIO $ log_error (format w err) >> exit (ExitFailure 1)
@@ -211,6 +264,7 @@ nixon_with_config user_config = liftIO $ do
         run_action run_opts
   case err of
     Left (EmptyError msg) -> die msg
+    Left (NixonError msg) -> die msg
     Right _ -> pure ()
 
 nixon_completer :: MonadIO m => Config.Config -> CompletionType -> [String] -> m [String]

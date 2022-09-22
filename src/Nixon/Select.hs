@@ -44,7 +44,7 @@ import Turtle
     textToLine,
   )
 
-data SelectionType = Default | Alternate Int deriving (Eq, Show)
+data SelectionType = Default | Edit | Show | Visit deriving (Eq, Show)
 
 data Selection a
   = EmptySelection

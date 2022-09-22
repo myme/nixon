@@ -14,11 +14,11 @@ module Nixon.Backend.Fzf
     fzfFilter,
     fzfPreview,
     fzfProjectCommand,
-    fzfWithEdit,
     fzfWithNth,
     fzfNoSort,
     fzfDefaults,
     fzfBuildArgs,
+    fzfExpect,
   )
 where
 
@@ -47,11 +47,6 @@ import Nixon.Utils
     shell_to_list,
     takeToSpace,
     toLines,
-  )
-import System.Console.Haskeline
-  ( defaultSettings,
-    getInputLineWithInitial,
-    runInputT,
   )
 import Turtle
   ( Alternative ((<|>)),
@@ -84,12 +79,13 @@ fzfBackend cfg =
    in Backend
         { projectSelector = fzfProjects fzf_opts',
           commandSelector = fzfProjectCommand fzf_opts',
-          selector = fzfWithEdit . fzf_opts
+          selector = fzf . fzf_opts
         }
 
 data FzfOpts = FzfOpts
   { _border :: Bool,
     _exact :: Maybe Bool,
+    _expectKeys :: [(Text, SelectionType)],
     _ignoreCase :: Maybe Bool,
     _header :: Maybe Text,
     _height :: Maybe Integer,
@@ -114,6 +110,7 @@ instance Semigroup FzfOpts where
     FzfOpts
       { _border = _border right || _border left,
         _exact = _exact right <|> _exact left,
+        _expectKeys = _expectKeys right <|> _expectKeys left,
         _ignoreCase = _ignoreCase right <|> _ignoreCase left,
         _header = _header right <|> _header left,
         _height = _height right <|> _height left,
@@ -129,6 +126,7 @@ fzfDefaults =
   FzfOpts
     { _border = False,
       _exact = Nothing,
+      _expectKeys = [],
       _ignoreCase = Nothing,
       _header = Nothing,
       _height = Nothing,
@@ -147,6 +145,9 @@ fzfBorder = fzfDefaults {_border = True}
 
 fzfExact :: Bool -> FzfOpts
 fzfExact enable = fzfDefaults {_exact = Just enable}
+
+fzfExpect :: Text -> SelectionType -> FzfOpts
+fzfExpect key selection = fzfDefaults {_expectKeys = [(key, selection)]}
 
 fzfIgnoreCase :: Bool -> FzfOpts
 fzfIgnoreCase enable = fzfDefaults {_ignoreCase = Just enable}
@@ -181,18 +182,23 @@ formatFieldIndex AllFields = ".."
 
 fzfBuildArgs :: FzfOpts -> [Text]
 fzfBuildArgs opts =
-  build_args
-    [ flag "--border" (_border opts),
-      flag "--exact" =<< _exact opts,
-      flag "-i" =<< _ignoreCase opts,
-      arg "--header" =<< _header opts,
-      arg "--height" . format (d % "%") =<< _height opts,
-      arg "--query" =<< _query opts,
-      arg "--filter" =<< _filter opts,
-      arg "--preview" =<< _preview opts,
-      arg "--with-nth" . formatFieldIndex =<< _withNth opts,
-      flag "--no-sort" (_noSort opts)
-    ]
+  let expect =
+        if null $ _expectKeys opts
+          then Nothing
+          else Just $ T.intercalate "," (map fst $ _expectKeys opts)
+   in build_args
+        [ flag "--border" (_border opts),
+          flag "--exact" =<< _exact opts,
+          arg "--expect" =<< expect,
+          flag "-i" =<< _ignoreCase opts,
+          arg "--header" =<< _header opts,
+          arg "--height" . format (d % "%") =<< _height opts,
+          arg "--query" =<< _query opts,
+          arg "--filter" =<< _filter opts,
+          arg "--preview" =<< _preview opts,
+          arg "--with-nth" . formatFieldIndex =<< _withNth opts,
+          flag "--no-sort" (_noSort opts)
+        ]
 
 fzfRaw :: MonadIO m => FzfOpts -> Shell Line -> m (Selection Text)
 fzfRaw opts candidates = do
@@ -200,7 +206,6 @@ fzfRaw opts candidates = do
         Just filter -> ["--filter", filter]
         Nothing ->
           "-1" :
-          "--expect=alt-enter" :
           "--ansi" :
           fzfBuildArgs opts
   (code, out) <- procStrict "fzf" args candidates
@@ -210,10 +215,15 @@ fzfRaw opts candidates = do
       ExitFailure 1 -> EmptySelection
       ExitFailure 130 -> CanceledSelection
       ExitFailure _ -> undefined
-      ExitSuccess -> case T.lines out of
-        ["", selection] -> Selection Default selection
-        ["alt-enter", selection] -> Selection (Alternate 0) selection
-        _ -> undefined
+      ExitSuccess ->
+        if null $ _expectKeys opts
+          then Selection Default out
+          else case T.lines out of
+            ["", selection] -> Selection Default selection
+            [key, selection] -> case lookup key $ _expectKeys opts of
+              Just alternative -> Selection alternative selection
+              Nothing -> EmptySelection
+            _ -> EmptySelection
 
 fzf :: MonadIO m => FzfOpts -> Shell Candidate -> m (Selection Text)
 fzf opts candidates = do
@@ -227,15 +237,6 @@ fzf opts candidates = do
     Selection t sel -> maybe EmptySelection (Selection t) sel
     CanceledSelection -> CanceledSelection
     EmptySelection -> EmptySelection
-
-fzfWithEdit :: (MonadIO m, MonadMask m) => FzfOpts -> Shell Candidate -> m (Selection Text)
-fzfWithEdit opts candidates =
-  fzf opts candidates >>= \case
-    Selection (Alternate idx) selection ->
-      fzfEditSelection selection >>= \case
-        Just selection' -> pure $ Selection (Alternate idx) selection'
-        Nothing -> pure EmptySelection
-    x -> pure x
 
 fzfFormatProjectName :: MonadIO m => Project -> m (Text, Project)
 fzfFormatProjectName project = do
@@ -261,15 +262,14 @@ fzfProjectCommand :: (MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -
 fzfProjectCommand opts project popts commands = do
   let candidates = map (show_command_with_description &&& id) commands
       header = format ("Select command [" % fp % "] (" % fp % ")") (project_name project) (project_dir project)
-      opts' = opts <> fzfHeader header <> maybe mempty fzfQuery (Options.run_command popts) <> fzfNoSort
+      opts' =
+        opts
+          <> fzfHeader header
+          <> maybe mempty fzfQuery (Options.run_command popts)
+          <> fzfNoSort
+          <> fzfExpect "alt-enter" Edit
+          <> fzfExpect "f1" Show
+          <> fzfExpect "f2" Visit
       input' = Select.Identity <$> select (fst <$> candidates)
   selection <- fmap (`lookup` candidates) <$> fzf opts' input'
   pure $ Select.unwrapMaybeSelection selection
-
--- | Use readline to manipulate/change a fzf selection
-fzfEditSelection :: (MonadIO m, MonadMask m) => Text -> m (Maybe Text)
-fzfEditSelection selection = runInputT defaultSettings $ do
-  line <- getInputLineWithInitial "> " (T.unpack selection, "")
-  pure $ case line of
-    Just "" -> Nothing
-    line' -> T.pack <$> line'
