@@ -9,6 +9,7 @@ module Nixon.Process
     run,
     run_with_output,
     spawn,
+    HasProc (..),
   )
 where
 
@@ -20,15 +21,19 @@ import System.Posix (createSession, forkProcess, getEnvironment)
 import System.Process (CreateProcess (cwd, env), proc)
 import Turtle
   ( Alternative (empty),
+    ExitCode,
     FilePath,
+    Line,
     MonadIO (..),
     Text,
     format,
     fp,
+    procStrict,
     sh,
     system,
     void,
   )
+import Turtle.Shell (Shell)
 import Prelude hiding (FilePath)
 
 type Cwd = Maybe FilePath
@@ -81,3 +86,9 @@ spawn cmd cwd' env' = liftIO $
     forkProcess $ do
       _ <- createSession
       run cmd cwd' env'
+
+class Monad m => HasProc m where
+  proc' :: Text -> [Text] -> Shell Line -> m (ExitCode, Text)
+
+instance HasProc IO where
+  proc' = procStrict

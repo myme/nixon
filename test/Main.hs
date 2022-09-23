@@ -12,6 +12,7 @@ import           Test.Nixon.Logging
 import           Test.QuickCheck
 import           Test.QuickCheck.Instances.Text ()
 import Test.Nixon.Backend.Fzf (fzf)
+import Test.Nixon.Process (process)
 
 empty :: Monad m => a -> m (Selection Text)
 empty = const (pure EmptySelection)
@@ -42,6 +43,8 @@ main = hspec $ do
     describe "Markdown" markdown_tests
 
   describe "Logging" logging
+
+  describe "Process" process
 
   describe "Utils" $ do
     describe "escape" $ do
