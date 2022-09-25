@@ -23,7 +23,6 @@ module Nixon.Backend.Fzf
 where
 
 import Control.Arrow (second, (&&&))
-import Control.Monad.Catch (MonadMask)
 import Data.List (sort)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, isJust)
@@ -257,7 +256,7 @@ fzfProjects opts query projects = do
   pure $ Select.unwrapMaybeSelection ((`Map.lookup` candidates) <$> selection)
 
 -- | Find commands applicable to a project
-fzfProjectCommand :: (HasProc m, MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Selection Command)
+fzfProjectCommand :: (HasProc m, MonadIO m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Selection Command)
 fzfProjectCommand opts project popts commands = do
   let candidates = map (show_command_with_description &&& id) commands
       header = format ("Select command [" % fp % "] (" % fp % ")") (project_name project) (project_dir project)
