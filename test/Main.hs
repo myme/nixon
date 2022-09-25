@@ -11,7 +11,7 @@ import           Test.Nixon.Config.Markdown
 import           Test.Nixon.Logging
 import           Test.QuickCheck
 import           Test.QuickCheck.Instances.Text ()
-import Test.Nixon.Backend.Fzf (fzf)
+import Test.Nixon.Backend.Fzf (fzfTests)
 import Test.Nixon.Process (process)
 
 empty :: Monad m => a -> m (Selection Text)
@@ -35,7 +35,7 @@ instance Arbitrary NonWsText where
 
 main :: IO ()
 main = hspec $ do
-  describe "Backend.Fzf" fzf
+  describe "Backend.Fzf" fzfTests
 
   describe "Command" command
 
