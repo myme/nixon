@@ -7,16 +7,18 @@ module Test.Nixon.Backend.Fzf where
 
 import Data.Functor ((<&>))
 import qualified Data.Text as T
+import Nixon.Backend.Fzf (fzf, fzfExpect, fzfFilter, fzfProjects)
 import qualified Nixon.Backend.Fzf as Fzf
+import qualified Nixon.Command as Cmd
+import Nixon.Project (Project (..))
+import Nixon.Select (Candidate (Identity), Selection (..), SelectionType (Default, Edit))
+import System.Exit (ExitCode (..))
 import Test.Hspec
+import Test.Nixon.TestLib (runProc)
 import Test.QuickCheck (Testable (property), chooseAny, oneof)
 import Test.QuickCheck.Property (forAll)
 import Turtle (d, format, (%))
 import Turtle.Shell (select)
-import Test.Nixon.TestLib (runProc)
-import System.Exit (ExitCode(..))
-import Nixon.Backend.Fzf (fzf)
-import Nixon.Select (Selection(..), Candidate (Identity), SelectionType (Default))
 
 monoid_law :: (Monoid m, Eq m, Show m) => (a -> m) -> a -> Expectation
 monoid_law f x = f x <> mempty `shouldBe` mempty <> f x
@@ -149,4 +151,63 @@ fzfTests = do
 
           result3 <- runProc (ExitSuccess, "3") $ fzf mempty (select candidates)
           result3 `shouldBe` Selection Default "three"
+
+        describe "Filter" $ do
+          it "Passes result straight through" $ do
+            let candidates = map Identity ["one", "two", "three"]
+                opts = fzfFilter "two"
+
+            result <- runProc (ExitSuccess, "two") $ fzf opts (select candidates)
+            result `shouldBe` Selection Default "two"
+
+          it "Passes multi-line output through" $ do
+            let candidates = map Identity ["one", "two", "three", "oneone"]
+                opts = fzfFilter "one"
+
+            result <- runProc (ExitSuccess, "one\noneone") $ fzf opts (select candidates)
+            result `shouldBe` Selection Default "one\noneone"
+
+        describe "Expect keys" $ do
+          it "Parses expected keys for default selection" $ do
+            let candidates = map Identity ["one", "two", "three"]
+                opts = fzfExpect "alt-enter" Edit
+
+            result <- runProc (ExitSuccess, "\n1") $ fzf opts (select candidates)
+            result `shouldBe` Selection Default "one"
+
+          it "Parses expected keys for alternative selection" $ do
+            let candidates = map Identity ["one", "two", "three"]
+                opts = fzfExpect "alt-enter" Edit
+
+            result <- runProc (ExitSuccess, "alt-enter\n1") $ fzf opts (select candidates)
+            result `shouldBe` Selection Edit "one"
+
+          it "Ignores expect keys first line when using filter" $ do
+            let candidates = map Identity ["one", "two", "three"]
+                opts = fzfExpect "alt-enter" Edit <> fzfFilter "two"
+
+            result <- runProc (ExitSuccess, "two") $ fzf opts (select candidates)
+            result `shouldBe` Selection Default "two"
+
+        describe "fzfPojects" $ do
+          it "finds projects" $ do
+            let project1 = Project "test-project" "/some/path" []
+                projects = [project1]
+            result <- runProc (ExitSuccess, "1") $ fzfProjects mempty Nothing projects
+            result `shouldBe` Selection Default project1
+
+        describe "fzfPojectCommand" $ do
+          it "finds project command with default selection" $ do
+            let project1 = Project "test-project" "/some/path" []
+                command1 = Cmd.empty
+                commands = [command1]
+            result <- runProc (ExitSuccess, "\n1") $ Fzf.fzfProjectCommand mempty project1 mempty commands
+            result `shouldBe` Selection Default command1
+
+          it "finds project command with edit selection" $ do
+            let project1 = Project "test-project" "/some/path" []
+                command1 = Cmd.empty
+                commands = [command1]
+            result <- runProc (ExitSuccess, "alt-enter\n1") $ Fzf.fzfProjectCommand mempty project1 mempty commands
+            result `shouldBe` Selection Edit command1
     )

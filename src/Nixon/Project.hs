@@ -53,7 +53,7 @@ data Project = Project
     project_dir :: FilePath,
     project_types :: [ProjectType]
   }
-  deriving (Show)
+  deriving (Eq, Show)
 
 from_path :: FilePath -> Project
 from_path path' =

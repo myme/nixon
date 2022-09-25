@@ -25,7 +25,7 @@ where
 import Control.Arrow (second, (&&&))
 import Data.List (sort)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isJust)
 import Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
 import Nixon.Backend (Backend (..))
@@ -205,21 +205,19 @@ fzfRaw opts candidates = do
           "--ansi" :
           fzfBuildArgs opts
   (code, out) <- proc' "fzf" args candidates
-  pure $ case _filter opts of
-    Just _ -> Selection Default out
-    Nothing -> case code of
-      ExitFailure 1 -> EmptySelection
-      ExitFailure 130 -> CanceledSelection
-      ExitFailure _ -> undefined
-      ExitSuccess ->
-        if null $ _expectKeys opts
-          then Selection Default out
-          else case T.lines out of
-            ["", selection] -> Selection Default selection
-            [key, selection] -> case lookup key $ _expectKeys opts of
-              Just alternative -> Selection alternative selection
-              Nothing -> EmptySelection
-            _ -> EmptySelection
+  pure $ case code of
+    ExitFailure 1 -> EmptySelection
+    ExitFailure 130 -> CanceledSelection
+    ExitFailure _ -> undefined
+    ExitSuccess ->
+      if isJust (_filter opts) || null (_expectKeys opts)
+        then Selection Default out
+        else case T.lines out of
+          ["", selection] -> Selection Default selection
+          [key, selection] -> case lookup key $ _expectKeys opts of
+            Just alternative -> Selection alternative selection
+            Nothing -> EmptySelection
+          _ -> EmptySelection
 
 fzf :: (HasProc m, MonadIO m) => FzfOpts -> Shell Candidate -> m (Selection Text)
 fzf opts candidates = do
