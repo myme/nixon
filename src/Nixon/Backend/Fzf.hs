@@ -25,13 +25,11 @@ where
 import Control.Arrow (second, (&&&))
 import Data.List (sort)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (catMaybes)
 import Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
 import Nixon.Backend (Backend (..))
 import Nixon.Command (Command (), show_command_with_description)
-import Nixon.Config.Options (RunOpts)
-import qualified Nixon.Config.Options as Options
 import Nixon.Config.Types (Config)
 import qualified Nixon.Config.Types as Config
 import Nixon.Process (HasProc (..), arg, build_args, flag)
@@ -256,14 +254,14 @@ fzfProjects opts query projects = do
   pure $ Select.unwrapMaybeSelection ((`Map.lookup` candidates) <$> selection)
 
 -- | Find commands applicable to a project
-fzfProjectCommand :: (HasProc m, MonadIO m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Selection Command)
-fzfProjectCommand opts project popts commands = do
+fzfProjectCommand :: (HasProc m, MonadIO m) => FzfOpts -> Project -> Maybe Text -> [Command] -> m (Selection Command)
+fzfProjectCommand opts project query commands = do
   let candidates = map (show_command_with_description &&& id) commands
       header = format ("Select command [" % fp % "] (" % fp % ")") (project_name project) (project_dir project)
       opts' =
         opts
           <> fzfHeader header
-          <> maybe mempty fzfQuery (Options.run_command popts)
+          <> maybe mempty fzfQuery query
           <> fzfNoSort
           <> fzfExpect "alt-enter" Edit
           <> fzfExpect "f1" Show

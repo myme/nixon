@@ -100,7 +100,7 @@ findAndHandleCmd :: Project -> RunOpts -> Nixon ()
 findAndHandleCmd project opts = with_local_config (project_path project) $ do
   find_command <- Backend.commandSelector <$> getBackend
   cmds <- list_commands project
-  cmd <- liftIO $ find_command project opts cmds
+  cmd <- liftIO $ find_command project (Opts.run_command opts) cmds
   handleCmd project cmd opts
 
 -- | Find and run a command in a project.

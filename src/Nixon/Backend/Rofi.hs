@@ -21,8 +21,6 @@ import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Text as T
 import Nixon.Backend (Backend (..))
 import Nixon.Command (Command, show_command_with_description)
-import Nixon.Config.Options (RunOpts)
-import qualified Nixon.Config.Options as Options
 import Nixon.Config.Types (Config)
 import qualified Nixon.Config.Types as Config
 import Nixon.Process (arg, arg_fmt, build_args, flag)
@@ -174,9 +172,9 @@ rofiProjects opts query projects = do
   selection <- rofi opts' (Select.Identity <$> select candidates)
   pure $ Select.unwrapMaybeSelection ((`Map.lookup` map') <$> selection)
 
-rofiProjectCommand :: MonadIO m => RofiOpts -> RunOpts -> [Command] -> m (Selection Command)
-rofiProjectCommand opts popts commands = do
+rofiProjectCommand :: MonadIO m => RofiOpts -> Maybe Text -> [Command] -> m (Selection Command)
+rofiProjectCommand opts query commands = do
   let candidates = Select.build_map show_command_with_description commands
-      opts' = opts <> rofiPrompt "Select command" <> maybe mempty rofiQuery (Options.run_command popts)
+      opts' = opts <> rofiPrompt "Select command" <> maybe mempty rofiQuery query
   selection <- rofi opts' (Select.Identity <$> select (Map.keys candidates))
   pure $ Select.unwrapMaybeSelection ((`Map.lookup` candidates) <$> selection)
