@@ -224,13 +224,16 @@ fzf opts candidates = do
   let mkidx = zip (map (T.pack . show) [1 :: Int ..])
       mkout = map (uncurry (format (s % " " % s)) . second Select.candidate_title)
       mkmap = Map.fromList . map (second Select.candidate_value)
-  (cs_input, cs) <- (mkout &&& mkmap) . mkidx <$> shell_to_list candidates
-  selection <- fzfRaw (opts <> fzfWithNth (FieldFrom 2)) (toLines $ select cs_input)
-  let selected = fmap stripAnsiEscapeCodes . flip Map.lookup cs . takeToSpace <$> selection
-  pure $ case selected of
-    Selection t sel -> maybe EmptySelection (Selection t) sel
-    CanceledSelection -> CanceledSelection
-    EmptySelection -> EmptySelection
+  if isJust $ _filter opts
+    then fzfRaw opts $ toLines $ Select.candidate_title <$> candidates
+    else do
+      (cs_input, cs) <- (mkout &&& mkmap) . mkidx <$> shell_to_list candidates
+      selection <- fzfRaw (opts <> fzfWithNth (FieldFrom 2)) (toLines $ select cs_input)
+      let selected = fmap stripAnsiEscapeCodes . flip Map.lookup cs . takeToSpace <$> selection
+      pure $ case selected of
+        Selection t sel -> maybe EmptySelection (Selection t) sel
+        CanceledSelection -> CanceledSelection
+        EmptySelection -> EmptySelection
 
 fzfFormatProjectName :: MonadIO m => Project -> m (Text, Project)
 fzfFormatProjectName project = do

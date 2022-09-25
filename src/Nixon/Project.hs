@@ -16,6 +16,7 @@ module Nixon.Project
   )
 where
 
+import Control.Applicative (empty, (<|>))
 import qualified Control.Foldl as Fold
 import Control.Monad (filterM)
 import Data.Function (on)
@@ -164,15 +165,15 @@ find_project ptypes source_dir = do
 find_projects :: MonadIO m => Integer -> [ProjectType] -> [FilePath] -> m [Project]
 find_projects max_depth ptypes source_dirs
   | max_depth < 0 = pure []
-  | otherwise = reduce Fold.list $ do
+  | otherwise = reduce Fold.mconcat $ do
     expanded <- liftIO $ concat <$> traverse expand_path source_dirs
     candidate <- select expanded
     guard =<< testdir candidate
-    subprojects <- do
-      children <- ls candidate
-      liftIO $ find_projects (max_depth - 1) ptypes [children]
-    project <- liftIO (find_project ptypes candidate)
-    select $ maybe subprojects (: subprojects) project
+    let project = maybe empty pure <$> liftIO (find_project ptypes candidate)
+        subprojects = do
+          children <- ls candidate
+          liftIO $ find_projects (max_depth - 1) ptypes [children]
+    project <|> subprojects
 
 expand_path :: MonadIO m => FilePath -> m [FilePath]
 expand_path path' = do
