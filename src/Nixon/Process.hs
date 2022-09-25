@@ -35,6 +35,7 @@ import Turtle
   )
 import Turtle.Shell (Shell)
 import Prelude hiding (FilePath)
+import Control.Monad.Trans.Reader (ReaderT)
 
 type Cwd = Maybe FilePath
 
@@ -92,3 +93,6 @@ class Monad m => HasProc m where
 
 instance HasProc IO where
   proc' = procStrict
+
+instance MonadIO m => HasProc (ReaderT a m) where
+  proc' cmd args input = liftIO $ proc' cmd args input

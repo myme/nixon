@@ -26,7 +26,7 @@ import Control.Arrow (second, (&&&))
 import Control.Monad.Catch (MonadMask)
 import Data.List (sort)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isJust)
 import Data.String.AnsiEscapeCodes.Strip.Text (stripAnsiEscapeCodes)
 import qualified Data.Text as T
 import Nixon.Backend (Backend (..))
@@ -35,7 +35,7 @@ import Nixon.Config.Options (RunOpts)
 import qualified Nixon.Config.Options as Options
 import Nixon.Config.Types (Config)
 import qualified Nixon.Config.Types as Config
-import Nixon.Process (arg, build_args, flag)
+import Nixon.Process (HasProc (..), arg, build_args, flag)
 import Nixon.Project
   ( Project (project_dir, project_name),
     project_path,
@@ -58,7 +58,6 @@ import Turtle
     d,
     format,
     fp,
-    procStrict,
     s,
     select,
     (%),
@@ -200,7 +199,7 @@ fzfBuildArgs opts =
           flag "--no-sort" (_noSort opts)
         ]
 
-fzfRaw :: MonadIO m => FzfOpts -> Shell Line -> m (Selection Text)
+fzfRaw :: HasProc m => FzfOpts -> Shell Line -> m (Selection Text)
 fzfRaw opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
@@ -208,7 +207,7 @@ fzfRaw opts candidates = do
           "-1" :
           "--ansi" :
           fzfBuildArgs opts
-  (code, out) <- procStrict "fzf" args candidates
+  (code, out) <- proc' "fzf" args candidates
   pure $ case _filter opts of
     Just _ -> Selection Default out
     Nothing -> case code of
@@ -225,7 +224,7 @@ fzfRaw opts candidates = do
               Nothing -> EmptySelection
             _ -> EmptySelection
 
-fzf :: MonadIO m => FzfOpts -> Shell Candidate -> m (Selection Text)
+fzf :: (HasProc m, MonadIO m) => FzfOpts -> Shell Candidate -> m (Selection Text)
 fzf opts candidates = do
   let mkidx = zip (map (T.pack . show) [1 :: Int ..])
       mkout = map (uncurry (format (s % " " % s)) . second Select.candidate_title)
@@ -244,7 +243,7 @@ fzfFormatProjectName project = do
   pure (format fp path, project)
 
 -- | Find projects
-fzfProjects :: MonadIO m => FzfOpts -> Maybe Text -> [Project] -> m (Selection Project)
+fzfProjects :: (HasProc m, MonadIO m) => FzfOpts -> Maybe Text -> [Project] -> m (Selection Project)
 fzfProjects opts query projects = do
   candidates <- Map.fromList <$> traverse fzfFormatProjectName projects
   let opts' =
@@ -258,7 +257,7 @@ fzfProjects opts query projects = do
   pure $ Select.unwrapMaybeSelection ((`Map.lookup` candidates) <$> selection)
 
 -- | Find commands applicable to a project
-fzfProjectCommand :: (MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Selection Command)
+fzfProjectCommand :: (HasProc m, MonadIO m, MonadMask m) => FzfOpts -> Project -> RunOpts -> [Command] -> m (Selection Command)
 fzfProjectCommand opts project popts commands = do
   let candidates = map (show_command_with_description &&& id) commands
       header = format ("Select command [" % fp % "] (" % fp % ")") (project_name project) (project_dir project)
