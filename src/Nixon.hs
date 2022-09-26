@@ -33,7 +33,7 @@ import Nixon.Logging (log_error, log_info)
 import Nixon.Process (Env, run, run_with_output)
 import Nixon.Project (Project, ProjectType (..), project_path)
 import qualified Nixon.Project as P
-import Nixon.Select (Selection (..), Selector)
+import Nixon.Select (Candidate (..), Selection (..), Selector)
 import qualified Nixon.Select as Select
 import Nixon.Types
   ( Config (commands, project_dirs, project_types),
@@ -59,23 +59,33 @@ import Turtle
     printf,
     pwd,
     s,
-    select,
     stream,
     w,
     (%),
   )
+import qualified Turtle
 import qualified Turtle.Bytes as BS
 import Prelude hiding (FilePath, fail, log)
 
--- | List projects, filtering if a filter is specified.
-list_projects :: [Project] -> Maybe Text -> Nixon ()
-list_projects projects query = do
+-- | List projects, filtering if a query is specified.
+listProjects :: [Project] -> Maybe Text -> Nixon ()
+listProjects projects query = do
   let fmt_line = fmap (Select.Identity . format fp)
   paths <- liftIO $ fmt_line <$> traverse (implode_home . project_path) projects
   let fzf_opts = fzfFilter $ fromMaybe "" query
   liftIO (fzf fzf_opts (Turtle.select paths)) >>= \case
     Selection _ matching -> liftIO $ T.putStr matching
     _ -> log_error "No projects."
+
+-- | List commands for a project, filtering if a query is specified
+listProjectCommands :: Project -> Maybe Text -> Nixon ()
+listProjectCommands project query = do
+  commands <- map show_command_with_description <$> findProjectCommands project
+  let fzfOpts = fzfFilter $ fromMaybe "" query
+  selection <- fzf fzfOpts (Turtle.select $ Identity <$> commands)
+  case selection of
+    Selection _ matching -> liftIO $ T.putStr matching
+    _ -> log_error "No commands."
 
 fail :: MonadIO m => NixonError -> m a
 fail err = liftIO (throwIO err)
@@ -87,8 +97,8 @@ with_local_config filepath action = do
     Nothing -> action
     Just cfg -> local (\env -> env {config = config env <> cfg}) action
 
-list_commands :: Project -> Nixon [Command]
-list_commands project = filter filter_cmd . commands . config <$> ask
+findProjectCommands :: Project -> Nixon [Command]
+findProjectCommands project = filter filter_cmd . commands . config <$> ask
   where
     ptypes = map project_id $ P.project_types project
     filter_cmd cmd =
@@ -99,7 +109,7 @@ list_commands project = filter filter_cmd . commands . config <$> ask
 findAndHandleCmd :: Project -> RunOpts -> Nixon ()
 findAndHandleCmd project opts = with_local_config (project_path project) $ do
   find_command <- Backend.commandSelector <$> getBackend
-  cmds <- list_commands project
+  cmds <- findProjectCommands project
   cmd <- liftIO $ find_command project (Opts.run_command opts) cmds
   handleCmd project cmd opts
 
@@ -186,7 +196,7 @@ resolve_cmd project selector cmd select_opts = do
         output <- BS.strict jsonEval
         case eitherDecodeStrict output :: Either String [Select.Candidate] of
           Left err -> error err
-          Right candidates -> select candidates
+          Right candidates -> Turtle.select candidates
   case selection of
     Selection _ result -> pure result
     _ -> error "Argument expansion aborted"
@@ -210,7 +220,7 @@ editSelection selection = runInputT defaultSettings $ do
 -- | Find/filter out a project and perform an action.
 project_action :: [Project] -> ProjectOpts -> Nixon ()
 project_action projects opts
-  | Opts.proj_list opts = list_projects projects (Opts.proj_project opts)
+  | Opts.proj_list opts = listProjects projects (Opts.proj_project opts)
   | otherwise = do
     ptypes <- project_types . config <$> ask
     projectSelector <- Backend.projectSelector <$> getBackend
@@ -239,7 +249,7 @@ run_action opts = do
   ptypes <- project_types . config <$> ask
   project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
   if Opts.run_list opts
-    then list_commands project >>= liftIO . mapM_ (T.putStrLn . show_command_with_description)
+    then listProjectCommands project (Opts.run_command opts)
     else findAndHandleCmd project opts
 
 die :: (Show a, MonadIO m) => a -> m b
@@ -286,7 +296,7 @@ nixon_completer user_config comp_type args = do
               let p' = find ((==) p . T.unpack . format fp . P.project_name) projects
               pure $ fromMaybe current p'
             _ -> liftIO $ P.find_in_project_or_default ptypes =<< pwd
-          commands <- with_local_config (project_path project) $ list_commands project
+          commands <- with_local_config (project_path project) $ findProjectCommands project
           pure $ map (T.unpack . cmdName) commands
 
 -- | Nixon with default configuration
