@@ -1,6 +1,6 @@
 module Nixon
   ( nixon,
-    nixon_with_config,
+    nixonWithConfig,
   )
 where
 
@@ -91,8 +91,8 @@ fail :: MonadIO m => NixonError -> m a
 fail err = liftIO (throwIO err)
 
 -- | Attempt to parse a local JSON
-with_local_config :: FilePath -> Nixon a -> Nixon a
-with_local_config filepath action = do
+withLocalConfig :: FilePath -> Nixon a -> Nixon a
+withLocalConfig filepath action = do
   liftIO (Config.find_local_config filepath) >>= \case
     Nothing -> action
     Just cfg -> local (\env -> env {config = config env <> cfg}) action
@@ -107,7 +107,7 @@ findProjectCommands project = filter filter_cmd . commands . config <$> ask
 
 -- | Find and handle a command in a project.
 findAndHandleCmd :: Project -> RunOpts -> Nixon ()
-findAndHandleCmd project opts = with_local_config (project_path project) $ do
+findAndHandleCmd project opts = withLocalConfig (project_path project) $ do
   find_command <- Backend.commandSelector <$> getBackend
   cmds <- findProjectCommands project
   cmd <- liftIO $ find_command project (Opts.run_command opts) cmds
@@ -123,7 +123,7 @@ handleCmd project cmd opts = do
     Selection selectionType cmd' ->
       if Opts.run_select opts
         then do
-          resolved <- resolve_cmd project selector cmd' Select.defaults
+          resolved <- resolveCmd project selector cmd' Select.defaults
           printf (s % "\n") resolved
         else do
           case selectionType of
@@ -139,7 +139,7 @@ runCmd project cmd args = do
   let project_selector select_opts shell' =
         cd (project_path project)
           >> selector (select_opts <> Select.title (show_command cmd)) shell'
-  env' <- resolve_env project project_selector cmd args
+  env' <- resolveEnv project project_selector cmd args
   evaluate cmd (Just $ project_path project) env'
 
 -- | Edit the command source before execution
@@ -168,24 +168,24 @@ visitCmd cmd =
       run ("vim" :| args) Nothing []
 
 -- | Resolve all command environment variable placeholders.
-resolve_env :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Nixon.Process.Env
-resolve_env project selector cmd args = do
+resolveEnv :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Nixon.Process.Env
+resolveEnv project selector cmd args = do
   vars <- mapM resolve_each $ zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
   pure $ nixon_envs ++ vars
   where
     nixon_envs = [("nixon_project_path", format fp $ project_path project)]
     resolve_each ((name, Env cmd'), select_opts) =
       (name,)
-        <$> ( assert_command cmd' >>= \c -> resolve_cmd project selector c select_opts
+        <$> ( assert_command cmd' >>= \c -> resolveCmd project selector c select_opts
             )
     assert_command cmd_name = do
       cmd' <- find ((==) cmd_name . cmdName) . commands . config <$> ask
       maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
 
 -- | Resolve command to selectable output.
-resolve_cmd :: Project -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon Text
-resolve_cmd project selector cmd select_opts = do
-  env' <- resolve_env project selector cmd []
+resolveCmd :: Project -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon Text
+resolveCmd project selector cmd select_opts = do
+  env' <- resolveEnv project selector cmd []
   let path' = Just $ project_path project
   linesEval <- getEvaluator (run_with_output stream) cmd path' env'
   jsonEval <- getEvaluator (run_with_output BS.stream) cmd path' env'
@@ -218,21 +218,21 @@ editSelection selection = runInputT defaultSettings $ do
     line' -> T.pack <$> line'
 
 -- | Find/filter out a project and perform an action.
-project_action :: [Project] -> ProjectOpts -> Nixon ()
-project_action projects opts
+projectAction :: [Project] -> ProjectOpts -> Nixon ()
+projectAction projects opts
   | Opts.proj_list opts = listProjects projects (Opts.proj_project opts)
   | otherwise = do
     ptypes <- project_types . config <$> ask
     projectSelector <- Backend.projectSelector <$> getBackend
 
-    let find_project' (Just ".") = do
+    let findProject (Just ".") = do
           inProject <- P.find_in_project ptypes =<< pwd
           case inProject of
             Nothing -> projectSelector Nothing projects
             Just project -> pure $ Selection Select.Default project
-        find_project' query = projectSelector query projects
+        findProject query = projectSelector query projects
 
-    selection <- liftIO $ find_project' (Opts.proj_project opts)
+    selection <- liftIO $ findProject (Opts.proj_project opts)
     case selection of
       EmptySelection -> liftIO (throwIO $ EmptyError "No command selected.")
       CanceledSelection -> liftIO (throwIO $ EmptyError "Command selection canceled.")
@@ -244,8 +244,8 @@ project_action projects opts
              in findAndHandleCmd project opts'
 
 -- | Run a command from current directory
-run_action :: RunOpts -> Nixon ()
-run_action opts = do
+runAction :: RunOpts -> Nixon ()
+runAction opts = do
   ptypes <- project_types . config <$> ask
   project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
   if Opts.run_list opts
@@ -257,37 +257,37 @@ die err = liftIO $ log_error (format w err) >> exit (ExitFailure 1)
 
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
-nixon_with_config :: MonadIO m => Config.Config -> m ()
-nixon_with_config user_config = liftIO $ do
-  (sub_cmd, cfg) <- either die pure =<< Opts.parse_args (nixon_completer user_config)
+nixonWithConfig :: MonadIO m => Config.Config -> m ()
+nixonWithConfig userConfig = liftIO $ do
+  (sub_cmd, cfg) <- either die pure =<< Opts.parse_args (nixonCompleter userConfig)
   err <- try $
-    runNixon (user_config <> cfg) $ case sub_cmd of
-      ProjectCommand project_opts -> do
+    runNixon (userConfig <> cfg) $ case sub_cmd of
+      ProjectCommand projectOpts -> do
         log_info "Running <project> command"
         cfg' <- config <$> ask
         let ptypes = project_types cfg'
             srcs = project_dirs cfg'
         projects <- P.sort_projects <$> liftIO (P.find_projects 1 ptypes srcs)
-        project_action projects project_opts
-      RunCommand run_opts -> do
+        projectAction projects projectOpts
+      RunCommand runOpts -> do
         log_info "Running <run> command"
-        run_action run_opts
+        runAction runOpts
   case err of
     Left (EmptyError msg) -> die msg
     Left (NixonError msg) -> die msg
     Right _ -> pure ()
 
-nixon_completer :: MonadIO m => Config.Config -> CompletionType -> [String] -> m [String]
-nixon_completer user_config comp_type args = do
-  let parse_args = Opts.parse_args $ nixon_completer user_config
+nixonCompleter :: MonadIO m => Config.Config -> CompletionType -> [String] -> m [String]
+nixonCompleter userConfig compType args = do
+  let parse_args = Opts.parse_args $ nixonCompleter userConfig
   (_, cfg) <- liftIO $ either die pure =<< withArgs args parse_args
   liftIO $
-    runNixon (user_config <> cfg) $ do
+    runNixon (userConfig <> cfg) $ do
       cfg' <- config <$> ask
       let ptypes = project_types cfg'
           srcs = project_dirs cfg'
       projects <- P.sort_projects <$> liftIO (P.find_projects 1 ptypes srcs)
-      case comp_type of
+      case compType of
         Opts.Project -> pure $ map (T.unpack . format fp . P.project_name) projects
         Opts.Run -> do
           project <- case args of
@@ -296,9 +296,9 @@ nixon_completer user_config comp_type args = do
               let p' = find ((==) p . T.unpack . format fp . P.project_name) projects
               pure $ fromMaybe current p'
             _ -> liftIO $ P.find_in_project_or_default ptypes =<< pwd
-          commands <- with_local_config (project_path project) $ findProjectCommands project
+          commands <- withLocalConfig (project_path project) $ findProjectCommands project
           pure $ map (T.unpack . cmdName) commands
 
 -- | Nixon with default configuration
 nixon :: MonadIO m => m ()
-nixon = nixon_with_config Config.defaultConfig
+nixon = nixonWithConfig Config.defaultConfig
