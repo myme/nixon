@@ -4,8 +4,10 @@ module Nixon
   )
 where
 
+import Control.Applicative ((<|>))
 import Control.Exception (throwIO, try)
 import Control.Monad.Catch (MonadMask)
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Reader (ask, local)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
@@ -56,6 +58,7 @@ import Turtle
     format,
     fp,
     lineToText,
+    need,
     printf,
     pwd,
     s,
@@ -161,11 +164,15 @@ visitCmd cmd =
     Nothing -> fail $ NixonError "Unable to find command location."
     Just loc -> do
       let args =
-            [ format fp $ Cmd.cmdFilePath loc,
-              format ("+" % d) $ Cmd.cmdLineNr loc
+            [ format ("+" % d) $ Cmd.cmdLineNr loc,
+              format fp $ Cmd.cmdFilePath loc
             ]
-      -- TODO: Replace with $EDITOR
-      run ("vim" :| args) Nothing []
+      editor <-
+        fromMaybe "nano"
+          <$> runMaybeT
+            ( MaybeT (need "VISUAL") <|> MaybeT (need "EDITOR")
+            )
+      run (editor :| args) Nothing []
 
 -- | Resolve all command environment variable placeholders.
 resolveEnv :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Nixon.Process.Env
