@@ -37,6 +37,8 @@ data Command = Command
     cmdSource :: Text,
     cmdEnv :: [(Text, CommandEnv)],
     cmdIsBg :: Bool,
+    -- | Command should be hidden from selection
+    cmdIsHidden :: Bool,
     cmdOutput :: CommandOutput,
     cmdLocation :: Maybe CommandLocation
   }
@@ -58,6 +60,7 @@ empty =
       cmdSource = "",
       cmdEnv = [],
       cmdIsBg = False,
+      cmdIsHidden = False,
       cmdOutput = Lines,
       cmdLocation = Nothing
     }
@@ -71,15 +74,18 @@ mkcommand :: CommandLocation -> Text -> Maybe Text -> [Text] -> Text -> Either T
 mkcommand loc spec lang ptypes src = case parse parse_args spec of
   Left err -> Left err
   Right args ->
-    Right $
+    let name = first_word spec
+    in Right $
       Command
-        { cmdName = first_word spec,
+        { cmdName = name,
           cmdDesc = Nothing,
           cmdLang = maybe None parseLang lang,
           cmdProjectTypes = ptypes,
           cmdSource = src,
           cmdEnv = args,
           cmdIsBg = False,
+          -- Default commands starting with underscore (_) to hidden
+          cmdIsHidden = T.isPrefixOf "_" name,
           cmdOutput = Lines,
           cmdLocation = Just loc
         }
