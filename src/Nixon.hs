@@ -112,7 +112,7 @@ findProjectCommands project = filter filter_cmd . commands . config <$> ask
 findAndHandleCmd :: Project -> RunOpts -> Nixon ()
 findAndHandleCmd project opts = withLocalConfig (project_path project) $ do
   find_command <- Backend.commandSelector <$> getBackend
-  cmds <- findProjectCommands project
+  cmds <- filter (not . T.isPrefixOf "_" . Cmd.cmdName) <$> findProjectCommands project
   cmd <- liftIO $ find_command project (Opts.run_command opts) cmds
   handleCmd project cmd opts
 
