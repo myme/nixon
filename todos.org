@@ -2,7 +2,11 @@
 
 * Workflow
 
-** TODO Edit commands in $EDITOR
+** DONE Edit commands in $EDITOR
+CLOSED: [2022-10-14 Fri 00:09]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-10-14 Fri 00:09]
+:END:
 
 ** TODO Add new commands
 
