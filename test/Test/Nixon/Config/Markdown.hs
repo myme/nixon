@@ -2,15 +2,27 @@
 
 module Test.Nixon.Config.Markdown where
 
+import           Data.Char (isAlphaNum)
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Nixon.Command (CommandEnv(Env))
+import           Nixon.Command (CommandEnv (Env))
 import qualified Nixon.Command as Cmd
-import           Nixon.Config.Markdown (parseMarkdown, parseHeaderArgs)
+import           Nixon.Config.Markdown (parseHeaderArgs, parseMarkdown)
 import           Nixon.Config.Types (defaultConfig)
 import qualified Nixon.Config.Types as Cfg
-import           Nixon.Language (Language(Bash))
+import           Nixon.Language (Language (Bash))
+import           Prelude hiding (FilePath)
 import           Test.Hspec
+import           Test.QuickCheck (Testable (property), Arbitrary, arbitrary, suchThat, listOf1)
+import           Test.QuickCheck.Instances.Text ()
+import           Turtle (format, s, (%))
+
+newtype CommandName = CommandName { getCmdName :: Text } deriving Show
+
+instance Arbitrary CommandName where
+  arbitrary =
+    CommandName . T.pack
+      <$> listOf1 (arbitrary `suchThat` \c -> isAlphaNum c || c == ' ')
 
 match_error :: Text -> Either Text b -> Bool
 match_error match = either (T.isInfixOf match) (const False)
@@ -88,6 +100,20 @@ command_tests = describe "commands section" $ do
             ["# command {.command}"
             ]
       result `shouldBe` Left "Expecting source block for command"
+
+    it "parse one command" $ property $ \name body ->
+      let fmt = (
+            "# " % s % " {.command}\n" %
+            "```bash\n" %
+            s % "\n" %
+            "```")
+          parsed = parseMarkdown "config.md" $ format fmt (getCmdName name) body
+          (expectedName : _) = T.words $ getCmdName name
+      in parsed `shouldSatisfy` \case
+        Right Cfg.Config
+          { Cfg.commands =
+            [Cmd.Command { Cmd.cmdName = n }] } -> expectedName == n
+        _ -> False
 
     it "simple command name with arg" $ do
       let result = parseMarkdown "some-file.md" $ T.unlines
@@ -277,6 +303,14 @@ parse_header_tests = describe "parseHeaderArgs" $ do
 
   it "mix args and kwargs" $ do
     parseHeaderArgs "{.command type=\"git\"}" `shouldBe` ("", ["command"], [("type", "git")])
+
+  it "parse random name" $ property $ \name ->
+    parseHeaderArgs (getCmdName name) `shouldBe` (getCmdName name, [], [])
+
+  it "parse random command name" $ property $ \name ->
+    let title = format (s % " {.command}") (getCmdName name)
+        strippedName = T.strip (getCmdName name)
+    in parseHeaderArgs title `shouldBe` (strippedName, ["command"], [])
 
 markdown_tests :: SpecWith ()
 markdown_tests = do
