@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Test.Nixon.Config.Markdown where
 
 import           Data.Text (Text)
@@ -7,26 +5,27 @@ import qualified Data.Text as T
 import           Nixon.Command (CommandEnv(Env))
 import qualified Nixon.Command as Cmd
 import           Nixon.Config.Markdown (parseMarkdown, parseHeaderArgs)
-import           Nixon.Config.Types (defaultConfig)
+import           Nixon.Config.Types (defaultConfig, LogLevel (LogWarning))
 import qualified Nixon.Config.Types as Cfg
 import           Nixon.Language (Language(Bash))
 import           Test.Hspec
+import Control.Arrow ((&&&))
 
 match_error :: Text -> Either Text b -> Bool
 match_error match = either (T.isInfixOf match) (const False)
 
 config_tests :: SpecWith ()
 config_tests = describe "config section" $ do
-  it "allows empty JSON object" $ do
+  it "allows empty JSON object" $
     let result = parseMarkdown "some-file.md" $ T.unlines
           ["# Config {.config}"
           ,"```"
           ,"{}"
           ,"```"
           ]
-    result `shouldBe` Right defaultConfig
+    in result `shouldBe` Right defaultConfig
 
-  it "parses JSON structure" $ do
+  it "parses JSON structure" $
     let result = parseMarkdown "some-file.md" $ T.unlines
           ["# Config {.config}"
           ,"```"
@@ -39,243 +38,239 @@ config_tests = describe "config section" $ do
           ,"}"
           ,"```"
           ]
-    result `shouldSatisfy` \case
-      Right Cfg.Config { Cfg.exact_match = Just True
-                       , Cfg.ignore_case = Just True
-                       , Cfg.project_dirs = ["foo", "bar"]
-                       , Cfg.use_direnv = Just True
-                       , Cfg.use_nix = Just True
-      } -> True
-      _ -> False
+    in result `shouldBe`
+      Right Cfg.Config {
+        Cfg.backend = Nothing,
+        Cfg.exact_match = Just True,
+        Cfg.ignore_case = Just True,
+        Cfg.force_tty = Nothing,
+        Cfg.project_dirs = ["foo", "bar"],
+        Cfg.project_types = [],
+        Cfg.commands = [],
+        Cfg.use_direnv = Just True,
+        Cfg.use_nix = Just True,
+        Cfg.terminal = Nothing,
+        Cfg.loglevel = Just LogWarning
+      }
 
   describe "errors" $ do
-    it "without config block" $ do
+    it "without config block" $
       let result = parseMarkdown "some-file.md" $ T.unlines
             ["# Config {.config}"
             ]
-      result `shouldBe` Left "Expecting config source after header"
+      in result `shouldBe` Left "Expecting config source after header"
 
-    it "on empty JSON config block" $ do
+    it "on empty JSON config block" $
       let result = parseMarkdown "some-file.md" $ T.unlines
             ["# Config {.config}"
             ,"```json"
             ,"```"
             ]
-      result `shouldSatisfy` match_error "not enough input"
+      in result `shouldSatisfy` match_error "not enough input"
 
-    it "with unexpected bash config block" $ do
+    it "with unexpected bash config block" $
       let result = parseMarkdown "some-file.md" $ T.unlines
             ["# Config {.config}"
             ,"```bash"
             ,"```"
             ]
-      result `shouldBe` Left "Invalid config language: bash"
+      in result `shouldBe` Left "Invalid config language: bash"
 
-    it "on config JSON syntax error" $ do
+    it "on config JSON syntax error" $
       let result = parseMarkdown "some-file.md" $ T.unlines
             ["# Config {.config}"
             ,"```json"
             ,"{,}"
             ,"```"
             ]
-      result `shouldSatisfy` match_error "object key"
+      in result `shouldSatisfy` match_error "object key"
 
 command_tests :: SpecWith ()
 command_tests = describe "commands section" $ do
   describe "errors" $ do
-    it "without source block" $ do
+    it "without source block" $
       let result = parseMarkdown "some-file.md" $ T.unlines
             ["# command {.command}"
             ]
-      result `shouldBe` Left "Expecting source block for command"
+      in result `shouldBe` Left "Expecting source block for command"
 
-    it "simple command name with arg" $ do
+    it "simple command name with arg" $
       let result = parseMarkdown "some-file.md" $ T.unlines
             ["# hello {.command}"
             ,"```bash"
             ,"echo Hello World"
             ,"```"
             ]
-      result `shouldSatisfy` \case
-        Right Cfg.Config
-          { Cfg.commands =
-            [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
-        _ -> False
+          selector = fmap Cmd.cmdName . Cfg.commands
+      in selector <$> result `shouldBe` Right ["hello"]
 
-    it "simple command name with ticks" $ do
+    it "simple command name with ticks" $
       let result = parseMarkdown "some-file.md" $ T.unlines
             ["# `hello`"
             ,"```bash"
             ,"echo Hello World"
             ,"```"
             ]
-      result `shouldSatisfy` \case
-        Right Cfg.Config
-          { Cfg.commands =
-            [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
-        _ -> False
+          selector = fmap Cmd.cmdName . Cfg.commands
+      in selector <$> result `shouldBe` Right ["hello"]
 
-  it "command name is first word" $ do
+  it "command name is first word" $
     let result = parseMarkdown "some-file.md" $ T.unlines
           ["# `hello ${foo} ${bar}`"
           ,"```bash"
           ,"echo Hello World"
           ,"```"
           ]
-    result `shouldSatisfy` \case
-      Right Cfg.Config
-        { Cfg.commands =
-          [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
-      _ -> False
+        selector = fmap Cmd.cmdName . Cfg.commands
+    in selector <$> result `shouldBe` Right ["hello"]
 
-  it "extracts source block" $ do
-    let result = parseMarkdown "some-file.md" $ T.unlines
-          ["# hello {.command .bg}"
-          ,""
-          ,"Command description."
-          ,""
-          ,"```bash"
-          ,"echo Hello World"
-          ,"```"
-          ]
-    result `shouldSatisfy` \case
-      Right Cfg.Config
-        { Cfg.commands = [Cmd.Command
-          { Cmd.cmdName = "hello"
-          , Cmd.cmdLang = Bash
-          , Cmd.cmdDesc = Just "Command description."
-          , Cmd.cmdSource = "echo Hello World\n"
-          , Cmd.cmdEnv = []
-          , Cmd.cmdIsBg = True
-          }]
-        } -> True
-      _ -> False
+  it "extracts source block" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "# hello {.command .bg}",
+                "",
+                "Command description.",
+                "",
+                "```bash",
+                "echo Hello World",
+                "```"
+              ]
+        selector
+          ( Cmd.Command
+              { Cmd.cmdName = name,
+                Cmd.cmdLang = lang,
+                Cmd.cmdDesc = desc,
+                Cmd.cmdSource = source,
+                Cmd.cmdEnv = env,
+                Cmd.cmdIsBg = isBg
+              }
+            ) = (name, lang, desc, source, env, isBg)
+    in fmap selector . Cfg.commands <$> result
+          `shouldBe` Right
+            [ ("hello", Bash, Just "Command description.", "echo Hello World\n", [], True)
+            ]
 
-  it "detects command by code block" $ do
-    let result = parseMarkdown "some-file.md" $ T.unlines
-          ["# `hello`"
-          ,"```bash"
-          ,"echo Hello World"
-          ,"```"
+  it "detects command by code block" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "# `hello`",
+                "```bash",
+                "echo Hello World",
+                "```"
+              ]
+        selector
+          ( Cmd.Command
+              { Cmd.cmdName = name,
+                Cmd.cmdLang = lang,
+                Cmd.cmdSource = source,
+                Cmd.cmdEnv = env,
+                Cmd.cmdIsBg = isBg
+              }
+            ) = (name, lang, source, env, isBg)
+    in fmap selector . Cfg.commands <$> result
+          `shouldBe` Right
+            [ ("hello", Bash, "echo Hello World\n", [], False)
           ]
-    result `shouldSatisfy` \case
-      Right Cfg.Config
-        { Cfg.commands = [Cmd.Command
-          { Cmd.cmdName = "hello"
-          , Cmd.cmdLang = Bash
-          , Cmd.cmdSource = "echo Hello World\n"
-          , Cmd.cmdEnv = []
-          , Cmd.cmdIsBg = False
-          }]
-        } -> True
-      _ -> False
 
-  it "detects json output format" $ do
-    let result = parseMarkdown "some-file.md" $ T.unlines
-          ["# `hello` {.json}"
-          ,"```bash"
-          ,"echo Hello World"
-          ,"```"
-          ]
-    result `shouldSatisfy` \case
-      Right Cfg.Config
-        { Cfg.commands = [Cmd.Command
-          { Cmd.cmdName = "hello"
-          , Cmd.cmdOutput = Cmd.JSON
-          }]
-        } -> True
-      _ -> False
+  it "detects json output format" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "# `hello` {.json}",
+                "```bash",
+                "echo Hello World",
+                "```"
+              ]
+        selector = fmap (Cmd.cmdName &&& Cmd.cmdOutput) . Cfg.commands
+    in selector <$> result `shouldBe` Right [("hello", Cmd.JSON)]
 
-  it "detects project type" $ do
-    let result = parseMarkdown "some-file.md" $ T.unlines
-          ["# `hello` {type=\"git\"}"
-          ,"```bash"
-          ,"echo Hello World"
-          ,"```"
-          ]
-    result `shouldSatisfy` \case
-      Right Cfg.Config
-        { Cfg.commands = [Cmd.Command
-          { Cmd.cmdName = "hello"
-          , Cmd.cmdProjectTypes = ["git"]
-          }]
-        } -> True
-      _ -> False
+  it "detects project type" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "# `hello` {type=\"git\"}",
+                "```bash",
+                "echo Hello World",
+                "```"
+              ]
+        selector = fmap (Cmd.cmdName &&& Cmd.cmdProjectTypes) . Cfg.commands
+    in selector <$> result `shouldBe` Right [("hello", ["git"])]
 
-  it "detects background commands by &" $ do
-    let result = parseMarkdown "some-file.md" $ T.unlines
-          ["# `hello &`"
-          ,"```bash"
-          ,"echo Hello World"
-          ,"```"
-          ]
-    result `shouldSatisfy` \case
-      Right Cfg.Config
-        { Cfg.commands = [Cmd.Command
-          { Cmd.cmdName = "hello"
-          , Cmd.cmdIsBg = True
-          }]
-        } -> True
-      _ -> False
+  it "detects background commands by &" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "# `hello &`",
+                "```bash",
+                "echo Hello World",
+                "```"
+              ]
+        selector = fmap (Cmd.cmdName &&& Cmd.cmdIsBg) . Cfg.commands
+    in selector <$> result `shouldBe` Right [("hello", True)]
 
-  it "supports alternate header format" $ do
-    let result = parseMarkdown "some-file.md" $ T.unlines
-          ["`hello`"
-          ,"======="
-          ,"```bash"
-          ,"echo Hello World"
-          ,"```"
-          ]
-    result `shouldSatisfy` \case
-      Right Cfg.Config { Cfg.commands = [Cmd.Command { Cmd.cmdName = "hello" }] } -> True
-      _ -> False
+  it "supports alternate header format" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "`hello`",
+                "=======",
+                "```bash",
+                "echo Hello World",
+                "```"
+              ]
+        selector = fmap Cmd.cmdName . Cfg.commands
+    in selector <$> result `shouldBe` Right ["hello"]
 
   describe "extracts environment placeholders" $ do
-    it "fails" $ do
+    it "fails" $
       let result = parseMarkdown "some-file.md" $ T.unlines
             ["# `hello ${arg} ${another-arg} &`"
             ,"```bash"
             ,"echo Hello \"$arg\" \"$another_arg\""
             ,"```"
             ]
-      result `shouldSatisfy` \case
-        Right Cfg.Config
-          { Cfg.commands = [Cmd.Command
-            { Cmd.cmdName = "hello"
-            , Cmd.cmdIsBg = True
-            , Cmd.cmdEnv = [("arg", Env "arg"), ("another_arg", Env "another-arg")]
-            }]
-          } -> True
-        _ -> False
+          selector (Cmd.Command {
+            Cmd.cmdName = name,
+            Cmd.cmdIsBg = isBg,
+            Cmd.cmdEnv = env
+          }) = (name, isBg, env)
+      in fmap selector . Cfg.commands <$> result `shouldBe`
+        Right [(
+          "hello",
+          True,
+          [("arg", Env "arg"), ("another_arg", Env "another-arg")]
+        )]
 
 parse_header_tests :: SpecWith ()
 parse_header_tests = describe "parseHeaderArgs" $ do
-  it "extracts name" $ do
+  it "extracts name" $
     parseHeaderArgs "some header" `shouldBe` ("some header", [], [])
 
-  it "extracts name, arg and kwarg" $ do
+  it "extracts name, arg and kwarg" $
     parseHeaderArgs "some header {.some-arg some-kw=\"value\"}" `shouldBe`
       ("some header", ["some-arg"], [("some-kw", "value")])
 
-  it "extracts .bg" $ do
+  it "extracts .bg" $
     parseHeaderArgs "{.bg}" `shouldBe` ("", ["bg"], [])
 
-  it "extracts .config" $ do
+  it "extracts .config" $
     parseHeaderArgs "{.config}" `shouldBe` ("", ["config"], [])
 
-  it "extracts .command" $ do
+  it "extracts .command" $
     parseHeaderArgs "{.command}" `shouldBe` ("", ["command"], [])
 
-  it "extracts .json" $ do
+  it "extracts .json" $
     parseHeaderArgs "{.json}" `shouldBe` ("", ["json"], [])
 
-  it "extracts type" $ do
+  it "extracts type" $
     parseHeaderArgs "{type=git}" `shouldBe` ("", [], [("type", "git")])
 
-  it "extracts type with quotes" $ do
+  it "extracts type with quotes" $
     parseHeaderArgs "{type=\"git\"}" `shouldBe` ("", [], [("type", "git")])
 
-  it "mix args and kwargs" $ do
+  it "mix args and kwargs" $
     parseHeaderArgs "{.command type=\"git\"}" `shouldBe` ("", ["command"], [("type", "git")])
 
 markdown_tests :: SpecWith ()
