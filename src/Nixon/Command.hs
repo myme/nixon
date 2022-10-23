@@ -59,7 +59,11 @@ empty =
     }
 
 -- | Placeholders for environment variables
-newtype CommandEnv = Env Text deriving (Eq, Show)
+data CommandEnv = Env
+  { envName :: Text,
+    envMultiple :: Bool
+  }
+  deriving (Eq, Show)
 
 data CommandOutput = Lines | JSON deriving (Eq, Show)
 

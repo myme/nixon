@@ -241,7 +241,7 @@ command_tests = describe "commands section" $ do
         Right [(
           "hello",
           True,
-          [("arg", Env "arg"), ("another_arg", Env "another-arg")]
+          [("arg", Env "arg" False), ("another_arg", Env "another-arg" False)]
         )]
 
 parse_header_tests :: SpecWith ()
@@ -286,15 +286,19 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses arg part" $ do
     parseCommandName "cat ${arg}" `shouldBe`
-      Right ("cat", [("arg", Env "arg")])
+      Right ("cat", [("arg", Env "arg" False)])
+
+  it "parses arg modifiers" $ do
+    parseCommandName "cat ${arg:m}" `shouldBe`
+      Right ("cat", [("arg", Env "arg" True)])
 
   it "parses text and placeholder part" $ do
     parseCommandName "cat \"${arg}\"" `shouldBe`
-      Right ("cat", [("arg", Env "arg")])
+      Right ("cat", [("arg", Env "arg" False)])
 
   it "replaces '-' with '_' in $name" $ do
     parseCommandName "cat \"${some-arg}\"" `shouldBe`
-      Right ("cat", [("some_arg", Env "some-arg")])
+      Right ("cat", [("some_arg", Env "some-arg" False)])
 
   it "allows use of $ not matching '${'" $ do
     parseCommandName "echo $SOME_VAR" `shouldBe` Right ("echo", [])

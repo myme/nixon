@@ -256,6 +256,7 @@ parseCommandArg :: Parser (Text, Cmd.CommandEnv)
 parseCommandArg = do
   let prefix = P.try $ P.string "${"
       suffix = P.string "}"
-  spec <- P.between prefix suffix (P.many1 $ P.noneOf "}")
-  let placeholder = T.pack spec
-  pure (T.replace "-" "_" placeholder, Cmd.Env placeholder)
+  spec <- T.pack <$> P.between prefix suffix (P.many1 $ P.noneOf "}")
+  let (name : flags) = T.splitOn ":" spec
+      multiple = "m" `elem` flags
+  pure (T.replace "-" "_" name, Cmd.Env name multiple)

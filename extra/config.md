@@ -170,8 +170,8 @@ git show $(echo $git_log | cut -f1 -d' ')
 rg --files
 ```
 
-### `vim-file ${rg-files}`
+### `vim-file ${rg-files:m}`
 
 ```bash
-vim "$rg_files"
+vim -p $rg_files
 ```

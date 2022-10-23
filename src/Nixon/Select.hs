@@ -89,7 +89,7 @@ instance Functor Selection where
 data SelectorOpts = SelectorOpts
   { selector_title :: Maybe Text,
     selector_search :: Maybe Text,
-    selector_multiple :: Maybe ()
+    selector_multiple :: Maybe Bool
   }
 
 defaults :: SelectorOpts

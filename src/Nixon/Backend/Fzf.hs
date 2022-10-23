@@ -24,6 +24,7 @@ module Nixon.Backend.Fzf
 where
 
 import Control.Arrow (second, (&&&))
+import Data.Bool (bool)
 import Data.List (sort)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, isJust)
@@ -44,7 +45,7 @@ import Nixon.Utils
   ( implode_home,
     shell_to_list,
     takeToSpace,
-    toLines, (<<),
+    toLines,
   )
 import Turtle
   ( Alternative ((<|>)),
@@ -71,7 +72,7 @@ fzfBackend cfg =
               fzfIgnoreCase <$> Config.ignore_case cfg,
               fzfQuery <$> Select.selector_search opts,
               fzfHeader <$> Select.selector_title opts,
-              pure fzfMultiple << Select.selector_multiple opts
+              fzfMultiple <<? Select.selector_multiple opts
             ]
       fzf_opts' = fzf_opts Select.defaults
    in Backend
@@ -79,6 +80,10 @@ fzfBackend cfg =
           commandSelector = fzfProjectCommand fzf_opts',
           selector = fzf . fzf_opts
         }
+
+(<<?) :: a -> Maybe Bool -> Maybe a
+(<<?) x f = bool Nothing (Just x) =<< f
+infixr 1 <<?
 
 data FzfOpts = FzfOpts
   { _border :: Bool,

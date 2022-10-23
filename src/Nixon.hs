@@ -35,7 +35,7 @@ import Nixon.Logging (log_error, log_info)
 import Nixon.Process (Env, run, run_with_output)
 import Nixon.Project (Project, ProjectType (..), project_path)
 import qualified Nixon.Project as P
-import Nixon.Select (Candidate (..), Selection (..), Selector)
+import Nixon.Select (Candidate (..), Selection (..), Selector, selector_multiple)
 import qualified Nixon.Select as Select
 import Nixon.Types
   ( Config (commands, project_dirs, project_types),
@@ -180,15 +180,16 @@ visitCmd cmd =
 -- | Resolve all command environment variable placeholders.
 resolveEnv :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Nixon.Process.Env
 resolveEnv project selector cmd args = do
-  vars <- mapM resolve_each $ zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
-  pure $ nixon_envs ++ map (second T.unwords) vars
+  vars <- mapM resolveEach $ zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
+  pure $ nixonEnvs ++ map (second T.unwords) vars
   where
-    nixon_envs = [("nixon_project_path", format fp $ project_path project)]
-    resolve_each ((name, Env cmd'), select_opts) =
-      (name,)
-        <$> ( assert_command cmd' >>= \c -> resolveCmd project selector c select_opts
-            )
-    assert_command cmd_name = do
+    nixonEnvs = [("nixon_project_path", format fp $ project_path project)]
+    resolveEach ((name, Env cmdName multiple), select_opts) = do
+      cmd' <- assertCommand cmdName
+      let select_opts' = select_opts {selector_multiple = Just multiple}
+      resolved <- resolveCmd project selector cmd' select_opts'
+      pure (name, resolved)
+    assertCommand cmd_name = do
       cmd' <- find ((==) cmd_name . cmdName) . commands . config <$> ask
       maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
 
