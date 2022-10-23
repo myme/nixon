@@ -6,7 +6,6 @@ import qualified Data.Text as T
 import           Nixon.Select
 import           Nixon.Utils
 import           Test.Hspec
-import           Test.Nixon.Command
 import           Test.Nixon.Config.Markdown
 import           Test.Nixon.Logging
 import           Test.QuickCheck
@@ -36,8 +35,6 @@ instance Arbitrary NonWsText where
 main :: IO ()
 main = hspec $ do
   describe "Backend.Fzf" fzfTests
-
-  describe "Command" command
 
   describe "Config" $ do
     describe "Markdown" markdown_tests

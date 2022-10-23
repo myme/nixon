@@ -1,15 +1,16 @@
 module Test.Nixon.Config.Markdown where
 
-import           Data.Text (Text)
-import qualified Data.Text as T
-import           Nixon.Command (CommandEnv(Env))
-import qualified Nixon.Command as Cmd
-import           Nixon.Config.Markdown (parseMarkdown, parseHeaderArgs)
-import           Nixon.Config.Types (defaultConfig, LogLevel (LogWarning))
-import qualified Nixon.Config.Types as Cfg
-import           Nixon.Language (Language(Bash))
-import           Test.Hspec
 import Control.Arrow ((&&&))
+import Data.Either (isLeft)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Nixon.Command (CommandEnv (Env))
+import qualified Nixon.Command as Cmd
+import Nixon.Config.Markdown (parseCommandName, parseHeaderArgs, parseMarkdown)
+import Nixon.Config.Types (LogLevel (LogWarning), defaultConfig)
+import qualified Nixon.Config.Types as Cfg
+import Nixon.Language (Language (Bash))
+import Test.Hspec
 
 match_error :: Text -> Either Text b -> Bool
 match_error match = either (T.isInfixOf match) (const False)
@@ -273,9 +274,38 @@ parse_header_tests = describe "parseHeaderArgs" $ do
   it "mix args and kwargs" $
     parseHeaderArgs "{.command type=\"git\"}" `shouldBe` ("", ["command"], [("type", "git")])
 
+parse_command_name_tests :: SpecWith ()
+parse_command_name_tests = describe "parseCommandName" $ do
+  it "parses text part" $ do
+    parseCommandName "echo 'foo bar baz'" `shouldBe`
+      Right ("echo", [])
+
+  it "parses leading spaces" $ do
+    parseCommandName "   echo 'foo bar baz'" `shouldBe`
+      Right ("echo", [])
+
+  it "parses arg part" $ do
+    parseCommandName "cat ${arg}" `shouldBe`
+      Right ("cat", [("arg", Env "arg")])
+
+  it "parses text and placeholder part" $ do
+    parseCommandName "cat \"${arg}\"" `shouldBe`
+      Right ("cat", [("arg", Env "arg")])
+
+  it "replaces '-' with '_' in $name" $ do
+    parseCommandName "cat \"${some-arg}\"" `shouldBe`
+      Right ("cat", [("some_arg", Env "some-arg")])
+
+  it "allows use of $ not matching '${'" $ do
+    parseCommandName "echo $SOME_VAR" `shouldBe` Right ("echo", [])
+
+  it "fails on unterminated arg" $ do
+    parseCommandName "cat \"${arg\"" `shouldSatisfy` isLeft
+
 markdown_tests :: SpecWith ()
 markdown_tests = do
   describe "parseMarkdown" $ do
     config_tests
     command_tests
     parse_header_tests
+    parse_command_name_tests

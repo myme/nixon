@@ -4,6 +4,7 @@ module Nixon.Config.Markdown
   ( defaultPath,
     parseMarkdown,
     parseHeaderArgs,
+    parseCommandName,
   )
 where
 
@@ -11,6 +12,7 @@ import CMark (commonmarkToNode)
 import qualified CMark as M
 import Data.Aeson (eitherDecodeStrict)
 import Data.Bifunctor (Bifunctor (first))
+import Data.Char (isSpace)
 import Data.Either (partitionEithers)
 import Data.List (find)
 import Data.Text (pack, strip)
@@ -31,6 +33,7 @@ import Nixon.Config.Types
       ),
     defaultConfig,
   )
+import qualified Nixon.Language as Lang
 import System.Directory (XdgDirectory (..), getXdgDirectory)
 import qualified Text.Parsec as P
 import Text.Parsec.Text (Parser)
@@ -219,5 +222,40 @@ parseCommand pos name projectTypes (Source lang src : rest) = (cmd, rest)
         { Cmd.cmdFilePath = posName pos,
           Cmd.cmdLineNr = maybe (-1) M.startLine (posLocation pos)
         }
-    cmd = Cmd.mkcommand loc name lang projectTypes src
+    cmd = do
+      (name', args) <- parseCommandName name
+      pure
+        Cmd.empty
+          { Cmd.cmdName = name',
+            Cmd.cmdLang = maybe Lang.None Lang.parseLang lang,
+            Cmd.cmdEnv = args,
+            Cmd.cmdProjectTypes = projectTypes,
+            Cmd.cmdSource = src,
+            Cmd.cmdLocation = Just loc
+          }
 parseCommand _ name _ rest = (Left $ format ("Expecting source block for " % s) name, rest)
+
+parseCommandName :: Text -> Either Text (Text, [(Text, Cmd.CommandEnv)])
+parseCommandName = first (T.pack . show) . P.parse parser ""
+  where
+    parser = do
+      P.spaces
+      name <- T.pack <$> P.many1 (P.satisfy (not . isSpace))
+      args <- parseCommandArgs
+      pure (name, args)
+
+parseCommandArgs :: Parser [(Text, Cmd.CommandEnv)]
+parseCommandArgs =
+  P.choice
+    [ (:) <$> parseCommandArg <*> parseCommandArgs,
+      P.anyChar *> parseCommandArgs,
+      [] <$ P.eof
+    ]
+
+parseCommandArg :: Parser (Text, Cmd.CommandEnv)
+parseCommandArg = do
+  let prefix = P.try $ P.string "${"
+      suffix = P.string "}"
+  spec <- P.between prefix suffix (P.many1 $ P.noneOf "}")
+  let placeholder = T.pack spec
+  pure (T.replace "-" "_" placeholder, Cmd.Env placeholder)
