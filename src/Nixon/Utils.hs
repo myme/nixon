@@ -9,6 +9,7 @@ module Nixon.Utils
     takeToSpace,
     filter_elems,
     implode_home,
+    (<<),
   )
 where
 
@@ -84,3 +85,8 @@ implode_home :: MonadIO m => FilePath -> m FilePath
 implode_home path' = do
   home' <- home
   pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')
+
+-- | Flipped Monad sequence >>
+(<<) :: Monad m => m b -> m a -> m b
+(<<) = flip (>>)
+infixr 1 <<

@@ -144,13 +144,13 @@ fzfTests = do
           let candidates = map Identity ["one", "two", "three"]
 
           result1 <- runProc (ExitSuccess, "1") $ fzf mempty (select candidates)
-          result1 `shouldBe` Selection Default "one"
+          result1 `shouldBe` Selection Default ["one"]
 
           result2 <- runProc (ExitSuccess, "2") $ fzf mempty (select candidates)
-          result2 `shouldBe` Selection Default "two"
+          result2 `shouldBe` Selection Default ["two"]
 
           result3 <- runProc (ExitSuccess, "3") $ fzf mempty (select candidates)
-          result3 `shouldBe` Selection Default "three"
+          result3 `shouldBe` Selection Default ["three"]
 
         describe "Filter" $ do
           it "Passes result straight through" $ do
@@ -158,14 +158,14 @@ fzfTests = do
                 opts = fzfFilter "two"
 
             result <- runProc (ExitSuccess, "two") $ fzf opts (select candidates)
-            result `shouldBe` Selection Default "two"
+            result `shouldBe` Selection Default ["two"]
 
           it "Passes multi-line output through" $ do
             let candidates = map Identity ["one", "two", "three", "oneone"]
                 opts = fzfFilter "one"
 
             result <- runProc (ExitSuccess, "one\noneone") $ fzf opts (select candidates)
-            result `shouldBe` Selection Default "one\noneone"
+            result `shouldBe` Selection Default ["one", "oneone"]
 
         describe "Expect keys" $ do
           it "Parses expected keys for default selection" $ do
@@ -173,28 +173,28 @@ fzfTests = do
                 opts = fzfExpect "alt-enter" Edit
 
             result <- runProc (ExitSuccess, "\n1") $ fzf opts (select candidates)
-            result `shouldBe` Selection Default "one"
+            result `shouldBe` Selection Default ["one"]
 
           it "Parses expected keys for alternative selection" $ do
             let candidates = map Identity ["one", "two", "three"]
                 opts = fzfExpect "alt-enter" Edit
 
             result <- runProc (ExitSuccess, "alt-enter\n1") $ fzf opts (select candidates)
-            result `shouldBe` Selection Edit "one"
+            result `shouldBe` Selection Edit ["one"]
 
           it "Ignores expect keys first line when using filter" $ do
             let candidates = map Identity ["one", "two", "three"]
                 opts = fzfExpect "alt-enter" Edit <> fzfFilter "two"
 
             result <- runProc (ExitSuccess, "two") $ fzf opts (select candidates)
-            result `shouldBe` Selection Default "two"
+            result `shouldBe` Selection Default ["two"]
 
         describe "fzfPojects" $ do
           it "finds projects" $ do
             let project1 = Project "test-project" "/some/path" []
                 projects = [project1]
             result <- runProc (ExitSuccess, "1") $ fzfProjects mempty Nothing projects
-            result `shouldBe` Selection Default project1
+            result `shouldBe` Selection Default [project1]
 
         describe "fzfPojectCommand" $ do
           it "finds project command with default selection" $ do
@@ -202,12 +202,12 @@ fzfTests = do
                 command1 = Cmd.empty
                 commands = [command1]
             result <- runProc (ExitSuccess, "\n1") $ Fzf.fzfProjectCommand mempty project1 mempty commands
-            result `shouldBe` Selection Default command1
+            result `shouldBe` Selection Default [command1]
 
           it "finds project command with edit selection" $ do
             let project1 = Project "test-project" "/some/path" []
                 command1 = Cmd.empty
                 commands = [command1]
             result <- runProc (ExitSuccess, "alt-enter\n1") $ Fzf.fzfProjectCommand mempty project1 mempty commands
-            result `shouldBe` Selection Edit command1
+            result `shouldBe` Selection Edit [command1]
     )

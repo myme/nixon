@@ -14,7 +14,7 @@ module Nixon.Backend.Rofi
   )
 where
 
-import Control.Arrow (second, (&&&))
+import Control.Arrow ((&&&))
 import Data.Bool (bool)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe)
@@ -135,18 +135,19 @@ rofi opts candidates = do
           ]
 
   map' <- Map.fromList . fmap (Select.candidate_title &&& Select.candidate_value) <$> shell_to_list candidates
-  (code, out) <- second (flip Map.lookup map' . T.strip) <$> procStrict "rofi" args (toLines $ select $ Map.keys map')
+  (code, out) <- procStrict "rofi" args (toLines $ select $ Map.keys map')
+  let out' = (fmap (flip Map.lookup map' . T.strip) . T.lines) out
   pure $ case code of
-    ExitSuccess -> mkselection Default out
+    ExitSuccess -> mkselection Default out'
     ExitFailure 1 -> CanceledSelection
     ExitFailure c
-      | c == 10 -> mkselection Edit out
-      | c == 11 -> mkselection Show out
-      | c == 12 -> mkselection Visit out
+      | c == 10 -> mkselection Edit out'
+      | c == 11 -> mkselection Show out'
+      | c == 12 -> mkselection Visit out'
       | otherwise -> error $ "Exit error: " <> show c
   where
-    mkselection _ Nothing = EmptySelection
-    mkselection type' (Just selection) = Selection type' selection
+    mkselection _ [] = EmptySelection
+    mkselection type' sel = Selection type' (catMaybes sel)
 
 -- | Format project names suited to rofi selection list
 rofiFormatProjectName :: MonadIO m => Project -> m Text
@@ -170,11 +171,11 @@ rofiProjects opts query projects = do
   candidates <- traverse rofiFormatProjectName projects
   let map' = Map.fromList (zip candidates projects)
   selection <- rofi opts' (Select.Identity <$> select candidates)
-  pure $ Select.unwrapMaybeSelection ((`Map.lookup` map') <$> selection)
+  pure $ Select.catMaybeSelection ((`Map.lookup` map') <$> selection)
 
 rofiProjectCommand :: MonadIO m => RofiOpts -> Maybe Text -> [Command] -> m (Selection Command)
 rofiProjectCommand opts query commands = do
   let candidates = Select.build_map show_command_with_description commands
       opts' = opts <> rofiPrompt "Select command" <> maybe mempty rofiQuery query
   selection <- rofi opts' (Select.Identity <$> select (Map.keys candidates))
-  pure $ Select.unwrapMaybeSelection ((`Map.lookup` candidates) <$> selection)
+  pure $ Select.catMaybeSelection ((`Map.lookup` candidates) <$> selection)

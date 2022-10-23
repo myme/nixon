@@ -16,6 +16,7 @@ module Nixon.Backend.Fzf
     fzfProjectCommand,
     fzfWithNth,
     fzfNoSort,
+    fzfMultiple,
     fzfDefaults,
     fzfBuildArgs,
     fzfExpect,
@@ -43,7 +44,7 @@ import Nixon.Utils
   ( implode_home,
     shell_to_list,
     takeToSpace,
-    toLines,
+    toLines, (<<),
   )
 import Turtle
   ( Alternative ((<|>)),
@@ -69,7 +70,8 @@ fzfBackend cfg =
             [ fzfExact <$> Config.exact_match cfg,
               fzfIgnoreCase <$> Config.ignore_case cfg,
               fzfQuery <$> Select.selector_search opts,
-              fzfHeader <$> Select.selector_title opts
+              fzfHeader <$> Select.selector_title opts,
+              pure fzfMultiple << Select.selector_multiple opts
             ]
       fzf_opts' = fzf_opts Select.defaults
    in Backend
@@ -89,7 +91,8 @@ data FzfOpts = FzfOpts
     _filter :: Maybe Text,
     _preview :: Maybe Text,
     _withNth :: Maybe FieldIndex,
-    _noSort :: Bool
+    _noSort :: Bool,
+    _multi :: Bool
   }
   deriving (Eq, Show)
 
@@ -114,7 +117,8 @@ instance Semigroup FzfOpts where
         _filter = _filter right <|> _filter left,
         _preview = _preview right <|> _preview left,
         _withNth = _withNth right <|> _withNth left,
-        _noSort = _noSort right || _noSort left
+        _noSort = _noSort right || _noSort left,
+        _multi = _multi right || _multi left
       }
 
 fzfDefaults :: FzfOpts
@@ -130,7 +134,8 @@ fzfDefaults =
       _filter = Nothing,
       _preview = Nothing,
       _withNth = Nothing,
-      _noSort = False
+      _noSort = False,
+      _multi = False
     }
 
 instance Monoid FzfOpts where
@@ -169,6 +174,9 @@ fzfWithNth with_nth = fzfDefaults {_withNth = Just with_nth}
 fzfNoSort :: FzfOpts
 fzfNoSort = fzfDefaults {_noSort = True}
 
+fzfMultiple :: FzfOpts
+fzfMultiple = fzfDefaults {_multi = True}
+
 formatFieldIndex :: FieldIndex -> Text
 formatFieldIndex (FieldIndex idx) = format d idx
 formatFieldIndex (FieldTo idx) = format (".." % d) idx
@@ -193,7 +201,8 @@ fzfBuildArgs opts =
           arg "--filter" =<< _filter opts,
           arg "--preview" =<< _preview opts,
           arg "--with-nth" . formatFieldIndex =<< _withNth opts,
-          flag "--no-sort" (_noSort opts)
+          flag "--no-sort" (_noSort opts),
+          flag "--multi" (_multi opts)
         ]
 
 fzfRaw :: HasProc m => FzfOpts -> Shell Line -> m (Selection Text)
@@ -204,7 +213,7 @@ fzfRaw opts candidates = do
           "-1" :
           "--ansi" :
           fzfBuildArgs opts
-  (code, out) <- proc' "fzf" args candidates
+  (code, out) <- second T.lines <$> proc' "fzf" args candidates
   pure $ case code of
     ExitFailure 1 -> EmptySelection
     ExitFailure 130 -> CanceledSelection
@@ -212,12 +221,13 @@ fzfRaw opts candidates = do
     ExitSuccess ->
       if isJust (_filter opts) || null (_expectKeys opts)
         then Selection Default out
-        else case T.lines out of
-          ["", selection] -> Selection Default selection
-          [key, selection] -> case lookup key $ _expectKeys opts of
+        else case out of
+          [] -> EmptySelection
+          [""] -> EmptySelection
+          ("" : selection) -> Selection Default selection
+          (key : selection) -> case lookup key $ _expectKeys opts of
             Just alternative -> Selection alternative selection
             Nothing -> EmptySelection
-          _ -> EmptySelection
 
 fzf :: (HasProc m, MonadIO m) => FzfOpts -> Shell Candidate -> m (Selection Text)
 fzf opts candidates = do
@@ -231,7 +241,8 @@ fzf opts candidates = do
       selection <- fzfRaw (opts <> fzfWithNth (FieldFrom 2)) (toLines $ select cs_input)
       let selected = fmap stripAnsiEscapeCodes . flip Map.lookup cs . takeToSpace <$> selection
       pure $ case selected of
-        Selection t sel -> maybe EmptySelection (Selection t) sel
+        Selection _ [] -> EmptySelection
+        Selection t sel -> maybe EmptySelection (Selection t) (sequence sel)
         CanceledSelection -> CanceledSelection
         EmptySelection -> EmptySelection
 
@@ -252,7 +263,7 @@ fzfProjects opts query projects = do
           <> maybe mempty fzfQuery query
   -- <> fzfPreview "ls $(eval echo {})"
   selection <- fzf opts' (Select.Identity <$> (select . sort $ Map.keys candidates))
-  pure $ Select.unwrapMaybeSelection ((`Map.lookup` candidates) <$> selection)
+  pure $ Select.catMaybeSelection ((`Map.lookup` candidates) <$> selection)
 
 -- | Find commands applicable to a project
 fzfProjectCommand :: (HasProc m, MonadIO m) => FzfOpts -> Project -> Maybe Text -> [Command] -> m (Selection Command)
@@ -269,4 +280,4 @@ fzfProjectCommand opts project query commands = do
           <> fzfExpect "f2" Visit
       input' = Select.Identity <$> select (fst <$> candidates)
   selection <- fmap (`lookup` candidates) <$> fzf opts' input'
-  pure $ Select.unwrapMaybeSelection selection
+  pure $ Select.catMaybeSelection selection
