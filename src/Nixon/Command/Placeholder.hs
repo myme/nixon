@@ -11,8 +11,11 @@ data PlaceholderType = Arg | EnvVar | Stdin
 
 -- | Placeholders for environment variables
 data Placeholder = Placeholder
-  { type_ :: PlaceholderType,
+  { -- | Type of placeholder
+    type_ :: PlaceholderType,
+    -- | The command it's referencing
     name :: Text,
+    -- | If the placeholder can select multiple
     multiple :: Bool
   }
   deriving (Eq, Show)

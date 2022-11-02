@@ -229,7 +229,7 @@ parseCommand pos name projectTypes (Source lang src : rest) = (cmd, rest)
         Cmd.empty
           { Cmd.cmdName = name',
             Cmd.cmdLang = maybe Lang.None Lang.parseLang lang,
-            Cmd.cmdEnv = args,
+            Cmd.cmdPlaceholders = args,
             Cmd.cmdProjectTypes = projectTypes,
             Cmd.cmdSource = src,
             Cmd.cmdLocation = Just loc,
@@ -237,7 +237,7 @@ parseCommand pos name projectTypes (Source lang src : rest) = (cmd, rest)
           }
 parseCommand _ name _ rest = (Left $ format ("Expecting source block for " % s) name, rest)
 
-parseCommandName :: Text -> Either Text (Text, [(Text, Cmd.Placeholder)])
+parseCommandName :: Text -> Either Text (Text, [Cmd.Placeholder])
 parseCommandName = first (T.pack . show) . P.parse parser ""
   where
     parser = do
@@ -246,7 +246,7 @@ parseCommandName = first (T.pack . show) . P.parse parser ""
       args <- parseCommandArgs
       pure (name, args)
 
-parseCommandArgs :: Parser [(Text, Cmd.Placeholder)]
+parseCommandArgs :: Parser [Cmd.Placeholder]
 parseCommandArgs =
   P.choice
     [ (:) <$> parseCommandArg <*> parseCommandArgs,
@@ -254,11 +254,14 @@ parseCommandArgs =
       [] <$ P.eof
     ]
 
-parseCommandArg :: Parser (Text, Cmd.Placeholder)
+parseCommandArg :: Parser Cmd.Placeholder
 parseCommandArg = do
-  let startCmdArg = (Cmd.Stdin <$ P.char '<') <|> (Cmd.Arg <$ P.char '$') <|> (Cmd.EnvVar <$ P.char '=')
+  let startCmdArg =
+        (Cmd.Stdin <$ P.char '<')
+          <|> (Cmd.Arg <$ P.char '$')
+          <|> (Cmd.EnvVar <$ P.char '=')
   envType <- P.try $ startCmdArg <* P.char '{'
   spec <- T.pack <$> P.manyTill (P.noneOf "}") (P.char '}')
   let (name : flags) = T.splitOn ":" spec
       multiple = "m" `elem` flags
-  pure (T.replace "-" "_" name, Cmd.Placeholder envType name multiple)
+  pure $ Cmd.Placeholder envType name multiple

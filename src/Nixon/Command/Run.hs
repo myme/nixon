@@ -40,13 +40,13 @@ runCmd selector path cmd args = do
 -- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
 resolveEnv :: FilePath -> Selector Nixon -> Command -> [Text] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv path selector cmd args = do
-  let mappedArgs = zip (Cmd.cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
+  let mappedArgs = zip (Cmd.cmdPlaceholders cmd) (map Select.search args <> repeat Select.defaults)
   (stdin, args', envs) <- foldM resolveEach (Nothing, [], []) mappedArgs
   pure (stdin, args', nixonEnvs ++ envs)
   where
     nixonEnvs = [("nixon_project_path", format fp path)]
 
-    resolveEach (stdin, args', envs) ((name, Cmd.Placeholder envType cmdName multiple), select_opts) = do
+    resolveEach (stdin, args', envs) (Cmd.Placeholder envType cmdName multiple, select_opts) = do
       cmd' <- assertCommand cmdName
       let select_opts' = select_opts {selector_multiple = Just multiple}
       resolved <- resolveCmd path selector cmd' select_opts'
@@ -60,7 +60,7 @@ resolveEnv path selector cmd args = do
         -- Each line counts as one positional argument
         Cmd.Arg -> (stdin, args' <> resolved, envs)
         -- Environment variables are concatenated into space-separated line
-        Cmd.EnvVar -> (stdin, args', envs <> [(name, T.unwords resolved)])
+        Cmd.EnvVar -> (stdin, args', envs <> [(T.replace "-" "_" cmdName, T.unwords resolved)])
 
     assertCommand cmd_name = do
       cmd' <- find ((==) cmd_name . Cmd.cmdName) . Types.commands . Types.config <$> ask

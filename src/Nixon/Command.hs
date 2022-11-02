@@ -17,6 +17,7 @@ where
 import Data.Text (Text)
 import qualified Data.Text as T
 import Nixon.Command.Placeholder (Placeholder)
+import qualified Nixon.Command.Placeholder as P
 import Nixon.Language (Language (None))
 import Turtle (FilePath, format, s, (%))
 import Prelude hiding (FilePath)
@@ -27,7 +28,7 @@ data Command = Command
     cmdLang :: Language,
     cmdProjectTypes :: [Text],
     cmdSource :: Text,
-    cmdEnv :: [(Text, Placeholder)],
+    cmdPlaceholders :: [Placeholder],
     cmdIsBg :: Bool,
     -- | Command should be hidden from selection
     cmdIsHidden :: Bool,
@@ -50,7 +51,7 @@ empty =
       cmdLang = None,
       cmdProjectTypes = [],
       cmdSource = "",
-      cmdEnv = [],
+      cmdPlaceholders = [],
       cmdIsBg = False,
       cmdIsHidden = False,
       cmdOutput = Lines,
@@ -60,7 +61,7 @@ empty =
 data CommandOutput = Lines | JSON deriving (Eq, Show)
 
 show_command :: Command -> Text
-show_command cmd = T.unwords $ cmdName cmd : map (format ("${" % s % "}") . fst) (cmdEnv cmd)
+show_command cmd = T.unwords $ cmdName cmd : map (format ("${" % s % "}") . P.name) (cmdPlaceholders cmd)
 
 show_command_with_description :: Command -> Text
 show_command_with_description cmd = format (s % s) (cmdName cmd) desc

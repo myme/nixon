@@ -176,7 +176,7 @@ command_tests = describe "commands section" $ do
                 Cmd.cmdLang = lang,
                 Cmd.cmdDesc = desc,
                 Cmd.cmdSource = source,
-                Cmd.cmdEnv = env,
+                Cmd.cmdPlaceholders = env,
                 Cmd.cmdIsBg = isBg
               }
             ) = (name, lang, desc, source, env, isBg)
@@ -199,7 +199,7 @@ command_tests = describe "commands section" $ do
               { Cmd.cmdName = name,
                 Cmd.cmdLang = lang,
                 Cmd.cmdSource = source,
-                Cmd.cmdEnv = env,
+                Cmd.cmdPlaceholders = env,
                 Cmd.cmdIsBg = isBg
               }
             ) = (name, lang, source, env, isBg)
@@ -271,14 +271,14 @@ command_tests = describe "commands section" $ do
             ( Cmd.Command
                 { Cmd.cmdName = name,
                   Cmd.cmdIsBg = isBg,
-                  Cmd.cmdEnv = env
+                  Cmd.cmdPlaceholders = placeholders
                 }
-              ) = (name, isBg, env)
+              ) = (name, isBg, placeholders)
        in fmap selector . Cfg.commands <$> result
             `shouldBe` Right
               [ ( "hello",
                   True,
-                  [("arg", Placeholder Arg "arg" False), ("another_arg", Placeholder Arg "another-arg" False)]
+                  [Placeholder Arg "arg" False, Placeholder Arg "another-arg" False]
                 )
               ]
 
@@ -324,31 +324,31 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses arg part" $ do
     parseCommandName "cat ${arg}"
-      `shouldBe` Right ("cat", [("arg", Placeholder Arg "arg" False)])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" False])
 
   it "parses stdin arg part" $ do
     parseCommandName "cat <{arg}"
-      `shouldBe` Right ("cat", [("arg", Placeholder Stdin "arg" False)])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" False])
 
   it "parses envvar arg part" $ do
     parseCommandName "cat ={arg}"
-      `shouldBe` Right ("cat", [("arg", Placeholder EnvVar "arg" False)])
+      `shouldBe` Right ("cat", [Placeholder EnvVar "arg" False])
 
   it "parses arg modifiers" $ do
     parseCommandName "cat ${arg:m}"
-      `shouldBe` Right ("cat", [("arg", Placeholder Arg "arg" True)])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" True])
 
   it "parses stdin arg modifiers" $ do
     parseCommandName "cat <{arg:m}"
-      `shouldBe` Right ("cat", [("arg", Placeholder Stdin "arg" True)])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" True])
 
   it "parses text and placeholder part" $ do
     parseCommandName "cat \"${arg}\""
-      `shouldBe` Right ("cat", [("arg", Placeholder Arg "arg" False)])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" False])
 
   it "replaces '-' with '_' in $name" $ do
     parseCommandName "cat \"${some-arg}\""
-      `shouldBe` Right ("cat", [("some_arg", Placeholder Arg "some-arg" False)])
+      `shouldBe` Right ("cat", [Placeholder Arg "some-arg" False])
 
   it "allows use of $ not matching '${'" $ do
     parseCommandName "echo $SOME_VAR" `shouldBe` Right ("echo", [])
