@@ -117,11 +117,11 @@ findAndHandleCmd project opts = withLocalConfig (project_path project) $ do
   find_command <- Backend.commandSelector <$> getBackend
   cmds <- filter (not . Cmd.cmdIsHidden) <$> findProjectCommands project
   cmd <- liftIO $ find_command project (Opts.run_command opts) cmds
-  handleCmd project cmd opts
+  handleCmd (project_path project) cmd opts
 
 -- | Find and run a command in a project.
-handleCmd :: Project -> Selection Command -> RunOpts -> Nixon ()
-handleCmd project cmd opts = do
+handleCmd :: FilePath -> Selection Command -> RunOpts -> Nixon ()
+handleCmd path cmd opts = do
   selector <- Backend.selector <$> getBackend
   case cmd of
     EmptySelection -> fail $ EmptyError "No command selected."
@@ -130,34 +130,33 @@ handleCmd project cmd opts = do
     Selection selectionType [cmd'] ->
       if Opts.run_select opts
         then do
-          resolved <- resolveCmd project selector cmd' Select.defaults
+          resolved <- resolveCmd path selector cmd' Select.defaults
           printf (s % "\n") (T.unlines resolved)
         else do
           case selectionType of
-            Select.Default -> runCmd project cmd' (Opts.run_args opts)
-            Select.Edit -> editCmd project cmd' (Opts.run_args opts)
+            Select.Default -> runCmd path cmd' (Opts.run_args opts)
+            Select.Edit -> editCmd path cmd' (Opts.run_args opts)
             Select.Show -> showCmd cmd'
             Select.Visit -> visitCmd cmd'
     Selection _ _ -> fail $ NixonError "Multiple commands selected."
 
 -- | Actually run a command
--- TODO: Replace Project with FilePath (project_path project)
-runCmd :: Project -> Command -> [Text] -> Nixon ()
-runCmd project cmd args = do
+runCmd :: FilePath -> Command -> [Text] -> Nixon ()
+runCmd path cmd args = do
   selector <- Backend.selector <$> getBackend
   let project_selector select_opts shell' =
-        cd (project_path project)
+        cd path
           >> selector (select_opts <> Select.title (show_command cmd)) shell'
-  (stdin, args', env') <- resolveEnv project project_selector cmd args
-  evaluate cmd args' (Just $ project_path project) env' (toLines <$> stdin)
+  (stdin, args', env') <- resolveEnv path project_selector cmd args
+  evaluate cmd args' (Just path) env' (toLines <$> stdin)
 
 -- | Edit the command source before execution
-editCmd :: Project -> Command -> [Text] -> Nixon ()
-editCmd project cmd args = do
+editCmd :: FilePath -> Command -> [Text] -> Nixon ()
+editCmd path cmd args = do
   edited <- editSelection (T.strip $ Cmd.cmdSource cmd)
   case edited of
     Nothing -> fail $ EmptyError "Empty command."
-    Just source -> runCmd project (cmd {Cmd.cmdSource = source}) args
+    Just source -> runCmd path (cmd {Cmd.cmdSource = source}) args
 
 -- | Print the command
 showCmd :: Command -> Nixon ()
@@ -181,18 +180,18 @@ visitCmd cmd =
       run (editor :| args) Nothing [] empty
 
 -- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
-resolveEnv :: Project -> Selector Nixon -> Command -> [Text] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
-resolveEnv project selector cmd args = do
+resolveEnv :: FilePath -> Selector Nixon -> Command -> [Text] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
+resolveEnv path selector cmd args = do
   let mappedArgs = zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
   (stdin, args', envs) <- foldM resolveEach (Nothing, [], []) mappedArgs
   pure (stdin, args', nixonEnvs ++ envs)
   where
-    nixonEnvs = [("nixon_project_path", format fp $ project_path project)]
+    nixonEnvs = [("nixon_project_path", format fp path)]
 
     resolveEach (stdin, args', envs) ((name, Env envType cmdName multiple), select_opts) = do
       cmd' <- assertCommand cmdName
       let select_opts' = select_opts {selector_multiple = Just multiple}
-      resolved <- resolveCmd project selector cmd' select_opts'
+      resolved <- resolveCmd path selector cmd' select_opts'
       pure $ case envType of
         -- Standard inputs are concatenated
         Cmd.Stdin ->
@@ -210,12 +209,11 @@ resolveEnv project selector cmd args = do
       maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
 
 -- | Resolve command to selectable output.
-resolveCmd :: Project -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon [Text]
-resolveCmd project selector cmd select_opts = do
-  (stdin, args, env') <- resolveEnv project selector cmd []
-  let path' = Just $ project_path project
-  linesEval <- getEvaluator (run_with_output stream) cmd args path' env' (toLines <$> stdin)
-  jsonEval <- getEvaluator (run_with_output BS.stream) cmd args path' env' (BS.fromUTF8 <$> stdin)
+resolveCmd :: FilePath -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon [Text]
+resolveCmd path selector cmd select_opts = do
+  (stdin, args, env') <- resolveEnv path selector cmd []
+  linesEval <- getEvaluator (run_with_output stream) cmd args (Just path) env' (toLines <$> stdin)
+  jsonEval <- getEvaluator (run_with_output BS.stream) cmd args (Just path) env' (BS.fromUTF8 <$> stdin)
   selection <- selector select_opts $ do
     case cmdOutput cmd of
       Lines -> Select.Identity . lineToText <$> linesEval
