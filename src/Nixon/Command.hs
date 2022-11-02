@@ -1,7 +1,5 @@
 module Nixon.Command
   ( Command (..),
-    CommandEnv (..),
-    CommandEnvType (..),
     CommandLocation (..),
     CommandOutput (..),
     Language (..),
@@ -18,9 +16,9 @@ where
 
 import Data.Text (Text)
 import qualified Data.Text as T
+import Nixon.Command.Placeholder (Placeholder)
 import Nixon.Language (Language (None))
 import Turtle (FilePath, format, s, (%))
-
 import Prelude hiding (FilePath)
 
 data Command = Command
@@ -29,7 +27,7 @@ data Command = Command
     cmdLang :: Language,
     cmdProjectTypes :: [Text],
     cmdSource :: Text,
-    cmdEnv :: [(Text, CommandEnv)],
+    cmdEnv :: [(Text, Placeholder)],
     cmdIsBg :: Bool,
     -- | Command should be hidden from selection
     cmdIsHidden :: Bool,
@@ -58,17 +56,6 @@ empty =
       cmdOutput = Lines,
       cmdLocation = Nothing
     }
-
-data CommandEnvType = Arg | EnvVar | Stdin
-  deriving (Eq, Show)
-
--- | Placeholders for environment variables
-data CommandEnv = Env
-  { envType :: CommandEnvType,
-    envName :: Text,
-    envMultiple :: Bool
-  }
-  deriving (Eq, Show)
 
 data CommandOutput = Lines | JSON deriving (Eq, Show)
 

@@ -14,7 +14,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Nixon.Command (Command, CommandOutput (..))
 import qualified Nixon.Command as Cmd
-import Nixon.Evaluator (getEvaluator, evaluate)
+import qualified Nixon.Command.Placeholder as Cmd
+import Nixon.Evaluator (evaluate, getEvaluator)
 import Nixon.Process (run_with_output)
 import qualified Nixon.Process
 import Nixon.Select (Selection (..), Selector, SelectorOpts (..))
@@ -22,7 +23,7 @@ import qualified Nixon.Select as Select
 import Nixon.Types (Nixon)
 import qualified Nixon.Types as Types
 import Nixon.Utils (toLines)
-import Turtle (FilePath, Shell, format, fp, select, stream, cd)
+import Turtle (FilePath, Shell, cd, format, fp, select, stream)
 import qualified Turtle.Bytes as BS
 import Turtle.Line (lineToText)
 import Prelude hiding (FilePath)
@@ -45,7 +46,7 @@ resolveEnv path selector cmd args = do
   where
     nixonEnvs = [("nixon_project_path", format fp path)]
 
-    resolveEach (stdin, args', envs) ((name, Cmd.Env envType cmdName multiple), select_opts) = do
+    resolveEach (stdin, args', envs) ((name, Cmd.Placeholder envType cmdName multiple), select_opts) = do
       cmd' <- assertCommand cmdName
       let select_opts' = select_opts {selector_multiple = Just multiple}
       resolved <- resolveCmd path selector cmd' select_opts'

@@ -20,6 +20,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Nixon.Command (bg, json, (<!))
 import qualified Nixon.Command as Cmd
+import qualified Nixon.Command.Placeholder as Cmd
 import qualified Nixon.Config.JSON as JSON
 import Nixon.Config.Types
   ( Config
@@ -236,7 +237,7 @@ parseCommand pos name projectTypes (Source lang src : rest) = (cmd, rest)
           }
 parseCommand _ name _ rest = (Left $ format ("Expecting source block for " % s) name, rest)
 
-parseCommandName :: Text -> Either Text (Text, [(Text, Cmd.CommandEnv)])
+parseCommandName :: Text -> Either Text (Text, [(Text, Cmd.Placeholder)])
 parseCommandName = first (T.pack . show) . P.parse parser ""
   where
     parser = do
@@ -245,7 +246,7 @@ parseCommandName = first (T.pack . show) . P.parse parser ""
       args <- parseCommandArgs
       pure (name, args)
 
-parseCommandArgs :: Parser [(Text, Cmd.CommandEnv)]
+parseCommandArgs :: Parser [(Text, Cmd.Placeholder)]
 parseCommandArgs =
   P.choice
     [ (:) <$> parseCommandArg <*> parseCommandArgs,
@@ -253,11 +254,11 @@ parseCommandArgs =
       [] <$ P.eof
     ]
 
-parseCommandArg :: Parser (Text, Cmd.CommandEnv)
+parseCommandArg :: Parser (Text, Cmd.Placeholder)
 parseCommandArg = do
   let startCmdArg = (Cmd.Stdin <$ P.char '<') <|> (Cmd.Arg <$ P.char '$') <|> (Cmd.EnvVar <$ P.char '=')
   envType <- P.try $ startCmdArg <* P.char '{'
   spec <- T.pack <$> P.manyTill (P.noneOf "}") (P.char '}')
   let (name : flags) = T.splitOn ":" spec
       multiple = "m" `elem` flags
-  pure (T.replace "-" "_" name, Cmd.Env envType name multiple)
+  pure (T.replace "-" "_" name, Cmd.Placeholder envType name multiple)
