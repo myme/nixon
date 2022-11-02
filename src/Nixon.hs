@@ -6,11 +6,9 @@ where
 
 import Control.Applicative ((<|>))
 import Control.Exception (throwIO, try)
-import Control.Monad (foldM)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Reader (ask, local)
-import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
 import Data.List (intersect)
 import Data.List.NonEmpty (NonEmpty ((:|)))
@@ -25,18 +23,18 @@ import Nixon.Backend.Fzf
     fzfFilter,
   )
 import Nixon.Backend.Rofi (rofiBackend)
-import Nixon.Command (Command (..), CommandEnv (..), CommandOutput (..), show_command, show_command_with_description)
+import Nixon.Command (Command (..), show_command_with_description)
 import qualified Nixon.Command as Cmd
+import qualified Nixon.Command.Run as Cmd
 import qualified Nixon.Config as Config
 import Nixon.Config.Options (BackendType (..), CompletionType, ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
 import qualified Nixon.Config.Types as Config
-import Nixon.Evaluator (evaluate, getEvaluator)
 import Nixon.Logging (log_error, log_info)
-import Nixon.Process (Env, run, run_with_output)
+import Nixon.Process (run)
 import Nixon.Project (Project, ProjectType (..), project_path)
 import qualified Nixon.Project as P
-import Nixon.Select (Candidate (..), Selection (..), Selector, selector_multiple)
+import Nixon.Select (Candidate (..), Selection (..))
 import qualified Nixon.Select as Select
 import Nixon.Types
   ( Config (commands, project_dirs, project_types),
@@ -45,7 +43,7 @@ import Nixon.Types
     NixonError (EmptyError, NixonError),
     runNixon,
   )
-import Nixon.Utils (implode_home, toLines)
+import Nixon.Utils (implode_home)
 import System.Console.Haskeline (defaultSettings, getInputLineWithInitial, runInputT)
 import System.Environment (withArgs)
 import Turtle
@@ -53,24 +51,19 @@ import Turtle
     ExitCode (ExitFailure),
     FilePath,
     MonadIO (..),
-    Shell,
     Text,
-    cd,
     d,
     exit,
     format,
     fp,
-    lineToText,
     need,
     printf,
     pwd,
     s,
     select,
-    stream,
     w,
     (%),
   )
-import qualified Turtle.Bytes as BS
 import Prelude hiding (FilePath, fail, log)
 
 -- | List projects, filtering if a query is specified.
@@ -130,33 +123,24 @@ handleCmd path cmd opts = do
     Selection selectionType [cmd'] ->
       if Opts.run_select opts
         then do
-          resolved <- resolveCmd path selector cmd' Select.defaults
+          resolved <- Cmd.resolveCmd path selector cmd' Select.defaults
           printf (s % "\n") (T.unlines resolved)
         else do
           case selectionType of
-            Select.Default -> runCmd path cmd' (Opts.run_args opts)
+            Select.Default -> Cmd.runCmd selector path cmd' (Opts.run_args opts)
             Select.Edit -> editCmd path cmd' (Opts.run_args opts)
             Select.Show -> showCmd cmd'
             Select.Visit -> visitCmd cmd'
     Selection _ _ -> fail $ NixonError "Multiple commands selected."
 
--- | Actually run a command
-runCmd :: FilePath -> Command -> [Text] -> Nixon ()
-runCmd path cmd args = do
-  selector <- Backend.selector <$> getBackend
-  let project_selector select_opts shell' =
-        cd path
-          >> selector (select_opts <> Select.title (show_command cmd)) shell'
-  (stdin, args', env') <- resolveEnv path project_selector cmd args
-  evaluate cmd args' (Just path) env' (toLines <$> stdin)
-
 -- | Edit the command source before execution
 editCmd :: FilePath -> Command -> [Text] -> Nixon ()
 editCmd path cmd args = do
+  selector <- Backend.selector <$> getBackend
   edited <- editSelection (T.strip $ Cmd.cmdSource cmd)
   case edited of
     Nothing -> fail $ EmptyError "Empty command."
-    Just source -> runCmd path (cmd {Cmd.cmdSource = source}) args
+    Just source -> Cmd.runCmd selector path (cmd {Cmd.cmdSource = source}) args
 
 -- | Print the command
 showCmd :: Command -> Nixon ()
@@ -178,53 +162,6 @@ visitCmd cmd =
             ( MaybeT (need "VISUAL") <|> MaybeT (need "EDITOR")
             )
       run (editor :| args) Nothing [] empty
-
--- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
-resolveEnv :: FilePath -> Selector Nixon -> Command -> [Text] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
-resolveEnv path selector cmd args = do
-  let mappedArgs = zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
-  (stdin, args', envs) <- foldM resolveEach (Nothing, [], []) mappedArgs
-  pure (stdin, args', nixonEnvs ++ envs)
-  where
-    nixonEnvs = [("nixon_project_path", format fp path)]
-
-    resolveEach (stdin, args', envs) ((name, Env envType cmdName multiple), select_opts) = do
-      cmd' <- assertCommand cmdName
-      let select_opts' = select_opts {selector_multiple = Just multiple}
-      resolved <- resolveCmd path selector cmd' select_opts'
-      pure $ case envType of
-        -- Standard inputs are concatenated
-        Cmd.Stdin ->
-          let stdinCombined = Just $ case stdin of
-                Nothing -> select resolved
-                Just prev -> prev <|> select resolved
-          in (stdinCombined, args', envs)
-        -- Each line counts as one positional argument
-        Cmd.Arg -> (stdin, args' <> resolved, envs)
-        -- Environment variables are concatenated into space-separated line
-        Cmd.EnvVar -> (stdin, args', envs <> [(name, T.unwords resolved)])
-
-    assertCommand cmd_name = do
-      cmd' <- find ((==) cmd_name . cmdName) . commands . config <$> ask
-      maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
-
--- | Resolve command to selectable output.
-resolveCmd :: FilePath -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon [Text]
-resolveCmd path selector cmd select_opts = do
-  (stdin, args, env') <- resolveEnv path selector cmd []
-  linesEval <- getEvaluator (run_with_output stream) cmd args (Just path) env' (toLines <$> stdin)
-  jsonEval <- getEvaluator (run_with_output BS.stream) cmd args (Just path) env' (BS.fromUTF8 <$> stdin)
-  selection <- selector select_opts $ do
-    case cmdOutput cmd of
-      Lines -> Select.Identity . lineToText <$> linesEval
-      JSON -> do
-        output <- BS.strict jsonEval
-        case eitherDecodeStrict output :: Either String [Select.Candidate] of
-          Left err -> error err
-          Right candidates -> Turtle.select candidates
-  case selection of
-    Selection _ result -> pure result
-    _ -> error "Argument expansion aborted"
 
 getBackend :: Nixon Backend
 getBackend = do
