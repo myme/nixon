@@ -112,8 +112,18 @@ command_tests = describe "commands section" $ do
             ,"echo Hello World"
             ,"```"
             ]
-          selector = fmap Cmd.cmdName . Cfg.commands
-      in selector <$> result `shouldBe` Right ["hello"]
+          selector = fmap (Cmd.cmdName &&& Cmd.cmdIsHidden) . Cfg.commands
+      in selector <$> result `shouldBe` Right [("hello", False)]
+
+    it "hidden command name with leading underscore" $
+      let result = parseMarkdown "some-file.md" $ T.unlines
+            ["# `_hidden`"
+            ,"```bash"
+            ,"echo Hello World"
+            ,"```"
+            ]
+          selector = fmap (Cmd.cmdName &&& Cmd.cmdIsHidden) . Cfg.commands
+      in selector <$> result `shouldBe` Right [("_hidden", True)]
 
   it "command name is first word" $
     let result = parseMarkdown "some-file.md" $ T.unlines

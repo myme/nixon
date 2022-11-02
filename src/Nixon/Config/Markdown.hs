@@ -231,7 +231,8 @@ parseCommand pos name projectTypes (Source lang src : rest) = (cmd, rest)
             Cmd.cmdEnv = args,
             Cmd.cmdProjectTypes = projectTypes,
             Cmd.cmdSource = src,
-            Cmd.cmdLocation = Just loc
+            Cmd.cmdLocation = Just loc,
+            Cmd.cmdIsHidden = "_" `T.isPrefixOf` name'
           }
 parseCommand _ name _ rest = (Left $ format ("Expecting source block for " % s) name, rest)
 
