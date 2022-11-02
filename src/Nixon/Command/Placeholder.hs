@@ -6,7 +6,7 @@ where
 
 import Data.Text (Text)
 
-data PlaceholderType = Arg | EnvVar | Stdin
+data PlaceholderType = Arg | EnvVar { envName :: Text } | Stdin
   deriving (Eq, Show)
 
 -- | Placeholders for environment variables

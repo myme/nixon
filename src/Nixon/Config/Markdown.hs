@@ -259,9 +259,14 @@ parseCommandArg = do
   let startCmdArg =
         (Cmd.Stdin <$ P.char '<')
           <|> (Cmd.Arg <$ P.char '$')
-          <|> (Cmd.EnvVar <$ P.char '=')
-  envType <- P.try $ startCmdArg <* P.char '{'
+          <|> (Cmd.EnvVar . T.pack <$> P.many P.alphaNum <* P.char '=')
+  placeholderType <- P.try $ startCmdArg <* P.char '{'
   spec <- T.pack <$> P.manyTill (P.noneOf "}") (P.char '}')
   let (name : flags) = T.splitOn ":" spec
       multiple = "m" `elem` flags
-  pure $ Cmd.Placeholder envType name multiple
+      fixup = T.replace "-" "_"
+      placeholderWithName = case placeholderType of
+        Cmd.EnvVar "" -> Cmd.EnvVar $ fixup name
+        Cmd.EnvVar alias -> Cmd.EnvVar $ fixup alias
+        same -> same
+  pure $ Cmd.Placeholder placeholderWithName name multiple

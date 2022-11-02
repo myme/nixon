@@ -332,7 +332,11 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses envvar arg part" $ do
     parseCommandName "cat ={arg}"
-      `shouldBe` Right ("cat", [Placeholder EnvVar "arg" False])
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "arg") "arg" False])
+
+  it "parses envvar part with alias" $ do
+    parseCommandName "cat FOO={bar}"
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "FOO") "bar" False])
 
   it "parses arg modifiers" $ do
     parseCommandName "cat ${arg:m}"
@@ -346,9 +350,9 @@ parse_command_name_tests = describe "parseCommandName" $ do
     parseCommandName "cat \"${arg}\""
       `shouldBe` Right ("cat", [Placeholder Arg "arg" False])
 
-  it "replaces '-' with '_' in $name" $ do
-    parseCommandName "cat \"${some-arg}\""
-      `shouldBe` Right ("cat", [Placeholder Arg "some-arg" False])
+  it "replaces '-' with '_' in env var name" $ do
+    parseCommandName "cat \"={some-arg}\""
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "some_arg") "some-arg" False])
 
   it "allows use of $ not matching '${'" $ do
     parseCommandName "echo $SOME_VAR" `shouldBe` Right ("echo", [])

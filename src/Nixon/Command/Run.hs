@@ -60,7 +60,7 @@ resolveEnv path selector cmd args = do
         -- Each line counts as one positional argument
         Cmd.Arg -> (stdin, args' <> resolved, envs)
         -- Environment variables are concatenated into space-separated line
-        Cmd.EnvVar -> (stdin, args', envs <> [(T.replace "-" "_" cmdName, T.unwords resolved)])
+        Cmd.EnvVar name -> (stdin, args', envs <> [(name, T.unwords resolved)])
 
     assertCommand cmd_name = do
       cmd' <- find ((==) cmd_name . Cmd.cmdName) . Types.commands . Types.config <$> ask
