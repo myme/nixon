@@ -10,9 +10,12 @@ CLOSED: [2022-10-14 Fri 00:09]
 
 ** TODO Add new commands
 
+Add a sub-command to create new commands in e.g. the closes .nixon.md file.
+
 ** TODO Dump config or selection to file
 
 ** TODO Bookmarks / recent commands
+
 ** TODO Support ~nix-shell~-like build inputs
 
 Allow code blocks to somehow define which dependencies they need to run, similar
@@ -21,9 +24,15 @@ to the ~nix-shell~ shebang.
 ** TODO Support some kind of parallel composition feature
 
 Allow defining tasks/scripts that can run multiple other tasks in parallel.
-** TODO Select multiple
+
+** DONE Select multiple
+CLOSED: [2022-11-02 Wed 23:55]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-11-02 Wed 23:55]
+:END:
 
 E.g. for a `docker-compose` command select which services to start/stop.
+
 ** TODO Default set of selection for multiple select
 
 * Backends (fzf, rofi)
@@ -38,7 +47,3 @@ CLOSED: [2021-04-09 Fri 21:31]
 ** TODO Add to bash/zsh history
 
 ** TODO Delete from history (alt-delete)
-
-* Integrations
-
-** TODO Pingbot integration
