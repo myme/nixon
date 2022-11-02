@@ -12,7 +12,7 @@ import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Data.List.NonEmpty (NonEmpty ((:|)), toList)
 import Data.Maybe (listToMaybe)
 import qualified Data.Text as T
-import Nixon.Process (Env, Run, arg, build_args, run, spawn)
+import Nixon.Process (Env, RunArgs, arg, build_args, run, spawn)
 import Nixon.Types (Config (use_nix), Nixon, ask, config)
 import Nixon.Utils (find_dominating_file, quote)
 import Turtle
@@ -24,7 +24,7 @@ import Turtle
     fp,
     parent,
     testpath,
-    (</>),
+    (</>), Shell, Line,
   )
 import Prelude hiding (FilePath)
 
@@ -42,15 +42,15 @@ find_nix_file dir = listToMaybe <$> filter_path nix_files
     filter_path = filterM (testpath . (dir </>))
 
 -- | Evaluate a command in a nix-shell
-nix_shell :: MonadIO m => FilePath -> Maybe Text -> Env -> m ()
+nix_shell :: MonadIO m => FilePath -> Maybe Text -> Env -> Maybe (Shell Line) -> m ()
 nix_shell = nix_run run
 
 -- | Fork and evaluate a command in a nix-shell
-nix_shell_spawn :: MonadIO m => FilePath -> Maybe Text -> Env -> m ()
+nix_shell_spawn :: MonadIO m => FilePath -> Maybe Text -> Env -> Maybe (Shell Line) -> m ()
 nix_shell_spawn = nix_run spawn
 
-nix_run :: MonadIO m => Run m a -> FilePath -> Maybe Text -> Env -> m a
-nix_run run' nix_file cmd env' =
+nix_run :: MonadIO m => RunArgs input m a -> FilePath -> Maybe Text -> Env -> Maybe (Shell input) -> m a
+nix_run run' nix_file cmd env' stdin =
   let nix_file' = format fp nix_file
       cmd' =
         "nix-shell"
@@ -58,7 +58,7 @@ nix_run run' nix_file cmd env' =
             [ pure [nix_file'],
               arg "--run" =<< cmd
             ]
-   in run' cmd' (Just $ parent nix_file) env'
+   in run' cmd' (Just $ parent nix_file) env' stdin
 
 nix_cmd :: NonEmpty Text -> FilePath -> Nixon (Maybe (NonEmpty Text))
 nix_cmd cmd path' =

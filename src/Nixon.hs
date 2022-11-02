@@ -6,6 +6,7 @@ where
 
 import Control.Applicative ((<|>))
 import Control.Exception (throwIO, try)
+import Control.Monad (foldM)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Reader (ask, local)
@@ -35,7 +36,7 @@ import Nixon.Logging (log_error, log_info)
 import Nixon.Process (Env, run, run_with_output)
 import Nixon.Project (Project, ProjectType (..), project_path)
 import qualified Nixon.Project as P
-import Nixon.Select (Candidate (..), Selection (..), Selector)
+import Nixon.Select (Candidate (..), Selection (..), Selector, selector_multiple)
 import qualified Nixon.Select as Select
 import Nixon.Types
   ( Config (commands, project_dirs, project_types),
@@ -44,13 +45,15 @@ import Nixon.Types
     NixonError (EmptyError, NixonError),
     runNixon,
   )
-import Nixon.Utils (implode_home)
+import Nixon.Utils (implode_home, toLines)
 import System.Console.Haskeline (defaultSettings, getInputLineWithInitial, runInputT)
 import System.Environment (withArgs)
 import Turtle
-  ( ExitCode (ExitFailure),
+  ( Alternative (empty),
+    ExitCode (ExitFailure),
     FilePath,
     MonadIO (..),
+    Shell,
     Text,
     cd,
     d,
@@ -62,11 +65,11 @@ import Turtle
     printf,
     pwd,
     s,
+    select,
     stream,
     w,
     (%),
   )
-import qualified Turtle
 import qualified Turtle.Bytes as BS
 import Prelude hiding (FilePath, fail, log)
 
@@ -77,7 +80,7 @@ listProjects projects query = do
   paths <- liftIO $ fmt_line <$> traverse (implode_home . project_path) projects
   let fzf_opts = fzfFilter $ fromMaybe "" query
   liftIO (fzf fzf_opts (Turtle.select paths)) >>= \case
-    Selection _ matching -> liftIO $ T.putStr matching
+    Selection _ matching -> liftIO $ T.putStr (T.unlines matching)
     _ -> log_error "No projects."
 
 -- | List commands for a project, filtering if a query is specified
@@ -87,7 +90,7 @@ listProjectCommands project query = do
   let fzfOpts = fzfFilter $ fromMaybe "" query
   selection <- fzf fzfOpts (Turtle.select $ Identity <$> commands)
   case selection of
-    Selection _ matching -> liftIO $ T.putStr matching
+    Selection _ matching -> liftIO $ T.putStr (T.unlines matching)
     _ -> log_error "No commands."
 
 fail :: MonadIO m => NixonError -> m a
@@ -123,27 +126,30 @@ handleCmd project cmd opts = do
   case cmd of
     EmptySelection -> fail $ EmptyError "No command selected."
     CanceledSelection -> fail $ EmptyError "Command selection canceled."
-    Selection selectionType cmd' ->
+    Selection _ [] -> fail $ EmptyError "No command selected."
+    Selection selectionType [cmd'] ->
       if Opts.run_select opts
         then do
           resolved <- resolveCmd project selector cmd' Select.defaults
-          printf (s % "\n") resolved
+          printf (s % "\n") (T.unlines resolved)
         else do
           case selectionType of
             Select.Default -> runCmd project cmd' (Opts.run_args opts)
             Select.Edit -> editCmd project cmd' (Opts.run_args opts)
             Select.Show -> showCmd cmd'
             Select.Visit -> visitCmd cmd'
+    Selection _ _ -> fail $ NixonError "Multiple commands selected."
 
 -- | Actually run a command
+-- TODO: Replace Project with FilePath (project_path project)
 runCmd :: Project -> Command -> [Text] -> Nixon ()
 runCmd project cmd args = do
   selector <- Backend.selector <$> getBackend
   let project_selector select_opts shell' =
         cd (project_path project)
           >> selector (select_opts <> Select.title (show_command cmd)) shell'
-  env' <- resolveEnv project project_selector cmd args
-  evaluate cmd (Just $ project_path project) env'
+  (stdin, args', env') <- resolveEnv project project_selector cmd args
+  evaluate cmd args' (Just $ project_path project) env' (toLines <$> stdin)
 
 -- | Edit the command source before execution
 editCmd :: Project -> Command -> [Text] -> Nixon ()
@@ -172,30 +178,44 @@ visitCmd cmd =
           <$> runMaybeT
             ( MaybeT (need "VISUAL") <|> MaybeT (need "EDITOR")
             )
-      run (editor :| args) Nothing []
+      run (editor :| args) Nothing [] empty
 
--- | Resolve all command environment variable placeholders.
-resolveEnv :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Nixon.Process.Env
+-- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
+resolveEnv :: Project -> Selector Nixon -> Command -> [Text] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv project selector cmd args = do
-  vars <- mapM resolve_each $ zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
-  pure $ nixon_envs ++ vars
+  let mappedArgs = zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
+  (stdin, args', envs) <- foldM resolveEach (Nothing, [], []) mappedArgs
+  pure (stdin, args', nixonEnvs ++ envs)
   where
-    nixon_envs = [("nixon_project_path", format fp $ project_path project)]
-    resolve_each ((name, Env cmd'), select_opts) =
-      (name,)
-        <$> ( assert_command cmd' >>= \c -> resolveCmd project selector c select_opts
-            )
-    assert_command cmd_name = do
+    nixonEnvs = [("nixon_project_path", format fp $ project_path project)]
+
+    resolveEach (stdin, args', envs) ((name, Env envType cmdName multiple), select_opts) = do
+      cmd' <- assertCommand cmdName
+      let select_opts' = select_opts {selector_multiple = Just multiple}
+      resolved <- resolveCmd project selector cmd' select_opts'
+      pure $ case envType of
+        -- Standard inputs are concatenated
+        Cmd.Stdin ->
+          let stdinCombined = Just $ case stdin of
+                Nothing -> select resolved
+                Just prev -> prev <|> select resolved
+          in (stdinCombined, args', envs)
+        -- Each line counts as one positional argument
+        Cmd.Arg -> (stdin, args' <> resolved, envs)
+        -- Environment variables are concatenated into space-separated line
+        Cmd.EnvVar -> (stdin, args', envs <> [(name, T.unwords resolved)])
+
+    assertCommand cmd_name = do
       cmd' <- find ((==) cmd_name . cmdName) . commands . config <$> ask
       maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
 
 -- | Resolve command to selectable output.
-resolveCmd :: Project -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon Text
+resolveCmd :: Project -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon [Text]
 resolveCmd project selector cmd select_opts = do
-  env' <- resolveEnv project selector cmd []
+  (stdin, args, env') <- resolveEnv project selector cmd []
   let path' = Just $ project_path project
-  linesEval <- getEvaluator (run_with_output stream) cmd path' env'
-  jsonEval <- getEvaluator (run_with_output BS.stream) cmd path' env'
+  linesEval <- getEvaluator (run_with_output stream) cmd args path' env' (toLines <$> stdin)
+  jsonEval <- getEvaluator (run_with_output BS.stream) cmd args path' env' (BS.fromUTF8 <$> stdin)
   selection <- selector select_opts $ do
     case cmdOutput cmd of
       Lines -> Select.Identity . lineToText <$> linesEval
@@ -236,19 +256,20 @@ projectAction projects opts
           inProject <- P.find_in_project ptypes =<< pwd
           case inProject of
             Nothing -> projectSelector Nothing projects
-            Just project -> pure $ Selection Select.Default project
+            Just project -> pure $ Selection Select.Default [project]
         findProject query = projectSelector query projects
 
     selection <- liftIO $ findProject (Opts.proj_project opts)
     case selection of
-      EmptySelection -> liftIO (throwIO $ EmptyError "No command selected.")
-      CanceledSelection -> liftIO (throwIO $ EmptyError "Command selection canceled.")
-      Selection _selectionType project ->
+      EmptySelection -> liftIO (throwIO $ EmptyError "No project selected.")
+      CanceledSelection -> liftIO (throwIO $ EmptyError "Project selection canceled.")
+      Selection _selectionType [project] ->
         if Opts.proj_select opts
           then liftIO $ printf (fp % "\n") (project_path project)
           else
             let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_args opts) (Opts.proj_list opts) (Opts.proj_select opts)
              in findAndHandleCmd project opts'
+      Selection _ _ -> liftIO (throwIO $ NixonError "Multiple projects selected.")
 
 -- | Run a command from current directory
 runAction :: RunOpts -> Nixon ()

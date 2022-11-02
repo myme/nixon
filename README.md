@@ -59,7 +59,7 @@ x-terminal-emulator
 
 ## Git stuff {type="git"}
 
-Commands for projects using `git`.
+Commands for projects using `git`. Detected by the `project_types` test for a `.git` directory.
 
 ### `git-files`
 
@@ -69,10 +69,26 @@ git ls-files
 
 ### `vim-file ${git-files}`
 
-Use arguments/placeholders to select from a list of files to edit.
+Use placeholder argument to select a single file to edit in `vim`.
 
 ```bash
-vim "$git_files"
+vim "$1"
+```
+
+### `vim-files ${git-files:m}`
+
+Use multi-line placeholder to select a list of files to edit in `vim` tabs.
+
+```bash
+vim -p "$@"
+```
+
+### `vim-stdin <{git-files:m}`
+
+Use stdin placeholder to select a list of files to edit in `vim` tabs handled by `xargs`.
+
+```bash
+xargs vim -p
 ```
 ~~~~~~
 

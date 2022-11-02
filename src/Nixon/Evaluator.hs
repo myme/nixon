@@ -20,7 +20,7 @@ import Nixon.Direnv (direnv_cmd)
 import Nixon.Language (extension, interpreter)
 import Nixon.Logging (log_info)
 import Nixon.Nix (nix_cmd)
-import Nixon.Process (Cwd, Env, Run)
+import Nixon.Process (Cwd, Env, RunArgs)
 import qualified Nixon.Process as Proc
 import Nixon.Types (Nixon)
 import qualified Nixon.Types as T
@@ -43,7 +43,7 @@ import Turtle
     w,
     writeTextFile,
     (%),
-    (</>),
+    (</>), Shell, Line,
   )
 import Prelude hiding (FilePath)
 
@@ -76,32 +76,36 @@ maybeWrapCmd (Just path) cmd =
         <|> MaybeT (nix_cmd cmd path)
 
 -- | Provide an evaluator for a command, possibly in a direnv/nix environment
-getEvaluator :: Run m a -> Command -> Cwd -> Env -> Nixon (m a)
-getEvaluator run cmd cwd env = do
+getEvaluator :: RunArgs input m a -> Command -> [Text] -> Cwd -> Env -> Maybe (Shell input) -> Nixon (m a)
+getEvaluator run cmd args cwd env stdin = do
   path <- writeCommand cmd
   int <-
     interpreter (cmdLang cmd) >>= \case
       Nothing -> die $ format ("No interpreter for " % w) (cmdLang cmd)
       Just int -> pure int
-  int_cmd <- maybeWrapCmd cwd (int <> (format fp path :| []))
-  pure $ run int_cmd cwd env
+  int_cmd <- maybeWrapCmd cwd (int <> (format fp path :| args))
+  pure $ run int_cmd cwd env stdin
 
 -- | Run the evaluator for a command
-withEvaluator :: Run Nixon a -> Command -> Cwd -> Env -> Nixon a
-withEvaluator run cmd cwd env = join (getEvaluator run cmd cwd env)
+withEvaluator :: RunArgs input Nixon a -> Command -> [Text] -> Cwd -> Env -> Maybe (Shell input) -> Nixon a
+withEvaluator run cmd args cwd env stdin = join (getEvaluator run cmd args cwd env stdin)
 
 -- | Evaluate a command, possibly in a direnv/nix environment
-evaluate :: Command -> Cwd -> Env -> Nixon ()
-evaluate cmd path env' = do
-  isTTY <- (&&) <$> (not . Config.isGuiBackend . T.backend <$> ask) <*> liftIO (IO.hIsTerminalDevice IO.stdin)
-  forceTTY <- fromMaybe False . Config.force_tty . T.config <$> ask
+evaluate :: Command -> [Text] -> Cwd -> Env -> Maybe (Shell Line) -> Nixon ()
+evaluate cmd args path env' stdin = do
   let source = cmdSource cmd
   log_info (format ("Running command " % w) source)
-  if isTTY || forceTTY
-    then withEvaluator Proc.run cmd path env'
+
+  isNotGUIBackend <- not . Config.isGuiBackend . T.backend <$> ask
+  isTTY <- liftIO $ IO.hIsTerminalDevice IO.stdin
+  forceTTY <- fromMaybe False . Config.force_tty . T.config <$> ask
+  let useTTY = isNotGUIBackend && isTTY
+
+  if useTTY || forceTTY
+    then withEvaluator Proc.run cmd args path env' stdin
     else
       if cmdIsBg cmd
-        then withEvaluator Proc.spawn cmd path env'
+        then withEvaluator Proc.spawn cmd args path env' stdin
         else do
           let end =
                 T.unlines
@@ -115,4 +119,4 @@ evaluate cmd path env' = do
               runMaybeT $
                 MaybeT (Config.terminal . T.config <$> ask)
                   <|> MaybeT (need "TERMINAL")
-          withEvaluator (Proc.spawn . ((term :| ["-e"]) <>)) cmd' path env'
+          withEvaluator (Proc.spawn . ((term :| ["-e"]) <>)) cmd' args path env' stdin

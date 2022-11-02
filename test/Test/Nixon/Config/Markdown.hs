@@ -4,7 +4,7 @@ import Control.Arrow ((&&&))
 import Data.Either (isLeft)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Nixon.Command (CommandEnv (Env))
+import Nixon.Command (CommandEnv (Env), CommandEnvType (..))
 import qualified Nixon.Command as Cmd
 import Nixon.Config.Markdown (parseCommandName, parseHeaderArgs, parseMarkdown)
 import Nixon.Config.Types (LogLevel (LogWarning), defaultConfig)
@@ -241,7 +241,7 @@ command_tests = describe "commands section" $ do
         Right [(
           "hello",
           True,
-          [("arg", Env "arg"), ("another_arg", Env "another-arg")]
+          [("arg", Env Arg "arg" False), ("another_arg", Env Arg "another-arg" False)]
         )]
 
 parse_header_tests :: SpecWith ()
@@ -286,18 +286,37 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses arg part" $ do
     parseCommandName "cat ${arg}" `shouldBe`
-      Right ("cat", [("arg", Env "arg")])
+      Right ("cat", [("arg", Env Arg "arg" False)])
+
+  it "parses stdin arg part" $ do
+    parseCommandName "cat <{arg}" `shouldBe`
+      Right ("cat", [("arg", Env Stdin "arg" False)])
+
+  it "parses envvar arg part" $ do
+    parseCommandName "cat ={arg}" `shouldBe`
+      Right ("cat", [("arg", Env EnvVar "arg" False)])
+
+  it "parses arg modifiers" $ do
+    parseCommandName "cat ${arg:m}" `shouldBe`
+      Right ("cat", [("arg", Env Arg "arg" True)])
+
+  it "parses stdin arg modifiers" $ do
+    parseCommandName "cat <{arg:m}" `shouldBe`
+      Right ("cat", [("arg", Env Stdin "arg" True)])
 
   it "parses text and placeholder part" $ do
     parseCommandName "cat \"${arg}\"" `shouldBe`
-      Right ("cat", [("arg", Env "arg")])
+      Right ("cat", [("arg", Env Arg "arg" False)])
 
   it "replaces '-' with '_' in $name" $ do
     parseCommandName "cat \"${some-arg}\"" `shouldBe`
-      Right ("cat", [("some_arg", Env "some-arg")])
+      Right ("cat", [("some_arg", Env Arg "some-arg" False)])
 
   it "allows use of $ not matching '${'" $ do
     parseCommandName "echo $SOME_VAR" `shouldBe` Right ("echo", [])
+
+  it "allows use of < not matching '<{'" $ do
+    parseCommandName "echo <SOME_VAR" `shouldBe` Right ("echo", [])
 
   it "fails on unterminated arg" $ do
     parseCommandName "cat \"${arg\"" `shouldSatisfy` isLeft
