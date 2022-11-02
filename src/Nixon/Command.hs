@@ -1,6 +1,7 @@
 module Nixon.Command
   ( Command (..),
     CommandEnv (..),
+    CommandEnvType (..),
     CommandLocation (..),
     CommandOutput (..),
     Language (..),
@@ -58,9 +59,13 @@ empty =
       cmdLocation = Nothing
     }
 
+data CommandEnvType = Arg | EnvVar | Stdin
+  deriving (Eq, Show)
+
 -- | Placeholders for environment variables
 data CommandEnv = Env
-  { envName :: Text,
+  { envType :: CommandEnvType,
+    envName :: Text,
     envMultiple :: Bool
   }
   deriving (Eq, Show)

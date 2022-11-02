@@ -1,7 +1,7 @@
 module Nixon.Process
   ( Cwd,
     Env,
-    Run,
+    RunArgs,
     arg,
     arg_fmt,
     build_args,
@@ -18,9 +18,9 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (catMaybes)
 import qualified Data.Text as T
 import System.Posix (createSession, forkProcess, getEnvironment)
-import System.Process (CreateProcess (cwd, env), proc)
+import System.Process (CreateProcess (cwd, env, std_in), proc, StdStream (CreatePipe))
 import Turtle
-  ( Alternative (empty),
+  ( Alternative,
     ExitCode,
     FilePath,
     Line,
@@ -36,6 +36,7 @@ import Turtle
 import Turtle.Shell (Shell)
 import Prelude hiding (FilePath)
 import Control.Monad.Trans.Reader (ReaderT)
+import Control.Applicative (Alternative(empty))
 
 type Cwd = Maybe FilePath
 
@@ -64,29 +65,42 @@ build_cmd cmd cwd' env' = do
         env = cpEnv
       }
 
-type Run m a = NonEmpty Text -> Cwd -> Env -> m a
+type RunArgs b m a =
+  -- | Command + args
+  NonEmpty Text ->
+  -- | Current working directory
+  Cwd ->
+  -- | Process environment
+  Env ->
+  -- | Standard input
+  Maybe (Shell b) ->
+  m a
 
 -- | Run a command and wait for it to finish
-run :: MonadIO m => Run m ()
-run cmd cwd' env' = sh $ do
+run :: MonadIO m => RunArgs Line m ()
+run cmd cwd' env' stdin = sh $ do
   cmd' <- build_cmd cmd cwd' env'
-  system cmd' empty
+  case stdin of
+    Nothing -> system cmd' empty
+    Just stdin' -> system cmd' { std_in = CreatePipe } stdin'
 
-type Runner m a = CreateProcess -> m a -> m a
+type Runner m a = CreateProcess -> Shell a -> m a
 
 -- | Run a process and return the output
-run_with_output :: (MonadIO m, Alternative m) => Runner m a -> Run m a
-run_with_output stream' cmd cwd' env' = do
+run_with_output :: (MonadIO m, Alternative m) => Runner m a -> RunArgs a m a
+run_with_output stream' cmd cwd' env' stdin = do
   cmd' <- build_cmd cmd cwd' env'
-  stream' cmd' empty
+  case stdin of
+    Nothing -> stream' cmd' empty
+    Just stdin' -> stream' cmd' { std_in = CreatePipe } stdin'
 
 -- | Spawn/fork off a command in the background
-spawn :: MonadIO m => Run m ()
-spawn cmd cwd' env' = liftIO $
+spawn :: MonadIO m => RunArgs Line m ()
+spawn cmd cwd' env' stdin = liftIO $
   void $
     forkProcess $ do
       _ <- createSession
-      run cmd cwd' env'
+      run cmd cwd' env' stdin
 
 class Monad m => HasProc m where
   proc' :: Text -> [Text] -> Shell Line -> m (ExitCode, Text)

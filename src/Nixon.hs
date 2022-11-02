@@ -6,6 +6,7 @@ where
 
 import Control.Applicative ((<|>))
 import Control.Exception (throwIO, try)
+import Control.Monad (foldM)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Reader (ask, local)
@@ -44,13 +45,15 @@ import Nixon.Types
     NixonError (EmptyError, NixonError),
     runNixon,
   )
-import Nixon.Utils (implode_home)
+import Nixon.Utils (implode_home, toLines)
 import System.Console.Haskeline (defaultSettings, getInputLineWithInitial, runInputT)
 import System.Environment (withArgs)
 import Turtle
-  ( ExitCode (ExitFailure),
+  ( Alternative (empty),
+    ExitCode (ExitFailure),
     FilePath,
     MonadIO (..),
+    Shell,
     Text,
     cd,
     d,
@@ -62,14 +65,13 @@ import Turtle
     printf,
     pwd,
     s,
+    select,
     stream,
     w,
     (%),
   )
-import qualified Turtle
 import qualified Turtle.Bytes as BS
 import Prelude hiding (FilePath, fail, log)
-import Control.Arrow (second)
 
 -- | List projects, filtering if a query is specified.
 listProjects :: [Project] -> Maybe Text -> Nixon ()
@@ -139,14 +141,15 @@ handleCmd project cmd opts = do
     Selection _ _ -> fail $ NixonError "Multiple commands selected."
 
 -- | Actually run a command
+-- TODO: Replace Project with FilePath (project_path project)
 runCmd :: Project -> Command -> [Text] -> Nixon ()
 runCmd project cmd args = do
   selector <- Backend.selector <$> getBackend
   let project_selector select_opts shell' =
         cd (project_path project)
           >> selector (select_opts <> Select.title (show_command cmd)) shell'
-  env' <- resolveEnv project project_selector cmd args
-  evaluate cmd (Just $ project_path project) env'
+  (stdin, args', env') <- resolveEnv project project_selector cmd args
+  evaluate cmd args' (Just $ project_path project) env' (toLines <$> stdin)
 
 -- | Edit the command source before execution
 editCmd :: Project -> Command -> [Text] -> Nixon ()
@@ -175,20 +178,33 @@ visitCmd cmd =
           <$> runMaybeT
             ( MaybeT (need "VISUAL") <|> MaybeT (need "EDITOR")
             )
-      run (editor :| args) Nothing []
+      run (editor :| args) Nothing [] empty
 
--- | Resolve all command environment variable placeholders.
-resolveEnv :: Project -> Selector Nixon -> Command -> [Text] -> Nixon Nixon.Process.Env
+-- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
+resolveEnv :: Project -> Selector Nixon -> Command -> [Text] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv project selector cmd args = do
-  vars <- mapM resolveEach $ zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
-  pure $ nixonEnvs ++ map (second T.unwords) vars
+  let mappedArgs = zip (cmdEnv cmd) (map Select.search args <> repeat Select.defaults)
+  (stdin, args', envs) <- foldM resolveEach (Nothing, [], []) mappedArgs
+  pure (stdin, args', nixonEnvs ++ envs)
   where
     nixonEnvs = [("nixon_project_path", format fp $ project_path project)]
-    resolveEach ((name, Env cmdName multiple), select_opts) = do
+
+    resolveEach (stdin, args', envs) ((name, Env envType cmdName multiple), select_opts) = do
       cmd' <- assertCommand cmdName
       let select_opts' = select_opts {selector_multiple = Just multiple}
       resolved <- resolveCmd project selector cmd' select_opts'
-      pure (name, resolved)
+      pure $ case envType of
+        -- Standard inputs are concatenated
+        Cmd.Stdin ->
+          let stdinCombined = Just $ case stdin of
+                Nothing -> select resolved
+                Just prev -> prev <|> select resolved
+          in (stdinCombined, args', envs)
+        -- Each line counts as one positional argument
+        Cmd.Arg -> (stdin, args' <> resolved, envs)
+        -- Environment variables are concatenated into space-separated line
+        Cmd.EnvVar -> (stdin, args', envs <> [(name, T.unwords resolved)])
+
     assertCommand cmd_name = do
       cmd' <- find ((==) cmd_name . cmdName) . commands . config <$> ask
       maybe (error $ "Invalid argument: " <> T.unpack cmd_name) pure cmd'
@@ -196,10 +212,10 @@ resolveEnv project selector cmd args = do
 -- | Resolve command to selectable output.
 resolveCmd :: Project -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon [Text]
 resolveCmd project selector cmd select_opts = do
-  env' <- resolveEnv project selector cmd []
+  (stdin, args, env') <- resolveEnv project selector cmd []
   let path' = Just $ project_path project
-  linesEval <- getEvaluator (run_with_output stream) cmd path' env'
-  jsonEval <- getEvaluator (run_with_output BS.stream) cmd path' env'
+  linesEval <- getEvaluator (run_with_output stream) cmd args path' env' (toLines <$> stdin)
+  jsonEval <- getEvaluator (run_with_output BS.stream) cmd args path' env' (BS.fromUTF8 <$> stdin)
   selection <- selector select_opts $ do
     case cmdOutput cmd of
       Lines -> Select.Identity . lineToText <$> linesEval

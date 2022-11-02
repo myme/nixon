@@ -28,7 +28,7 @@
 
 ### `terminal &`
 
-```bash
+```
 x-terminal-emulator
 ```
 
@@ -164,13 +164,56 @@ git show $(echo $git_log | cut -f1 -d' ')
 
 ## Files
 
+### `cat`
+
+Basic check for `stdin` is readable when there are no `stdin` placeholder args.
+
+```bash
+cat
+```
+
 ### `rg-files`
 
 ```bash
 rg --files
 ```
 
-### `vim-file ${rg-files:m}`
+### `vim-stdin <{rg-files:m}`
+
+Open files in `vim` passing files to open in through `stdin` and `xargs`.
+
+```bash
+xargs vim -p
+```
+
+### `vim-stdin-concat <{git-files:m} <{rg-files:m}`
+
+Open files in `vim` passing files to open in through `stdin` and `xargs`
+concatenating every `stdin` input.
+
+```bash
+xargs vim -p
+```
+
+### `vim-arg ${rg-files}`
+
+Open files in `vim` passing files as a single positional argument.
+
+```bash
+vim -p "$1"
+```
+
+### `vim-args ${rg-files:m}`
+
+Open files in `vim` passing files as positional arguments.
+
+```bash
+vim -p "$@"
+```
+
+### `vim-env ={rg-files:m}`
+
+Open files in `vim` passing files in an environment variable.
 
 ```bash
 vim -p $rg_files
