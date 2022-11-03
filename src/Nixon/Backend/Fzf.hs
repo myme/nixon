@@ -24,7 +24,6 @@ module Nixon.Backend.Fzf
 where
 
 import Control.Arrow (second, (&&&))
-import Data.Bool (bool)
 import Data.List (sort)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, isJust)
@@ -46,6 +45,7 @@ import Nixon.Utils
     shell_to_list,
     takeToSpace,
     toLines,
+    (<<?),
   )
 import Turtle
   ( Alternative ((<|>)),
@@ -80,10 +80,6 @@ fzfBackend cfg =
           commandSelector = fzfProjectCommand fzf_opts',
           selector = fzf . fzf_opts
         }
-
-(<<?) :: a -> Maybe Bool -> Maybe a
-(<<?) x f = bool Nothing (Just x) =<< f
-infixr 1 <<?
 
 data FzfOpts = FzfOpts
   { _border :: Bool,

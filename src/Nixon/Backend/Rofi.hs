@@ -27,7 +27,7 @@ import Nixon.Process (arg, arg_fmt, build_args, flag)
 import Nixon.Project (Project (project_dir, project_name))
 import Nixon.Select (Candidate, Selection (..), SelectionType (..))
 import qualified Nixon.Select as Select
-import Nixon.Utils (implode_home, shell_to_list, toLines)
+import Nixon.Utils (implode_home, shell_to_list, toLines, (<<?))
 import Turtle
   ( Alternative ((<|>)),
     ExitCode (ExitFailure, ExitSuccess),
@@ -52,7 +52,8 @@ rofiBackend cfg =
             [ rofiExact <$> Config.exact_match cfg,
               rofiIgnoreCase <$> Config.ignore_case cfg,
               rofiQuery <$> Select.selector_search opts,
-              rofiPrompt <$> Select.selector_title opts
+              rofiPrompt <$> Select.selector_title opts,
+              rofiMultiple <<? Select.selector_multiple opts
             ]
       rofi_opts' = rofi_opts Select.defaults
    in Backend
@@ -67,6 +68,7 @@ data RofiOpts = RofiOpts
     _ignore_case :: Maybe Bool,
     _msg :: Maybe Text,
     _markup :: Bool,
+    _multi :: Bool,
     _prompt :: Maybe Text,
     _query :: Maybe Text
   }
@@ -79,6 +81,7 @@ instance Semigroup RofiOpts where
         _ignore_case = _ignore_case right <|> _ignore_case left,
         _markup = _markup right || _markup left,
         _msg = _msg right <|> _msg left,
+        _multi = _multi right || _multi left,
         _prompt = _prompt right <|> _prompt left,
         _query = _query right <|> _query left
       }
@@ -90,6 +93,7 @@ instance Monoid RofiOpts where
         _ignore_case = Nothing,
         _markup = False,
         _msg = Nothing,
+        _multi = False,
         _prompt = Nothing,
         _query = Nothing
       }
@@ -114,6 +118,9 @@ rofiPrompt prompt = mempty {_prompt = Just prompt}
 rofiQuery :: Text -> RofiOpts
 rofiQuery query = mempty {_query = Just query}
 
+rofiMultiple :: RofiOpts
+rofiMultiple = mempty {_multi = True}
+
 data RofiResult
   = RofiCancel
   | RofiDefault Int
@@ -129,6 +136,7 @@ rofi opts candidates = do
           [ arg_fmt "-matching" (bool "fuzzy" "normal" . fromMaybe False) (_exact opts),
             flag "-i" =<< _ignore_case opts,
             flag "-markup-rows" (_markup opts),
+            flag "-multi-select" (_multi opts),
             arg "-mesg" =<< _msg opts,
             arg "-p" =<< _prompt opts,
             arg "-filter" =<< _query opts

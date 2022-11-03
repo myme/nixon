@@ -9,9 +9,11 @@ module Nixon.Utils
     takeToSpace,
     filter_elems,
     implode_home,
+    (<<?),
   )
 where
 
+import Data.Bool (bool)
 import Data.Char (isSpace)
 import Data.List.NonEmpty (toList)
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -84,3 +86,9 @@ implode_home :: MonadIO m => FilePath -> m FilePath
 implode_home path' = do
   home' <- home
   pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')
+
+-- | Return a if the bool within the Maybe is True
+(<<?) :: a -> Maybe Bool -> Maybe a
+(<<?) x f = bool Nothing (Just x) =<< f
+
+infixr 1 <<?
