@@ -90,6 +90,17 @@ Use stdin placeholder to select a list of files to edit in `vim` tabs handled by
 ```bash
 xargs vim -p
 ```
+
+### `vim-env FILES={git-files:m}`
+
+Use environment variable placeholder to select a list of files to edit in `vim`
+tabs. The environment variable name is optional and can be empty, in which case
+the name will be the name of the placeholder action with `-` (/dashes/) replaced
+by `_` (/underscore/), `git_files` in this case.
+
+```bash
+vim -p $FILES
+```
 ~~~~~~
 
 ## Usage
