@@ -9,7 +9,7 @@
   "use_direnv":true,
   "use_nix":true,
   "project_dirs": [
-    "~/src"
+    "~/code/**/*"
   ],
   "project_types": [
     { "name": "cabal", "test": ["cabal.project"], "desc": "Cabal new-style project"},
@@ -48,10 +48,10 @@ emacs
 ]
 ```
 
-### `hello-world ${json-greetings}`
+### `hello-world <{json-greetings:m}`
 
 ```bash
-echo ${json_greetings}
+cat
 ```
 
 ### `networks`
@@ -60,10 +60,18 @@ echo ${json_greetings}
 nmcli -t connection | cut -d':' -f1
 ```
 
-### `network-connect`
+### `network-connect ${networks}`
 
 ```bash
-nmcli connection up "$(nixon networks)"
+nmcli connection up "$1"
+```
+
+### `pd`
+
+```bash
+cd "$nixon_project_path/../.."
+echo -n "Current dir: "
+pwd
 ```
 
 ## nix stuff
@@ -93,7 +101,7 @@ jq '.scripts | to_entries | map({ title: (.key + " → " + .value), value: .key 
 ### `npm-run ${npm-scripts}`
 
 ```bash
-npm run "$npm_scripts"
+npm run "$1"
 ```
 
 ### `npm-install`
@@ -107,7 +115,7 @@ npm install
 ### `yarn-run ${npm-scripts}`
 
 ```bash
-yarn run "$npm_scripts"
+yarn run "$1"
 ```
 
 ### `yarn-install`
@@ -153,13 +161,13 @@ git ls-files
 ### `git-rev ${git-log}`
 
 ```bash
-echo $git_log
+echo "$1"
 ```
 
-### `git-show ${git-log}`
+### `git-show ${git-rev}`
 
 ```bash
-git show $(echo $git_log | cut -f1 -d' ')
+git show $(echo "$1" | cut -f1 -d' ')
 ```
 
 ## Files
@@ -217,4 +225,12 @@ Open files in `vim` passing files in an environment variable.
 
 ```bash
 vim -p $rg_files
+```
+
+### `vim-env-alias FILES={rg-files:m}`
+
+Open files in `vim` passing files in an environment variable.
+
+```bash
+vim -p $FILES
 ```
