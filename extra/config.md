@@ -100,6 +100,8 @@ jq '.scripts | to_entries | map({ title: (.key + " → " + .value), value: .key 
 
 ### `npm-run ${npm-scripts}`
 
+Run a `npm` script from `package.json`.
+
 ```bash
 npm run "$1"
 ```
