@@ -38,6 +38,9 @@ CLOSED: [2022-11-02 Wed 23:55]
 E.g. for a `docker-compose` command select which services to start/stop.
 
 ** TODO Default set of selection for multiple select
+
+** TODO Placeholder default values
+
 * Backends (fzf, rofi)
 
 ** TODO Pass through backend configuration (for e.g. styles++)
