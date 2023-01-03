@@ -50,6 +50,7 @@ import Turtle
     (%),
   )
 import Prelude hiding (FilePath)
+import Data.List.NonEmpty (NonEmpty((:|)))
 
 data PosInfo = PosInfo
   { posName :: FilePath,
@@ -262,7 +263,7 @@ parseCommandArg = do
           <|> (Cmd.EnvVar . T.pack <$> P.many P.alphaNum <* P.char '=')
   placeholderType <- P.try $ startCmdArg <* P.char '{'
   spec <- T.pack <$> P.manyTill (P.noneOf "}") (P.char '}')
-  let (name : flags) = T.splitOn ":" spec
+  let (name :| flags) = splitOn ":" spec
       multiple = "m" `elem` flags
       fixup = T.replace "-" "_"
       placeholderWithName = case placeholderType of
@@ -270,3 +271,8 @@ parseCommandArg = do
         Cmd.EnvVar alias -> Cmd.EnvVar $ fixup alias
         same -> same
   pure $ Cmd.Placeholder placeholderWithName name multiple
+
+splitOn :: Text -> Text -> NonEmpty Text
+splitOn delim input = case T.splitOn delim input of
+  [] -> input :| []
+  (first' : rest) -> first' :| rest
