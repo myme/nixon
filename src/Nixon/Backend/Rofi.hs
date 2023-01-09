@@ -57,7 +57,7 @@ rofiBackend cfg =
             ]
       rofi_opts' = rofi_opts Select.defaults
    in Backend
-        { projectSelector = rofiProjects rofi_opts',
+        { projectSelector = rofiProjects . rofi_opts,
           commandSelector = const $ rofiProjectCommand rofi_opts',
           selector = rofi . rofi_opts
         }

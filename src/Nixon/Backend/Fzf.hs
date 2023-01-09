@@ -76,7 +76,7 @@ fzfBackend cfg =
             ]
       fzf_opts' = fzf_opts Select.defaults
    in Backend
-        { projectSelector = fzfProjects fzf_opts',
+        { projectSelector = fzfProjects . fzf_opts,
           commandSelector = fzfProjectCommand fzf_opts',
           selector = fzf . fzf_opts
         }

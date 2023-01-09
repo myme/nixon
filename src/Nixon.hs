@@ -10,11 +10,13 @@ import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Reader (ask, local)
 import Data.Foldable (find)
+import Data.Functor (void)
 import Data.List (intersect)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Data.Traversable (for)
 import Nixon.Backend (Backend)
 import qualified Nixon.Backend as Backend
 import Nixon.Backend.Fzf
@@ -123,7 +125,8 @@ handleCmd path cmd opts = do
     Selection selectionType [cmd'] ->
       if Opts.run_select opts
         then do
-          resolved <- Cmd.resolveCmd path selector cmd' Select.defaults
+          let selectOpts = Select.defaults {Select.selector_multiple = Just True}
+          resolved <- Cmd.resolveCmd path selector cmd' selectOpts
           printf (s % "\n") (T.unlines resolved)
         else do
           case selectionType of
@@ -184,27 +187,29 @@ projectAction :: [Project] -> ProjectOpts -> Nixon ()
 projectAction projects opts
   | Opts.proj_list opts = listProjects projects (Opts.proj_project opts)
   | otherwise = do
-    ptypes <- project_types . config <$> ask
-    projectSelector <- Backend.projectSelector <$> getBackend
+      ptypes <- project_types . config <$> ask
+      projectSelector <- Backend.projectSelector <$> getBackend
 
-    let findProject (Just ".") = do
-          inProject <- P.find_in_project ptypes =<< pwd
-          case inProject of
-            Nothing -> projectSelector Nothing projects
-            Just project -> pure $ Selection Select.Default [project]
-        findProject query = projectSelector query projects
+      let selectOpts = Select.defaults {Select.selector_multiple = Just $ Opts.proj_select opts}
+          findProject (Just ".") = do
+            inProject <- P.find_in_project ptypes =<< pwd
+            case inProject of
+              Nothing -> projectSelector selectOpts Nothing projects
+              Just project -> pure $ Selection Select.Default [project]
+          findProject query = projectSelector selectOpts query projects
 
-    selection <- liftIO $ findProject (Opts.proj_project opts)
-    case selection of
-      EmptySelection -> liftIO (throwIO $ EmptyError "No project selected.")
-      CanceledSelection -> liftIO (throwIO $ EmptyError "Project selection canceled.")
-      Selection _selectionType [project] ->
-        if Opts.proj_select opts
-          then liftIO $ printf (fp % "\n") (project_path project)
-          else
-            let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_args opts) (Opts.proj_list opts) (Opts.proj_select opts)
-             in findAndHandleCmd project opts'
-      Selection _ _ -> liftIO (throwIO $ NixonError "Multiple projects selected.")
+      selection <- liftIO $ findProject (Opts.proj_project opts)
+      case selection of
+        EmptySelection -> liftIO (throwIO $ EmptyError "No project selected.")
+        CanceledSelection -> liftIO (throwIO $ EmptyError "Project selection canceled.")
+        Selection _selectionType ps ->
+          if Opts.proj_select opts
+            then void . liftIO . for ps $ printf (fp % "\n") . project_path
+            else case ps of
+              [project] ->
+                let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_args opts) (Opts.proj_list opts) (Opts.proj_select opts)
+                 in findAndHandleCmd project opts'
+              _ -> liftIO (throwIO $ NixonError "Multiple projects selected.")
 
 -- | Run a command from current directory
 runAction :: RunOpts -> Nixon ()
