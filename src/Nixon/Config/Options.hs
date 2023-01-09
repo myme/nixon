@@ -7,7 +7,6 @@ module Nixon.Config.Options
     SubCommand (..),
     ProjectOpts (..),
     RunOpts (..),
-    command,
     default_options,
     parse_args,
   )
@@ -75,10 +74,6 @@ data RunOpts = RunOpts
     run_select :: Bool
   }
   deriving (Show)
-
-command :: SubCommand -> Maybe Text
-command (ProjectCommand ProjectOpts {proj_command}) = proj_command
-command (RunCommand RunOpts {run_command}) = run_command
 
 default_options :: Options
 default_options =
