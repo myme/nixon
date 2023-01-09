@@ -15,6 +15,7 @@ import Data.Bifunctor (Bifunctor (first))
 import Data.Char (isSpace)
 import Data.Either (partitionEithers)
 import Data.List (find)
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Text (pack, strip)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
@@ -50,7 +51,6 @@ import Turtle
     (%),
   )
 import Prelude hiding (FilePath)
-import Data.List.NonEmpty (NonEmpty((:|)))
 
 data PosInfo = PosInfo
   { posName :: FilePath,
@@ -163,25 +163,25 @@ parse fileName = go (S 0 []) (JSON.empty, [])
       | l < stateHeaderLevel st = go (S l []) ps nodes'
       -- Skipping levels on the way down
       | l > stateHeaderLevel st + 1 =
-        Left $
-          format
-            ("Unexpected header level bump (" % d % " to " % d % "): " % s)
-            (stateHeaderLevel st)
-            l
-            name
+          Left $
+            format
+              ("Unexpected header level bump (" % d % " to " % d % "): " % s)
+              (stateHeaderLevel st)
+              l
+              name
     go st (cfg, ps) (Head pos l name attr : rest)
       -- We found a config
       | hasArgs "config" attr = case parseConfig rest of
-        (Left err, _) -> Left err
-        (Right cfg', rest') -> go st (cfg', ps) rest'
+          (Left err, _) -> Left err
+          (Right cfg', rest') -> go st (cfg', ps) rest'
       -- We found a command
       | hasArgs "command" attr =
-        let pt = getKwargs "type" attr <> stateProjectTypes st
-            isBg = hasArgs "bg" attr
-            isJson = hasArgs "json" attr
-         in case parseCommand (PosInfo fileName pos) name pt rest of
-              (Left err, _) -> Left err
-              (Right p, rest') -> go st (cfg, p <! bg isBg <! json isJson : ps) rest'
+          let pt = getKwargs "type" attr <> stateProjectTypes st
+              isBg = hasArgs "bg" attr
+              isJson = hasArgs "json" attr
+           in case parseCommand (PosInfo fileName pos) name pt rest of
+                (Left err, _) -> Left err
+                (Right p, rest') -> go st (cfg, p <! bg isBg <! json isJson : ps) rest'
       -- Pick up project type along the way
       | otherwise = go st' (cfg, ps) rest
       where
