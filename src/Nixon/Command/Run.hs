@@ -30,26 +30,27 @@ import Prelude hiding (FilePath)
 
 -- | Actually run a command
 runCmd :: Selector Nixon -> FilePath -> Command -> [Text] -> Nixon ()
-runCmd selector path cmd args = do
+runCmd selector projectPath cmd args = do
   let project_selector select_opts shell' =
-        cd path
+        cd projectPath
           >> selector (select_opts <> Select.title (Cmd.show_command cmd)) shell'
-  (stdin, args', env') <- resolveEnv path project_selector cmd args
-  evaluate cmd args' (Just path) env' (toLines <$> stdin)
+  (stdin, args', env') <- resolveEnv projectPath project_selector cmd args
+  let pwd = Cmd.cmdPwd cmd <|> Just projectPath
+  evaluate cmd args' pwd env' (toLines <$> stdin)
 
 -- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
 resolveEnv :: FilePath -> Selector Nixon -> Command -> [Text] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
-resolveEnv path selector cmd args = do
+resolveEnv projectPath selector cmd args = do
   let mappedArgs = zip (Cmd.cmdPlaceholders cmd) (map Select.search args <> repeat Select.defaults)
   (stdin, args', envs) <- foldM resolveEach (Nothing, [], []) mappedArgs
   pure (stdin, args', nixonEnvs ++ envs)
   where
-    nixonEnvs = [("nixon_project_path", format fp path)]
+    nixonEnvs = [("nixon_project_path", format fp projectPath)]
 
     resolveEach (stdin, args', envs) (Cmd.Placeholder envType cmdName multiple, select_opts) = do
       cmd' <- assertCommand cmdName
       let select_opts' = select_opts {selector_multiple = Just multiple}
-      resolved <- resolveCmd path selector cmd' select_opts'
+      resolved <- resolveCmd projectPath selector cmd' select_opts'
       pure $ case envType of
         -- Standard inputs are concatenated
         Cmd.Stdin ->
@@ -68,10 +69,10 @@ resolveEnv path selector cmd args = do
 
 -- | Resolve command to selectable output.
 resolveCmd :: FilePath -> Selector Nixon -> Command -> Select.SelectorOpts -> Nixon [Text]
-resolveCmd path selector cmd select_opts = do
-  (stdin, args, env') <- resolveEnv path selector cmd []
-  linesEval <- getEvaluator (run_with_output stream) cmd args (Just path) env' (toLines <$> stdin)
-  jsonEval <- getEvaluator (run_with_output BS.stream) cmd args (Just path) env' (BS.fromUTF8 <$> stdin)
+resolveCmd projectPath selector cmd select_opts = do
+  (stdin, args, env') <- resolveEnv projectPath selector cmd []
+  linesEval <- getEvaluator (run_with_output stream) cmd args (Just projectPath) env' (toLines <$> stdin)
+  jsonEval <- getEvaluator (run_with_output BS.stream) cmd args (Just projectPath) env' (BS.fromUTF8 <$> stdin)
   selection <- selector select_opts $ do
     case Cmd.cmdOutput cmd of
       Lines -> Select.Identity . lineToText <$> linesEval

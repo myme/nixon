@@ -29,14 +29,14 @@ import Nixon.Command (Command (..), show_command_with_description)
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Command.Run as Cmd
 import qualified Nixon.Config as Config
-import Nixon.Config.Options (BackendType (..), CompletionType, ProjectOpts (..), RunOpts (..), SubCommand (..))
+import Nixon.Config.Options (BackendType (..), CompletionType, EvalOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
 import qualified Nixon.Config.Types as Config
 import Nixon.Logging (log_error, log_info)
 import Nixon.Process (run)
 import Nixon.Project (Project, ProjectType (..), project_path)
 import qualified Nixon.Project as P
-import Nixon.Select (Candidate (..), Selection (..))
+import Nixon.Select (Candidate (..), Selection (..), SelectionType (..))
 import qualified Nixon.Select as Select
 import Nixon.Types
   ( Config (commands, project_dirs, project_types),
@@ -182,6 +182,28 @@ editSelection selection = runInputT defaultSettings $ do
     Just "" -> Nothing
     line' -> T.pack <$> line'
 
+-- | Evaluate a command expression.
+evalAction :: EvalOpts -> Nixon ()
+evalAction (EvalOpts cmd placeholders lang) = do
+  pwd' <- pwd
+  ptypes <- project_types . config <$> ask
+  project <- liftIO (P.find_in_project_or_default ptypes pwd')
+  let cmd' =
+        Cmd.empty
+          { cmdSource = cmd,
+            cmdPlaceholders = placeholders,
+            cmdPwd = Just pwd',
+            cmdLang = lang
+          }
+      runOpts =
+        RunOpts
+          { run_command = Nothing,
+            run_args = [],
+            run_list = False,
+            run_select = False
+          }
+  handleCmd (project_path project) (Selection Default [cmd']) runOpts
+
 -- | Find/filter out a project and perform an action.
 projectAction :: [Project] -> ProjectOpts -> Nixon ()
 projectAction projects opts
@@ -230,6 +252,9 @@ nixonWithConfig userConfig = liftIO $ do
   (sub_cmd, cfg) <- either die pure =<< Opts.parse_args (nixonCompleter userConfig)
   err <- try $
     runNixon (userConfig <> cfg) $ case sub_cmd of
+      EvalCommand evalOpts -> do
+        log_info "Running <eval> command"
+        evalAction evalOpts
       ProjectCommand projectOpts -> do
         log_info "Running <project> command"
         cfg' <- config <$> ask
@@ -256,6 +281,7 @@ nixonCompleter userConfig compType args = do
           srcs = project_dirs cfg'
       projects <- P.sort_projects <$> liftIO (P.find_projects 1 ptypes srcs)
       case compType of
+        Opts.Eval -> pure []
         Opts.Project -> pure $ map (T.unpack . format fp . P.project_name) projects
         Opts.Run -> do
           project <- case args of

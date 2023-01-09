@@ -28,11 +28,13 @@ data Command = Command
     cmdLang :: Language,
     cmdProjectTypes :: [Text],
     cmdSource :: Text,
+    cmdPwd :: Maybe FilePath,
     cmdPlaceholders :: [Placeholder],
     cmdIsBg :: Bool,
     -- | Command should be hidden from selection
     cmdIsHidden :: Bool,
     cmdOutput :: CommandOutput,
+    -- | Command location in configuration
     cmdLocation :: Maybe CommandLocation
   }
   deriving (Eq, Show)
@@ -51,6 +53,7 @@ empty =
       cmdLang = None,
       cmdProjectTypes = [],
       cmdSource = "",
+      cmdPwd = Nothing,
       cmdPlaceholders = [],
       cmdIsBg = False,
       cmdIsHidden = False,

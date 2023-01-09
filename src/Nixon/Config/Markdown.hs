@@ -4,6 +4,7 @@ module Nixon.Config.Markdown
   ( defaultPath,
     parseMarkdown,
     parseHeaderArgs,
+    parseCommandArg,
     parseCommandName,
   )
 where
@@ -250,13 +251,17 @@ parseCommandName = first (T.pack . show) . P.parse parser ""
 parseCommandArgs :: Parser [Cmd.Placeholder]
 parseCommandArgs =
   P.choice
-    [ (:) <$> parseCommandArg <*> parseCommandArgs,
+    [ (:) <$> parseCommandArg' <*> parseCommandArgs,
       P.anyChar *> parseCommandArgs,
       [] <$ P.eof
     ]
 
-parseCommandArg :: Parser Cmd.Placeholder
-parseCommandArg = do
+-- | Convenience wrapper for running placeholder parser
+parseCommandArg :: String -> Either String Cmd.Placeholder
+parseCommandArg = first show . P.parse parseCommandArg' "" . T.pack
+
+parseCommandArg' :: Parser Cmd.Placeholder
+parseCommandArg' = do
   let startCmdArg =
         (Cmd.Stdin <$ P.char '<')
           <|> (Cmd.Arg <$ P.char '$')

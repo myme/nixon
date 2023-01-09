@@ -5,6 +5,7 @@ module Nixon.Config.Options
     LogLevel (..),
     Options (..),
     SubCommand (..),
+    EvalOpts (..),
     ProjectOpts (..),
     RunOpts (..),
     default_options,
@@ -12,11 +13,14 @@ module Nixon.Config.Options
   )
 where
 
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
+import Nixon.Command.Placeholder (Placeholder)
 import Nixon.Config (read_config)
 import qualified Nixon.Config.Markdown as MD
 import Nixon.Config.Types (BackendType (..), Config, ConfigError (..), LogLevel (..))
 import qualified Nixon.Config.Types as Config
+import qualified Nixon.Language as Lang
 import Nixon.Utils (implode_home)
 import qualified Options.Applicative as Opts
 import System.Environment (getArgs)
@@ -43,7 +47,7 @@ import Prelude hiding (FilePath)
 
 type Completer = [String] -> IO [String]
 
-data CompletionType = Project | Run
+data CompletionType = Eval | Project | Run
 
 -- | Command line options.
 data Options = Options
@@ -54,8 +58,16 @@ data Options = Options
   deriving (Show)
 
 data SubCommand
-  = ProjectCommand ProjectOpts
+  = EvalCommand EvalOpts
+  | ProjectCommand ProjectOpts
   | RunCommand RunOpts
+  deriving (Show)
+
+data EvalOpts = EvalOpts
+  { eval_command :: Text,
+    eval_placeholders :: [Placeholder],
+    eval_language :: Lang.Language
+  }
   deriving (Show)
 
 data ProjectOpts = ProjectOpts
@@ -111,7 +123,8 @@ parser default_config mkcompleter =
   Options
     <$> optional (optPath "config" 'C' (config_help default_config))
     <*> parse_config
-    <*> ( ProjectCommand <$> subcommand "project" "Project actions" (project_parser mkcompleter)
+    <*> ( EvalCommand <$> subcommand "eval" "Evaluate expression" eval_parser
+            <|> ProjectCommand <$> subcommand "project" "Project actions" (project_parser mkcompleter)
             <|> RunCommand <$> subcommand "run" "Run command" (run_parser $ mkcompleter Run)
             <|> RunCommand <$> run_parser (mkcompleter Run)
         )
@@ -145,6 +158,21 @@ parser default_config mkcompleter =
         <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
         <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")
         <*> optional (opt parse_loglevel "loglevel" 'L' "Loglevel: debug, info, warning, error")
+
+eval_parser :: Parser EvalOpts
+eval_parser =
+  EvalOpts
+    <$> Opts.strArgument
+      (Opts.metavar "command" <> Opts.help "Command expression")
+    <*> many
+      ( Opts.argument
+          (Opts.eitherReader MD.parseCommandArg)
+          (Opts.metavar "placeholder" <> Opts.help "Placeholder")
+      )
+    <*> defBash (opt parseLang "language" 'l' "Language: bash, JavaScript, Haskell, ...")
+  where
+    defBash = fmap (fromMaybe Lang.Bash) . optional
+    parseLang = Just . Lang.parseLang
 
 project_parser :: (CompletionType -> Opts.Completer) -> Parser ProjectOpts
 project_parser mkcompleter =
