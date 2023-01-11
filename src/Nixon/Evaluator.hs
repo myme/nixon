@@ -1,5 +1,6 @@
 module Nixon.Evaluator
   ( evaluate,
+    garbageCollect,
     getCacheDir,
     getEvaluator,
     writeCommand,
@@ -24,13 +25,15 @@ import Nixon.Process (Cwd, Env, RunArgs)
 import qualified Nixon.Process as Proc
 import Nixon.Types (Nixon)
 import qualified Nixon.Types as T
-import Nixon.Utils (quote)
+import Nixon.Utils (quote, shell_to_list)
 import System.Directory (XdgDirectory (..), getXdgDirectory)
 import qualified System.IO as IO
 import Turtle
   ( Alternative ((<|>)),
     FilePath,
+    Line,
     MonadIO (..),
+    Shell,
     Text,
     decodeString,
     die,
@@ -38,12 +41,14 @@ import Turtle
     fp,
     fromText,
     join,
+    ls,
     mktree,
     need,
+    rm,
     w,
     writeTextFile,
     (%),
-    (</>), Shell, Line,
+    (</>),
   )
 import Prelude hiding (FilePath)
 
@@ -65,6 +70,16 @@ writeCommand cmd = liftIO $ do
       path = cacheDir </> basename
   writeTextFile path content
   pure path
+
+-- | Clean up all cache files in $XDG_CACHE_DIR/nixon
+garbageCollect :: MonadIO m => Bool -> m [Text]
+garbageCollect dryRun = shell_to_list $ do
+  files <- ls =<< getCacheDir
+  if dryRun
+    then pure $ format ("would remove " % fp) files
+    else do
+      rm files
+      pure $ format ("removed " % fp) files
 
 -- | Maybe wrap a command in direnv/nix.
 maybeWrapCmd :: Cwd -> NonEmpty Text -> Nixon (NonEmpty Text)

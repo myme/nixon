@@ -6,6 +6,7 @@ module Nixon.Config.Options
     Options (..),
     SubCommand (..),
     EvalOpts (..),
+    GCOpts (..),
     ProjectOpts (..),
     RunOpts (..),
     default_options,
@@ -59,6 +60,7 @@ data Options = Options
 
 data SubCommand
   = EvalCommand EvalOpts
+  | GCCommand GCOpts
   | ProjectCommand ProjectOpts
   | RunCommand RunOpts
   deriving (Show)
@@ -67,6 +69,11 @@ data EvalOpts = EvalOpts
   { eval_command :: Text,
     eval_placeholders :: [Placeholder],
     eval_language :: Lang.Language
+  }
+  deriving (Show)
+
+newtype GCOpts = GCOpts
+  { gcDryRun :: Bool
   }
   deriving (Show)
 
@@ -124,6 +131,7 @@ parser default_config mkcompleter =
     <$> optional (optPath "config" 'C' (config_help default_config))
     <*> parse_config
     <*> ( EvalCommand <$> subcommand "eval" "Evaluate expression" eval_parser
+            <|> GCCommand <$> subcommand "gc" "Garbage collect cached items" gcParser
             <|> ProjectCommand <$> subcommand "project" "Project actions" (project_parser mkcompleter)
             <|> RunCommand <$> subcommand "run" "Run command" (run_parser $ mkcompleter Run)
             <|> RunCommand <$> run_parser (mkcompleter Run)
@@ -173,6 +181,10 @@ eval_parser =
   where
     defBash = fmap (fromMaybe Lang.Bash) . optional
     parseLang = Just . Lang.parseLang
+
+gcParser :: Parser GCOpts
+gcParser =
+  GCOpts <$> switch "dry-run" 'd' "Dry-run, print file paths without deleting"
 
 project_parser :: (CompletionType -> Opts.Completer) -> Parser ProjectOpts
 project_parser mkcompleter =

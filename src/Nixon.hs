@@ -29,9 +29,10 @@ import Nixon.Command (Command (..), show_command_with_description)
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Command.Run as Cmd
 import qualified Nixon.Config as Config
-import Nixon.Config.Options (BackendType (..), CompletionType, EvalOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
+import Nixon.Config.Options (BackendType (..), CompletionType, EvalOpts (..), GCOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
 import qualified Nixon.Config.Types as Config
+import Nixon.Evaluator (garbageCollect)
 import Nixon.Logging (log_error, log_info)
 import Nixon.Process (run)
 import Nixon.Project (Project, ProjectType (..), project_path)
@@ -204,6 +205,12 @@ evalAction (EvalOpts cmd placeholders lang) = do
           }
   handleCmd (project_path project) (Selection Default [cmd']) runOpts
 
+-- | Garbage collect cached scripts
+gcAction :: GCOpts -> Nixon ()
+gcAction gcOpts = do
+  files <- garbageCollect (gcDryRun gcOpts)
+  void . liftIO . for files $ T.putStrLn
+
 -- | Find/filter out a project and perform an action.
 projectAction :: [Project] -> ProjectOpts -> Nixon ()
 projectAction projects opts
@@ -255,6 +262,9 @@ nixonWithConfig userConfig = liftIO $ do
       EvalCommand evalOpts -> do
         log_info "Running <eval> command"
         evalAction evalOpts
+      GCCommand gcOpts -> do
+        log_info "Running <gc> command"
+        gcAction gcOpts
       ProjectCommand projectOpts -> do
         log_info "Running <project> command"
         cfg' <- config <$> ask
