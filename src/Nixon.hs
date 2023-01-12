@@ -263,7 +263,7 @@ die err = liftIO $ log_error (format w err) >> exit (ExitFailure 1)
 -- showing the progress of starting the environment.
 nixonWithConfig :: MonadIO m => Config.Config -> m ()
 nixonWithConfig userConfig = liftIO $ do
-  (sub_cmd, cfg) <- either die pure =<< Opts.parse_args (nixonCompleter userConfig)
+  (sub_cmd, cfg) <- either die pure =<< Opts.parseArgs (nixonCompleter userConfig)
   err <- try $
     runNixon (userConfig <> cfg) $ case sub_cmd of
       EvalCommand evalOpts -> do
@@ -289,7 +289,7 @@ nixonWithConfig userConfig = liftIO $ do
 
 nixonCompleter :: MonadIO m => Config.Config -> CompletionType -> [String] -> m [String]
 nixonCompleter userConfig compType args = do
-  let parse_args = Opts.parse_args $ nixonCompleter userConfig
+  let parse_args = Opts.parseArgs $ nixonCompleter userConfig
   (_, cfg) <- liftIO $ either die pure =<< withArgs args parse_args
   liftIO $
     runNixon (userConfig <> cfg) $ do
