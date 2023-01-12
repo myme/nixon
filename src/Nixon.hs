@@ -29,7 +29,7 @@ import Nixon.Command (Command (..), show_command_with_description)
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Command.Run as Cmd
 import qualified Nixon.Config as Config
-import Nixon.Config.Options (BackendType (..), CompletionType, EvalOpts (..), GCOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
+import Nixon.Config.Options (BackendType (..), CompletionType, EvalOpts (..), EvalSource (..), GCOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
 import qualified Nixon.Config.Types as Config
 import Nixon.Evaluator (garbageCollect)
@@ -62,12 +62,14 @@ import Turtle
     need,
     printf,
     pwd,
+    readTextFile,
     s,
     select,
     w,
     (%),
   )
 import Prelude hiding (FilePath, fail, log)
+import Nixon.Language (Language (..), fromFilePath)
 
 -- | List projects, filtering if a query is specified.
 listProjects :: [Project] -> Maybe Text -> Nixon ()
@@ -185,16 +187,21 @@ editSelection selection = runInputT defaultSettings $ do
 
 -- | Evaluate a command expression.
 evalAction :: EvalOpts -> Nixon ()
-evalAction (EvalOpts cmd placeholders lang) = do
+evalAction (EvalOpts source placeholders lang) = do
   pwd' <- pwd
   ptypes <- project_types . config <$> ask
   project <- liftIO (P.find_in_project_or_default ptypes pwd')
+  (source', lang') <- case source of
+    EvalInline inline -> pure (inline, fromMaybe Bash lang)
+    EvalFile filePath ->
+      let lang' = fromMaybe (fromFilePath filePath) lang
+       in liftIO ((,) <$> readTextFile filePath <*> pure lang')
   let cmd' =
         Cmd.empty
-          { cmdSource = cmd,
+          { cmdSource = source',
             cmdPlaceholders = placeholders,
             cmdPwd = Just pwd',
-            cmdLang = lang
+            cmdLang = lang'
           }
       runOpts =
         RunOpts

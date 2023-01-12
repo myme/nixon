@@ -1,6 +1,7 @@
 module Nixon.Language
   ( Language (..),
     extension,
+    fromFilePath,
     interpreter,
     parseLang,
   )
@@ -10,7 +11,9 @@ import Control.Monad.IO.Class (MonadIO)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Text (Text, unpack)
 import Options.Applicative ((<|>))
-import Turtle (need)
+import Turtle (FilePath, need)
+import qualified Turtle
+import Prelude hiding (FilePath)
 
 data Language
   = Bash
@@ -46,6 +49,17 @@ parseLang = \case
   "python" -> Python
   "" -> None
   lang -> Unknown lang
+
+fromFilePath :: FilePath -> Language
+fromFilePath path = case Turtle.extension path of
+  Just "sh" -> Bash
+  Just "hs" -> Haskell
+  Just "js" -> JavaScript
+  Just "json" -> JSON
+  Just "txt" -> Plain
+  Just "py" -> Python
+  Just lang -> Unknown lang
+  Nothing -> Unknown ""
 
 extension :: Language -> Text
 extension = \case

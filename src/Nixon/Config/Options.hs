@@ -6,6 +6,7 @@ module Nixon.Config.Options
     Options (..),
     SubCommand (..),
     EvalOpts (..),
+    EvalSource (..),
     GCOpts (..),
     ProjectOpts (..),
     RunOpts (..),
@@ -14,7 +15,6 @@ module Nixon.Config.Options
   )
 where
 
-import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
 import Nixon.Command.Placeholder (Placeholder)
 import Nixon.Config (read_config)
@@ -65,10 +65,13 @@ data SubCommand
   | RunCommand RunOpts
   deriving (Show)
 
+data EvalSource = EvalInline Text | EvalFile FilePath
+  deriving (Show)
+
 data EvalOpts = EvalOpts
-  { eval_command :: Text,
+  { eval_source :: EvalSource,
     eval_placeholders :: [Placeholder],
-    eval_language :: Lang.Language
+    eval_language :: Maybe Lang.Language
   }
   deriving (Show)
 
@@ -170,16 +173,18 @@ parser default_config mkcompleter =
 eval_parser :: Parser EvalOpts
 eval_parser =
   EvalOpts
-    <$> Opts.strArgument
-      (Opts.metavar "command" <> Opts.help "Command expression")
+    <$> ( EvalFile <$> optPath "file" 'f' "File to evaluate"
+            <|> EvalInline
+              <$> Opts.strArgument
+                (Opts.metavar "command" <> Opts.help "Command expression")
+        )
     <*> many
       ( Opts.argument
           (Opts.eitherReader MD.parseCommandArg)
           (Opts.metavar "placeholder" <> Opts.help "Placeholder")
       )
-    <*> defBash (opt parseLang "language" 'l' "Language: bash, JavaScript, Haskell, ...")
+    <*> optional (opt parseLang "language" 'l' "Language: bash, JavaScript, Haskell, ...")
   where
-    defBash = fmap (fromMaybe Lang.Bash) . optional
     parseLang = Just . Lang.parseLang
 
 gcParser :: Parser GCOpts
