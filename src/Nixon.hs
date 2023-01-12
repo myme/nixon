@@ -114,7 +114,7 @@ findAndHandleCmd :: Project -> RunOpts -> Nixon ()
 findAndHandleCmd project opts = withLocalConfig (project_path project) $ do
   find_command <- Backend.commandSelector <$> getBackend
   cmds <- filter (not . Cmd.cmdIsHidden) <$> findProjectCommands project
-  cmd <- liftIO $ find_command project (Opts.run_command opts) cmds
+  cmd <- liftIO $ find_command project (Opts.runCommand opts) cmds
   handleCmd (project_path project) cmd opts
 
 -- | Find and run a command in a project.
@@ -126,15 +126,15 @@ handleCmd path cmd opts = do
     CanceledSelection -> fail $ EmptyError "Command selection canceled."
     Selection _ [] -> fail $ EmptyError "No command selected."
     Selection selectionType [cmd'] ->
-      if Opts.run_select opts
+      if Opts.runSelect opts
         then do
           let selectOpts = Select.defaults {Select.selector_multiple = Just True}
           resolved <- Cmd.resolveCmd path selector cmd' selectOpts
           printf (s % "\n") (T.unlines resolved)
         else do
           case selectionType of
-            Select.Default -> Cmd.runCmd selector path cmd' (Opts.run_args opts)
-            Select.Edit -> editCmd path cmd' (Opts.run_args opts)
+            Select.Default -> Cmd.runCmd selector path cmd' (Opts.runArgs opts)
+            Select.Edit -> editCmd path cmd' (Opts.runArgs opts)
             Select.Show -> showCmd cmd'
             Select.Visit -> visitCmd cmd'
     Selection _ _ -> fail $ NixonError "Multiple commands selected."
@@ -205,10 +205,10 @@ evalAction (EvalOpts source placeholders lang) = do
           }
       runOpts =
         RunOpts
-          { run_command = Nothing,
-            run_args = [],
-            run_list = False,
-            run_select = False
+          { runCommand = Nothing,
+            runArgs = [],
+            runList = False,
+            runSelect = False
           }
   handleCmd (project_path project) (Selection Default [cmd']) runOpts
 
@@ -221,12 +221,12 @@ gcAction gcOpts = do
 -- | Find/filter out a project and perform an action.
 projectAction :: [Project] -> ProjectOpts -> Nixon ()
 projectAction projects opts
-  | Opts.proj_list opts = listProjects projects (Opts.proj_project opts)
+  | Opts.projList opts = listProjects projects (Opts.projProject opts)
   | otherwise = do
       ptypes <- project_types . config <$> ask
       projectSelector <- Backend.projectSelector <$> getBackend
 
-      let selectOpts = Select.defaults {Select.selector_multiple = Just $ Opts.proj_select opts}
+      let selectOpts = Select.defaults {Select.selector_multiple = Just $ Opts.projSelect opts}
           findProject (Just ".") = do
             inProject <- P.find_in_project ptypes =<< pwd
             case inProject of
@@ -234,16 +234,16 @@ projectAction projects opts
               Just project -> pure $ Selection Select.Default [project]
           findProject query = projectSelector selectOpts query projects
 
-      selection <- liftIO $ findProject (Opts.proj_project opts)
+      selection <- liftIO $ findProject (Opts.projProject opts)
       case selection of
         EmptySelection -> liftIO (throwIO $ EmptyError "No project selected.")
         CanceledSelection -> liftIO (throwIO $ EmptyError "Project selection canceled.")
         Selection _selectionType ps ->
-          if Opts.proj_select opts
+          if Opts.projSelect opts
             then void . liftIO . for ps $ printf (fp % "\n") . project_path
             else case ps of
               [project] ->
-                let opts' = RunOpts (Opts.proj_command opts) (Opts.proj_args opts) (Opts.proj_list opts) (Opts.proj_select opts)
+                let opts' = RunOpts (Opts.projCommand opts) (Opts.projArgs opts) (Opts.projList opts) (Opts.projSelect opts)
                  in findAndHandleCmd project opts'
               _ -> liftIO (throwIO $ NixonError "Multiple projects selected.")
 
@@ -252,8 +252,8 @@ runAction :: RunOpts -> Nixon ()
 runAction opts = do
   ptypes <- project_types . config <$> ask
   project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
-  if Opts.run_list opts
-    then listProjectCommands project (Opts.run_command opts)
+  if Opts.runList opts
+    then listProjectCommands project (Opts.runCommand opts)
     else findAndHandleCmd project opts
 
 die :: (Show a, MonadIO m) => a -> m b

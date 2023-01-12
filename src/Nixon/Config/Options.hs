@@ -69,9 +69,9 @@ data EvalSource = EvalInline Text | EvalFile FilePath
   deriving (Show)
 
 data EvalOpts = EvalOpts
-  { eval_source :: EvalSource,
-    eval_placeholders :: [Placeholder],
-    eval_language :: Maybe Lang.Language
+  { evalSource :: EvalSource,
+    evalPlaceholders :: [Placeholder],
+    evalLanguage :: Maybe Lang.Language
   }
   deriving (Show)
 
@@ -81,19 +81,19 @@ newtype GCOpts = GCOpts
   deriving (Show)
 
 data ProjectOpts = ProjectOpts
-  { proj_project :: Maybe Text,
-    proj_command :: Maybe Text,
-    proj_args :: [Text],
-    proj_list :: Bool,
-    proj_select :: Bool
+  { projProject :: Maybe Text,
+    projCommand :: Maybe Text,
+    projArgs :: [Text],
+    projList :: Bool,
+    projSelect :: Bool
   }
   deriving (Show)
 
 data RunOpts = RunOpts
-  { run_command :: Maybe Text,
-    run_args :: [Text],
-    run_list :: Bool,
-    run_select :: Bool
+  { runCommand :: Maybe Text,
+    runArgs :: [Text],
+    runList :: Bool,
+    runSelect :: Bool
   }
   deriving (Show)
 
@@ -105,10 +105,10 @@ default_options =
       sub_command =
         RunCommand
           RunOpts
-            { run_command = Nothing,
-              run_args = [],
-              run_list = False,
-              run_select = False
+            { runCommand = Nothing,
+              runArgs = [],
+              runList = False,
+              runSelect = False
             }
     }
 
