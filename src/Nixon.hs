@@ -33,6 +33,7 @@ import Nixon.Config.Options (BackendType (..), CompletionType, EvalOpts (..), Ev
 import qualified Nixon.Config.Options as Opts
 import qualified Nixon.Config.Types as Config
 import Nixon.Evaluator (garbageCollect)
+import Nixon.Language (Language (..), fromFilePath)
 import Nixon.Logging (log_error, log_info)
 import Nixon.Process (run)
 import Nixon.Project (Project, ProjectType (..), project_path)
@@ -69,7 +70,6 @@ import Turtle
     (%),
   )
 import Prelude hiding (FilePath, fail, log)
-import Nixon.Language (Language (..), fromFilePath)
 
 -- | List projects, filtering if a query is specified.
 listProjects :: [Project] -> Maybe Text -> Nixon ()
@@ -186,21 +186,27 @@ editSelection selection = runInputT defaultSettings $ do
     line' -> T.pack <$> line'
 
 -- | Evaluate a command expression.
-evalAction :: EvalOpts -> Nixon ()
-evalAction (EvalOpts source placeholders lang) = do
-  pwd' <- pwd
-  ptypes <- project_types . config <$> ask
-  project <- liftIO (P.find_in_project_or_default ptypes pwd')
+evalAction :: [Project] -> EvalOpts -> Nixon ()
+evalAction projects (EvalOpts source placeholders lang projSelect) = do
+  project <- do
+    selection <- findProject projects Select.defaults (if projSelect then Nothing else Just ".")
+    case selection of
+      EmptySelection -> liftIO (throwIO $ EmptyError "No project selected.")
+      CanceledSelection -> liftIO (throwIO $ EmptyError "Project selection canceled.")
+      Selection _selectionType [project] -> pure project
+      _ -> liftIO (throwIO $ NixonError "Multiple projects selected.")
+
   (source', lang') <- case source of
     EvalInline inline -> pure (inline, fromMaybe Bash lang)
     EvalFile filePath ->
       let lang' = fromMaybe (fromFilePath filePath) lang
        in liftIO ((,) <$> readTextFile filePath <*> pure lang')
+
   let cmd' =
         Cmd.empty
           { cmdSource = source',
             cmdPlaceholders = placeholders,
-            cmdPwd = Just pwd',
+            cmdPwd = Just $ project_path project,
             cmdLang = lang'
           }
       runOpts =
@@ -210,6 +216,7 @@ evalAction (EvalOpts source placeholders lang) = do
             runList = False,
             runSelect = False
           }
+
   handleCmd (project_path project) (Selection Default [cmd']) runOpts
 
 -- | Garbage collect cached scripts
@@ -218,23 +225,26 @@ gcAction gcOpts = do
   files <- garbageCollect (gcDryRun gcOpts)
   void . liftIO . for files $ T.putStrLn
 
+findProject :: [Project] -> Select.SelectorOpts -> Maybe Text -> Nixon (Selection Project)
+findProject projects selectOpts query = do
+  projectSelector <- Backend.projectSelector <$> getBackend
+  case query of
+    (Just ".") -> do
+      ptypes <- project_types . config <$> ask
+      inProject <- P.find_in_project ptypes =<< pwd
+      case inProject of
+        Nothing -> liftIO $ projectSelector selectOpts Nothing projects
+        Just project -> pure $ Selection Select.Default [project]
+    _ -> liftIO $ projectSelector selectOpts query projects
+
 -- | Find/filter out a project and perform an action.
 projectAction :: [Project] -> ProjectOpts -> Nixon ()
 projectAction projects opts
   | Opts.projList opts = listProjects projects (Opts.projProject opts)
   | otherwise = do
-      ptypes <- project_types . config <$> ask
-      projectSelector <- Backend.projectSelector <$> getBackend
-
       let selectOpts = Select.defaults {Select.selector_multiple = Just $ Opts.projSelect opts}
-          findProject (Just ".") = do
-            inProject <- P.find_in_project ptypes =<< pwd
-            case inProject of
-              Nothing -> projectSelector selectOpts Nothing projects
-              Just project -> pure $ Selection Select.Default [project]
-          findProject query = projectSelector selectOpts query projects
 
-      selection <- liftIO $ findProject (Opts.projProject opts)
+      selection <- findProject projects selectOpts (Opts.projProject opts)
       case selection of
         EmptySelection -> liftIO (throwIO $ EmptyError "No project selected.")
         CanceledSelection -> liftIO (throwIO $ EmptyError "Project selection canceled.")
@@ -264,24 +274,28 @@ die err = liftIO $ log_error (format w err) >> exit (ExitFailure 1)
 nixonWithConfig :: MonadIO m => Config.Config -> m ()
 nixonWithConfig userConfig = liftIO $ do
   (sub_cmd, cfg) <- either die pure =<< Opts.parseArgs (nixonCompleter userConfig)
+
   err <- try $
-    runNixon (userConfig <> cfg) $ case sub_cmd of
-      EvalCommand evalOpts -> do
-        log_info "Running <eval> command"
-        evalAction evalOpts
-      GCCommand gcOpts -> do
-        log_info "Running <gc> command"
-        gcAction gcOpts
-      ProjectCommand projectOpts -> do
-        log_info "Running <project> command"
-        cfg' <- config <$> ask
-        let ptypes = project_types cfg'
-            srcs = project_dirs cfg'
-        projects <- P.sort_projects <$> liftIO (P.find_projects 1 ptypes srcs)
-        projectAction projects projectOpts
-      RunCommand runOpts -> do
-        log_info "Running <run> command"
-        runAction runOpts
+    runNixon (userConfig <> cfg) $ do
+      cfg' <- config <$> ask
+      let ptypes = project_types cfg'
+          srcs = project_dirs cfg'
+      projects <- P.sort_projects <$> liftIO (P.find_projects 1 ptypes srcs)
+
+      case sub_cmd of
+        EvalCommand evalOpts -> do
+          log_info "Running <eval> command"
+          evalAction projects evalOpts
+        GCCommand gcOpts -> do
+          log_info "Running <gc> command"
+          gcAction gcOpts
+        ProjectCommand projectOpts -> do
+          log_info "Running <project> command"
+          projectAction projects projectOpts
+        RunCommand runOpts -> do
+          log_info "Running <run> command"
+          runAction runOpts
+
   case err of
     Left (EmptyError msg) -> die msg
     Left (NixonError msg) -> die msg

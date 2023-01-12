@@ -70,7 +70,8 @@ data EvalSource = EvalInline Text | EvalFile FilePath
 data EvalOpts = EvalOpts
   { evalSource :: EvalSource,
     evalPlaceholders :: [Placeholder],
-    evalLanguage :: Maybe Lang.Language
+    evalLanguage :: Maybe Lang.Language,
+    evalSelectProject :: Bool
   }
   deriving (Show)
 
@@ -168,6 +169,7 @@ evalParser =
           (Opts.metavar "placeholder" <> Opts.help "Placeholder")
       )
     <*> optional (opt parseLang "language" 'l' "Language: bash, JavaScript, Haskell, ...")
+    <*> switch "project" 'p' "Select project"
   where
     parseLang = Just . Lang.parseLang
 
