@@ -1,6 +1,6 @@
 module Nixon.Config
-  ( find_local_config,
-    read_config,
+  ( findLocalConfig,
+    readConfig,
   )
 where
 
@@ -20,17 +20,17 @@ import Turtle
   )
 import Prelude hiding (FilePath)
 
-find_local_config :: MonadIO m => FilePath -> m (Maybe Config)
-find_local_config path = runMaybeT $ do
+findLocalConfig :: MonadIO m => FilePath -> m (Maybe Config)
+findLocalConfig path = runMaybeT $ do
   local_config <- MaybeT $ find_dominating_file path ".nixon.md"
-  res <- read_config local_config
+  res <- readConfig local_config
   MaybeT $ either onError (pure . Just) res
   where
     onError (ParseError err) = liftIO $ throwIO (ParseError err)
     onError _ = pure Nothing
 
-read_config :: MonadIO m => FilePath -> m (Either ConfigError Config)
-read_config path = do
+readConfig :: MonadIO m => FilePath -> m (Either ConfigError Config)
+readConfig path = do
   liftIO $
     tryIOError (readTextFile path) >>= \case
       Left err

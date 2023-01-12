@@ -97,7 +97,7 @@ fail err = liftIO (throwIO err)
 -- | Attempt to parse a local JSON
 withLocalConfig :: FilePath -> Nixon a -> Nixon a
 withLocalConfig filepath action = do
-  liftIO (Config.find_local_config filepath) >>= \case
+  liftIO (Config.findLocalConfig filepath) >>= \case
     Nothing -> action
     Just cfg -> local (\env -> env {config = config env <> cfg}) action
 

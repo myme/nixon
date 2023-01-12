@@ -16,7 +16,7 @@ where
 
 import qualified Data.Text as Text
 import Nixon.Command.Placeholder (Placeholder)
-import Nixon.Config (read_config)
+import Nixon.Config (readConfig)
 import qualified Nixon.Config.Markdown as MD
 import Nixon.Config.Types (BackendType (..), Config, ConfigError (..), LogLevel (..))
 import qualified Nixon.Config.Types as Config
@@ -205,12 +205,12 @@ runParser completer =
 -- | Read configuration from config file and command line arguments
 parseArgs :: MonadIO m => (CompletionType -> Completer) -> m (Either ConfigError (SubCommand, Config))
 parseArgs mkcompleter = do
-  default_config <- implode_home =<< MD.defaultPath
+  defaultConfig <- implode_home =<< MD.defaultPath
   let completer = Opts.listIOCompleter . completionArgs . mkcompleter
-  opts <- Turtle.options "Launch project environment" (parser default_config completer)
+  opts <- Turtle.options "Launch project environment" (parser defaultConfig completer)
   configPath <- maybe MD.defaultPath pure (configFile opts)
   liftIO $ do
-    cfg <- read_config configPath
+    cfg <- readConfig configPath
     let mergedConfig = liftA2 (<>) cfg (pure $ config opts)
         subCmdConfig = fmap (subCommand opts,) mergedConfig
     pure subCmdConfig
