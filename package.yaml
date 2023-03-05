@@ -5,39 +5,39 @@ executables:
   nixon:
     main: Main.hs
     source-dirs:
-    - app
+      - app
     dependencies:
-    - base
-    - nixon
+      - base
+      - nixon
     ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
 
 library:
   source-dirs:
-  - src
+    - src
   dependencies:
-  - base
-  - aeson
-  - bytestring
-  - cmark
-  - containers
-  - cryptohash
-  - directory
-  - exceptions
-  - foldl
-  - haskeline
-  - optparse-applicative
-  - parsec
-  - process
-  - strip-ansi-escape
-  - text
-  - transformers
-  - turtle == 1.5.*
-  - unix
-  - unordered-containers
-  - wordexp
+    - base
+    - aeson
+    - bytestring
+    - cmark
+    - containers
+    - cryptohash
+    - directory
+    - exceptions
+    - foldl
+    - haskeline
+    - optparse-applicative
+    - parsec
+    - process
+    - strip-ansi-escape
+    - text
+    - transformers
+    - turtle == 1.5.*
+    - unix
+    - unordered-containers
+    - wordexp
 
 tests:
   nixon-test:
@@ -58,6 +58,7 @@ default-extensions:
   - GeneralizedNewtypeDeriving
   - LambdaCase
   - NamedFieldPuns
+  - NoImplicitPrelude
   - OverloadedStrings
   - TupleSections
 

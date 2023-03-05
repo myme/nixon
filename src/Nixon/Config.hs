@@ -11,6 +11,7 @@ import Data.Char (isSpace)
 import qualified Data.Text as T
 import Nixon.Config.Markdown (parseMarkdown)
 import Nixon.Config.Types (Config, ConfigError (..))
+import Nixon.Prelude
 import Nixon.Utils (find_dominating_file)
 import System.IO.Error (isDoesNotExistError, tryIOError)
 import Turtle
@@ -18,7 +19,6 @@ import Turtle
     MonadIO (..),
     readTextFile,
   )
-import Prelude hiding (FilePath)
 
 findLocalConfig :: MonadIO m => FilePath -> m (Maybe Config)
 findLocalConfig path = runMaybeT $ do

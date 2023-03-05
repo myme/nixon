@@ -19,6 +19,7 @@ import Data.List.NonEmpty (toList)
 import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Nixon.Prelude
 import qualified System.IO as IO
 import Turtle
   ( FilePath,
@@ -38,7 +39,6 @@ import Turtle
     textToLines,
     (</>),
   )
-import Prelude hiding (FilePath)
 
 escape :: Text -> Text
 escape = T.concatMap convert

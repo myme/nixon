@@ -23,6 +23,7 @@ import Nixon.Backend (Backend (..))
 import Nixon.Command (Command, show_command_with_description)
 import Nixon.Config.Types (Config)
 import qualified Nixon.Config.Types as Config
+import Nixon.Prelude
 import Nixon.Process (arg, arg_fmt, build_args, flag)
 import Nixon.Project (Project (project_dir, project_name))
 import Nixon.Select (Candidate, Selection (..), SelectionType (..))
@@ -42,7 +43,6 @@ import Turtle
     (%),
   )
 import qualified Turtle as Tu
-import Prelude hiding (FilePath)
 
 rofiBackend :: Config -> Backend
 rofiBackend cfg =

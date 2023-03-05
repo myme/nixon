@@ -21,6 +21,7 @@ import Nixon.Direnv (direnv_cmd)
 import Nixon.Language (extension, interpreter)
 import Nixon.Logging (log_info)
 import Nixon.Nix (nix_cmd)
+import Nixon.Prelude
 import Nixon.Process (Cwd, Env, RunArgs)
 import qualified Nixon.Process as Proc
 import Nixon.Types (Nixon)
@@ -50,7 +51,6 @@ import Turtle
     (%),
     (</>),
   )
-import Prelude hiding (FilePath)
 
 getCacheDir :: MonadIO m => m FilePath
 getCacheDir = liftIO $ decodeString <$> getXdgDirectory XdgCache "nixon"

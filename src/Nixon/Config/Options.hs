@@ -21,6 +21,7 @@ import qualified Nixon.Config.Markdown as MD
 import Nixon.Config.Types (BackendType (..), Config, ConfigError (..), LogLevel (..))
 import qualified Nixon.Config.Types as Config
 import qualified Nixon.Language as Lang
+import Nixon.Prelude
 import Nixon.Utils (implode_home)
 import qualified Options.Applicative as Opts
 import System.Environment (getArgs)
@@ -43,7 +44,6 @@ import Turtle
     switch,
     (%),
   )
-import Prelude hiding (FilePath)
 
 type Completer = [String] -> IO [String]
 

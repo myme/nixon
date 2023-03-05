@@ -33,6 +33,7 @@ import Nixon.Backend (Backend (..))
 import Nixon.Command (Command (), show_command_with_description)
 import Nixon.Config.Types (Config)
 import qualified Nixon.Config.Types as Config
+import Nixon.Prelude hiding (filter)
 import Nixon.Process (HasProc (..), arg, build_args, flag)
 import Nixon.Project
   ( Project (project_dir, project_name),
@@ -61,7 +62,6 @@ import Turtle
     select,
     (%),
   )
-import Prelude hiding (FilePath, filter)
 
 fzfBackend :: Config -> Backend
 fzfBackend cfg =

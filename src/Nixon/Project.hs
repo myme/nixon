@@ -25,6 +25,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (isInfixOf)
 import qualified Data.Text as T
 import Nixon.Command (Command (..))
+import Nixon.Prelude
 import System.Wordexp (nosubst, wordexp)
 import Turtle
   ( FilePath,
@@ -47,7 +48,6 @@ import Turtle
     testpath,
     (</>),
   )
-import Prelude hiding (FilePath)
 
 data Project = Project
   { project_name :: FilePath,

@@ -10,6 +10,7 @@ import qualified Data.Text as T
 import Nixon.Backend.Fzf (fzf, fzfExpect, fzfFilter, fzfProjects)
 import qualified Nixon.Backend.Fzf as Fzf
 import qualified Nixon.Command as Cmd
+import Nixon.Prelude
 import Nixon.Project (Project (..))
 import Nixon.Select (Candidate (Identity), Selection (..), SelectionType (Default, Edit))
 import System.Exit (ExitCode (..))

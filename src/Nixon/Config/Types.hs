@@ -12,9 +12,9 @@ import Control.Applicative (Alternative ((<|>)))
 import Control.Exception (Exception)
 import Nixon.Command (Command)
 import Nixon.Logging (LogLevel (..))
+import Nixon.Prelude
 import Nixon.Project (ProjectType)
 import Turtle (FilePath, Text)
-import Prelude hiding (FilePath)
 
 data BackendType = Fzf | Rofi deriving (Eq, Show)
 

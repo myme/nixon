@@ -19,10 +19,10 @@ import Nixon.Config.Types (BackendType (..), Config)
 import qualified Nixon.Config.Types as Config
 import Nixon.Logging (HasLogging)
 import qualified Nixon.Logging as Logging
+import Nixon.Prelude
 import Nixon.Utils (printErr)
 import qualified System.IO as IO
 import Turtle (Text)
-import Prelude hiding (FilePath)
 
 data Env = Env
   { backend :: BackendType,

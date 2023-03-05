@@ -10,6 +10,7 @@ import Nixon.Config.Markdown (parseCommandName, parseHeaderArgs, parseMarkdown)
 import Nixon.Config.Types (LogLevel (LogWarning), defaultConfig)
 import qualified Nixon.Config.Types as Cfg
 import Nixon.Language (Language (Bash))
+import Nixon.Prelude
 import Test.Hspec
 
 match_error :: Text -> Either Text b -> Bool

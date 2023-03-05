@@ -19,8 +19,8 @@ import qualified Data.Text as T
 import Nixon.Command.Placeholder (Placeholder)
 import qualified Nixon.Command.Placeholder as P
 import Nixon.Language (Language (None))
+import Nixon.Prelude
 import Turtle (FilePath, format, s, (%))
-import Prelude hiding (FilePath)
 
 data Command = Command
   { cmdName :: Text,

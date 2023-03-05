@@ -11,8 +11,8 @@ where
 
 import Control.Monad (when)
 import Data.Text (Text)
+import Nixon.Prelude
 import Nixon.Utils (printErr)
-import Prelude hiding (log)
 
 data LogLevel = LogDebug | LogInfo | LogWarning | LogError
   deriving (Eq, Ord, Show, Bounded, Enum)

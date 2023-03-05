@@ -10,10 +10,10 @@ where
 import Control.Monad.IO.Class (MonadIO)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Text (Text, unpack)
+import Nixon.Prelude
 import Options.Applicative ((<|>))
 import Turtle (FilePath, need)
 import qualified Turtle
-import Prelude hiding (FilePath)
 
 data Language
   = Bash

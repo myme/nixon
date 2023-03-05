@@ -13,15 +13,17 @@ module Nixon.Process
   )
 where
 
+import Control.Applicative (Alternative (empty))
 import Control.Arrow ((***))
+import Control.Monad.Trans.Reader (ReaderT)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (catMaybes)
 import qualified Data.Text as T
+import Nixon.Prelude
 import System.Posix (createSession, forkProcess, getEnvironment)
-import System.Process (CreateProcess (cwd, env, std_in), proc, StdStream (CreatePipe))
+import System.Process (CreateProcess (cwd, env, std_in), StdStream (CreatePipe), proc)
 import Turtle
-  ( Alternative,
-    ExitCode,
+  ( ExitCode,
     FilePath,
     Line,
     MonadIO (..),
@@ -34,9 +36,6 @@ import Turtle
     void,
   )
 import Turtle.Shell (Shell)
-import Prelude hiding (FilePath)
-import Control.Monad.Trans.Reader (ReaderT)
-import Control.Applicative (Alternative(empty))
 
 type Cwd = Maybe FilePath
 
@@ -82,7 +81,7 @@ run cmd cwd' env' stdin = sh $ do
   cmd' <- build_cmd cmd cwd' env'
   case stdin of
     Nothing -> system cmd' empty
-    Just stdin' -> system cmd' { std_in = CreatePipe } stdin'
+    Just stdin' -> system cmd' {std_in = CreatePipe} stdin'
 
 type Runner m a = CreateProcess -> Shell a -> m a
 
@@ -92,7 +91,7 @@ run_with_output stream' cmd cwd' env' stdin = do
   cmd' <- build_cmd cmd cwd' env'
   case stdin of
     Nothing -> stream' cmd' empty
-    Just stdin' -> stream' cmd' { std_in = CreatePipe } stdin'
+    Just stdin' -> stream' cmd' {std_in = CreatePipe} stdin'
 
 -- | Spawn/fork off a command in the background
 spawn :: MonadIO m => RunArgs Line m ()

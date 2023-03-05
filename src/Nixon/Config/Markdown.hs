@@ -37,6 +37,7 @@ import Nixon.Config.Types
     defaultConfig,
   )
 import qualified Nixon.Language as Lang
+import Nixon.Prelude
 import System.Directory (XdgDirectory (..), getXdgDirectory)
 import qualified Text.Parsec as P
 import Text.Parsec.Text (Parser)
@@ -51,7 +52,6 @@ import Turtle
     s,
     (%),
   )
-import Prelude hiding (FilePath)
 
 data PosInfo = PosInfo
   { posName :: FilePath,

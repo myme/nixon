@@ -12,6 +12,7 @@ import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Data.List.NonEmpty (NonEmpty ((:|)), toList)
 import Data.Maybe (listToMaybe)
 import qualified Data.Text as T
+import Nixon.Prelude
 import Nixon.Process (Env, RunArgs, arg, build_args, run, spawn)
 import Nixon.Types (Config (use_nix), Nixon, ask, config)
 import Nixon.Utils (find_dominating_file, quote)
@@ -26,7 +27,6 @@ import Turtle
     testpath,
     (</>), Shell, Line,
   )
-import Prelude hiding (FilePath)
 
 -- | Nix project files, in prioritized order
 nix_files :: [FilePath]

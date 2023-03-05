@@ -16,6 +16,7 @@ import Nixon.Command (Command, CommandOutput (..))
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Command.Placeholder as Cmd
 import Nixon.Evaluator (evaluate, getEvaluator)
+import Nixon.Prelude
 import Nixon.Process (run_with_output)
 import qualified Nixon.Process
 import Nixon.Select (Selection (..), Selector, SelectorOpts (..))
@@ -26,7 +27,6 @@ import Nixon.Utils (toLines)
 import Turtle (FilePath, Shell, cd, format, fp, select, stream)
 import qualified Turtle.Bytes as BS
 import Turtle.Line (lineToText)
-import Prelude hiding (FilePath)
 
 -- | Actually run a command
 runCmd :: Selector Nixon -> FilePath -> Command -> [Text] -> Nixon ()

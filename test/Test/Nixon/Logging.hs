@@ -3,6 +3,7 @@ module Test.Nixon.Logging (logging) where
 import Control.Monad.Trans.RWS
 import Data.Text
 import Nixon.Logging
+import Nixon.Prelude
 import Test.Hspec
 import Test.QuickCheck
 import Test.QuickCheck.Instances.Text ()

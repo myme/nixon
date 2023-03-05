@@ -2,6 +2,7 @@
 
 module Test.Nixon.Process where
 
+import Nixon.Prelude
 import Nixon.Process (HasProc (..))
 import Test.Hspec
 import Test.Nixon.TestLib (runProc)

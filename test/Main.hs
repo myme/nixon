@@ -1,17 +1,18 @@
 module Main where
 
-import           Data.Char (isSpace, isPrint)
-import           Data.Text (Text)
+import Data.Char (isPrint, isSpace)
+import Data.Text (Text)
 import qualified Data.Text as T
-import           Nixon.Select
-import           Nixon.Utils
-import           Test.Hspec
-import           Test.Nixon.Config.Markdown
-import           Test.Nixon.Logging
-import           Test.QuickCheck
-import           Test.QuickCheck.Instances.Text ()
+import Nixon.Prelude
+import Nixon.Select
+import Nixon.Utils
+import Test.Hspec
 import Test.Nixon.Backend.Fzf (fzfTests)
+import Test.Nixon.Config.Markdown
+import Test.Nixon.Logging
 import Test.Nixon.Process (process)
+import Test.QuickCheck
+import Test.QuickCheck.Instances.Text ()
 
 empty :: Monad m => a -> m (Selection Text)
 empty = const (pure EmptySelection)
@@ -20,14 +21,15 @@ arbitraryTextOf :: (Char -> Bool) -> Gen Text
 arbitraryTextOf pred' = T.pack <$> listOf1 (arbitrary `suchThat` pred')
 
 -- | newtype for arbitrary whitespace
-newtype WsText = WsText { getWs :: Text } deriving (Show, Eq, Ord)
+newtype WsText = WsText {getWs :: Text} deriving (Show, Eq, Ord)
+
 instance Arbitrary WsText where
   shrink (WsText t) = WsText <$> shrink t
   arbitrary = WsText <$> arbitraryTextOf isSpace
 
-
 -- | newtype for Text without whitespace
-newtype NonWsText = NonWsText { getNonWs :: Text } deriving (Show, Eq, Ord)
+newtype NonWsText = NonWsText {getNonWs :: Text} deriving (Show, Eq, Ord)
+
 instance Arbitrary NonWsText where
   shrink (NonWsText t) = NonWsText <$> shrink t
   arbitrary = NonWsText <$> arbitraryTextOf (\c -> isPrint c && (not . isSpace) c)
@@ -63,7 +65,9 @@ main = hspec $ do
 
     describe "takeToSpace" $ do
       it "is empty with leading space" $
-        property $ \text -> takeToSpace (" " <> getWs text) == ""
+        property $
+          \text -> takeToSpace (" " <> getWs text) == ""
 
       it "reads until first space" $
-        property $ \pre ws post -> takeToSpace (getNonWs pre <> getWs ws <> post) == getNonWs pre
+        property $
+          \pre ws post -> takeToSpace (getNonWs pre <> getWs ws <> post) == getNonWs pre

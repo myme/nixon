@@ -35,6 +35,7 @@ import qualified Nixon.Config.Types as Config
 import Nixon.Evaluator (garbageCollect)
 import Nixon.Language (Language (..), fromFilePath)
 import Nixon.Logging (log_error, log_info)
+import Nixon.Prelude
 import Nixon.Process (run)
 import Nixon.Project (Project, ProjectType (..), project_path)
 import qualified Nixon.Project as P
@@ -69,7 +70,6 @@ import Turtle
     w,
     (%),
   )
-import Prelude hiding (FilePath, fail, log)
 
 -- | List projects, filtering if a query is specified.
 listProjects :: [Project] -> Maybe Text -> Nixon ()
