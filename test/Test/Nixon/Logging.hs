@@ -1,7 +1,6 @@
 module Test.Nixon.Logging (logging) where
 
 import Control.Monad.Trans.RWS
-import Data.Text
 import Nixon.Logging
 import Nixon.Prelude
 import Test.Hspec
@@ -24,7 +23,7 @@ logging = do
       genInput = (,) <$> arbitraryBoundedEnum <*> arbitrary
 
       test log_fn min_lvl = forAll genInput $ \(lvl, txt) ->
-        let expected = if lvl <= min_lvl then [txt] else []
+        let expected = [txt | lvl <= min_lvl]
         in runLogger lvl (log_fn txt) == expected
 
   describe "filters log messages" $ do

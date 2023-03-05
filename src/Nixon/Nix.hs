@@ -57,12 +57,13 @@ nix_run run' nix_file cmd env' stdin =
    in run' cmd' (Just $ parent nix_file) env' stdin
 
 nix_cmd :: NonEmpty Text -> FilePath -> Nixon (Maybe (NonEmpty Text))
-nix_cmd cmd path' =
-  use_nix . config <$> ask >>= \case
-    Just True -> liftIO $
-      runMaybeT $ do
-        nix_file <-
-          MaybeT (find_dominating_file path' "shell.nix")
-            <|> MaybeT (find_dominating_file path' "default.nix")
-        pure ("nix-shell" :| ["--command", quote $ T.unwords $ toList cmd, format fp nix_file])
-    _ -> pure Nothing
+nix_cmd cmd path' = ask >>= wrapCmd . use_nix . config
+  where
+    wrapCmd = \case
+      Just True -> liftIO $
+        runMaybeT $ do
+          nix_file <-
+            MaybeT (find_dominating_file path' "shell.nix")
+              <|> MaybeT (find_dominating_file path' "default.nix")
+          pure ("nix-shell" :| ["--command", quote $ T.unwords $ toList cmd, format fp nix_file])
+      _ -> pure Nothing
