@@ -197,18 +197,17 @@ fzfTests = do
             result <- runProc (ExitSuccess, "1") $ fzfProjects mempty Nothing projects
             result `shouldBe` Selection Default [project1]
 
+        let project1 = Project "test-project" "/some/path" []
+            command1 = Cmd.empty
+            command2 = Cmd.empty
+            commands = [command1, command2]
+
         describe "fzfPojectCommand" $ do
           it "finds project command with default selection" $ do
-            let project1 = Project "test-project" "/some/path" []
-                command1 = Cmd.empty
-                commands = [command1]
             result <- runProc (ExitSuccess, "\n1") $ Fzf.fzfProjectCommand mempty project1 mempty commands
             result `shouldBe` Selection Default [command1]
 
           it "finds project command with edit selection" $ do
-            let project1 = Project "test-project" "/some/path" []
-                command1 = Cmd.empty
-                commands = [command1]
             result <- runProc (ExitSuccess, "alt-enter\n1") $ Fzf.fzfProjectCommand mempty project1 mempty commands
             result `shouldBe` Selection Edit [command1]
     )

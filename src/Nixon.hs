@@ -265,6 +265,13 @@ runAction opts = do
 die :: (Show a, MonadIO m) => a -> m b
 die err = liftIO $ log_error (format w err) >> exit (ExitFailure 1)
 
+getSortedProjects :: Nixon [Project]
+getSortedProjects = do
+  cfg' <- config <$> ask
+  let ptypes = project_types cfg'
+      srcs = project_dirs cfg'
+  P.sort_projects <$> liftIO (P.find_projects 1 ptypes srcs)
+
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
 nixonWithConfig :: MonadIO m => Config.Config -> m ()
@@ -273,11 +280,7 @@ nixonWithConfig userConfig = liftIO $ do
 
   err <- try $
     runNixon (userConfig <> cfg) $ do
-      cfg' <- config <$> ask
-      let ptypes = project_types cfg'
-          srcs = project_dirs cfg'
-      projects <- P.sort_projects <$> liftIO (P.find_projects 1 ptypes srcs)
-
+      projects <- getSortedProjects
       case sub_cmd of
         EvalCommand evalOpts -> do
           log_info "Running <eval> command"
@@ -303,10 +306,7 @@ nixonCompleter userConfig compType args = do
   (_, cfg) <- liftIO $ either die pure =<< withArgs args parse_args
   liftIO $
     runNixon (userConfig <> cfg) $ do
-      cfg' <- config <$> ask
-      let ptypes = project_types cfg'
-          srcs = project_dirs cfg'
-      projects <- P.sort_projects <$> liftIO (P.find_projects 1 ptypes srcs)
+      projects <- getSortedProjects
       case compType of
         Opts.Eval -> pure []
         Opts.Project -> pure $ map (T.unpack . format fp . P.project_name) projects
@@ -316,7 +316,9 @@ nixonCompleter userConfig compType args = do
               current <- P.from_path <$> pwd
               let p' = find ((==) p . T.unpack . format fp . P.project_name) projects
               pure $ fromMaybe current p'
-            _ -> liftIO $ P.find_in_project_or_default ptypes =<< pwd
+            _ -> do
+              ptypes <- project_types . config <$> ask
+              liftIO $ P.find_in_project_or_default ptypes =<< pwd
           commands <- withLocalConfig (project_path project) $ findProjectCommands project
           pure $ map (T.unpack . cmdName) commands
 

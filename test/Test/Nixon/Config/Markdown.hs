@@ -171,15 +171,14 @@ command_tests = describe "commands section" $ do
                 "```"
               ]
         selector
-          ( Cmd.Command
-              { Cmd.cmdName = name,
-                Cmd.cmdLang = lang,
-                Cmd.cmdDesc = desc,
-                Cmd.cmdSource = source,
-                Cmd.cmdPlaceholders = env,
-                Cmd.cmdIsBg = isBg
-              }
-            ) = (name, lang, desc, source, env, isBg)
+          Cmd.Command
+            { Cmd.cmdName = name,
+              Cmd.cmdLang = lang,
+              Cmd.cmdDesc = desc,
+              Cmd.cmdSource = source,
+              Cmd.cmdPlaceholders = env,
+              Cmd.cmdIsBg = isBg
+            } = (name, lang, desc, source, env, isBg)
      in fmap selector . Cfg.commands <$> result
           `shouldBe` Right
             [ ("hello", Bash, Just "Command description.", "echo Hello World\n", [], True)
@@ -195,14 +194,13 @@ command_tests = describe "commands section" $ do
                 "```"
               ]
         selector
-          ( Cmd.Command
-              { Cmd.cmdName = name,
-                Cmd.cmdLang = lang,
-                Cmd.cmdSource = source,
-                Cmd.cmdPlaceholders = env,
-                Cmd.cmdIsBg = isBg
-              }
-            ) = (name, lang, source, env, isBg)
+          Cmd.Command
+            { Cmd.cmdName = name,
+              Cmd.cmdLang = lang,
+              Cmd.cmdSource = source,
+              Cmd.cmdPlaceholders = env,
+              Cmd.cmdIsBg = isBg
+            } = (name, lang, source, env, isBg)
      in fmap selector . Cfg.commands <$> result
           `shouldBe` Right
             [ ("hello", Bash, "echo Hello World\n", [], False)
@@ -268,12 +266,11 @@ command_tests = describe "commands section" $ do
                   "```"
                 ]
           selector
-            ( Cmd.Command
-                { Cmd.cmdName = name,
-                  Cmd.cmdIsBg = isBg,
-                  Cmd.cmdPlaceholders = placeholders
-                }
-              ) = (name, isBg, placeholders)
+            Cmd.Command
+              { Cmd.cmdName = name,
+                Cmd.cmdIsBg = isBg,
+                Cmd.cmdPlaceholders = placeholders
+              } = (name, isBg, placeholders)
        in fmap selector . Cfg.commands <$> result
             `shouldBe` Right
               [ ( "hello",
