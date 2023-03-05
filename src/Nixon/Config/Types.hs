@@ -8,13 +8,11 @@ module Nixon.Config.Types
   )
 where
 
-import Control.Applicative (Alternative ((<|>)))
 import Control.Exception (Exception)
 import Nixon.Command (Command)
 import Nixon.Logging (LogLevel (..))
 import Nixon.Prelude
 import Nixon.Project (ProjectType)
-import Turtle (FilePath, Text)
 
 data BackendType = Fzf | Rofi deriving (Eq, Show)
 

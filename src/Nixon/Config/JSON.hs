@@ -11,7 +11,7 @@ import Data.Aeson (FromJSON (parseJSON), withObject, (.:), (.:?))
 import GHC.Generics (Generic)
 import Nixon.Prelude
 import Nixon.Project (ProjectMarker (..), ProjectType (..))
-import Turtle (FilePath, Text, fromText)
+import Turtle (fromText)
 
 data Config = Config
   { exact_match :: Maybe Bool,

@@ -2,7 +2,6 @@ module Test.Nixon.Config.Markdown where
 
 import Control.Arrow ((&&&))
 import Data.Either (isLeft)
-import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Nixon.Command as Cmd
 import Nixon.Command.Placeholder (Placeholder (..), PlaceholderType (..))

@@ -5,12 +5,10 @@ module Nixon.Command.Run
   )
 where
 
-import Control.Applicative ((<|>))
 import Control.Monad (foldM)
 import Control.Monad.Trans.Reader (ask)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
-import Data.Text (Text)
 import qualified Data.Text as T
 import Nixon.Command (Command, CommandOutput (..))
 import qualified Nixon.Command as Cmd
@@ -24,7 +22,7 @@ import qualified Nixon.Select as Select
 import Nixon.Types (Nixon)
 import qualified Nixon.Types as Types
 import Nixon.Utils (toLines)
-import Turtle (FilePath, Shell, cd, format, fp, select, stream)
+import Turtle (Shell, cd, format, fp, select, stream)
 import qualified Turtle.Bytes as BS
 import Turtle.Line (lineToText)
 

@@ -16,7 +16,7 @@ module Nixon.Project
   )
 where
 
-import Control.Applicative (empty, (<|>))
+import Control.Applicative (empty)
 import qualified Control.Foldl as Fold
 import Control.Monad (filterM)
 import Data.Function (on)
@@ -28,10 +28,7 @@ import Nixon.Command (Command (..))
 import Nixon.Prelude
 import System.Wordexp (nosubst, wordexp)
 import Turtle
-  ( FilePath,
-    IsString (..),
-    MonadIO (..),
-    Text,
+  ( IsString (..),
     encodeString,
     filename,
     format,

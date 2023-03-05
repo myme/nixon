@@ -42,11 +42,7 @@ import System.Directory (XdgDirectory (..), getXdgDirectory)
 import qualified Text.Parsec as P
 import Text.Parsec.Text (Parser)
 import Turtle
-  ( Alternative ((<|>)),
-    FilePath,
-    IsString (fromString),
-    MonadIO (..),
-    Text,
+  ( IsString (fromString),
     d,
     format,
     s,

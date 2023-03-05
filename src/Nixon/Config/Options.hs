@@ -26,13 +26,10 @@ import Nixon.Utils (implode_home)
 import qualified Options.Applicative as Opts
 import System.Environment (getArgs)
 import Turtle
-  ( Alternative (many, (<|>)),
+  ( Alternative (many),
     Applicative (liftA2),
-    FilePath,
     IsString (fromString),
-    MonadIO (..),
     Parser,
-    Text,
     format,
     fp,
     opt,

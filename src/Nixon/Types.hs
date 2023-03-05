@@ -11,7 +11,6 @@ module Nixon.Types
 where
 
 import Control.Exception (Exception)
-import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.Bool (bool)
 import Data.Maybe (fromMaybe)
@@ -22,7 +21,6 @@ import qualified Nixon.Logging as Logging
 import Nixon.Prelude
 import Nixon.Utils (printErr)
 import qualified System.IO as IO
-import Turtle (Text)
 
 data Env = Env
   { backend :: BackendType,

@@ -14,11 +14,7 @@ import Nixon.Config.Types (Config, ConfigError (..))
 import Nixon.Prelude
 import Nixon.Utils (find_dominating_file)
 import System.IO.Error (isDoesNotExistError, tryIOError)
-import Turtle
-  ( FilePath,
-    MonadIO (..),
-    readTextFile,
-  )
+import Turtle (readTextFile)
 
 findLocalConfig :: MonadIO m => FilePath -> m (Maybe Config)
 findLocalConfig path = runMaybeT $ do

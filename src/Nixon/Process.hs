@@ -24,10 +24,7 @@ import System.Posix (createSession, forkProcess, getEnvironment)
 import System.Process (CreateProcess (cwd, env, std_in), StdStream (CreatePipe), proc)
 import Turtle
   ( ExitCode,
-    FilePath,
     Line,
-    MonadIO (..),
-    Text,
     format,
     fp,
     procStrict,

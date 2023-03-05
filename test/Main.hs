@@ -1,7 +1,6 @@
 module Main where
 
 import Data.Char (isPrint, isSpace)
-import Data.Text (Text)
 import qualified Data.Text as T
 import Nixon.Prelude
 import Nixon.Select

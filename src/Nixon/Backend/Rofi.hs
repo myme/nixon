@@ -30,11 +30,8 @@ import Nixon.Select (Candidate, Selection (..), SelectionType (..))
 import qualified Nixon.Select as Select
 import Nixon.Utils (implode_home, shell_to_list, toLines, (<<?))
 import Turtle
-  ( Alternative ((<|>)),
-    ExitCode (ExitFailure, ExitSuccess),
-    MonadIO,
+  ( ExitCode (ExitFailure, ExitSuccess),
     Shell,
-    Text,
     directory,
     format,
     fp,

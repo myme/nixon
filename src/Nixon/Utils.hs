@@ -22,12 +22,9 @@ import qualified Data.Text.IO as T
 import Nixon.Prelude
 import qualified System.IO as IO
 import Turtle
-  ( FilePath,
-    Fold (Fold),
+  ( Fold (Fold),
     Line,
-    MonadIO (..),
     Shell,
-    Text,
     fold,
     home,
     parent,

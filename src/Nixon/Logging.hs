@@ -10,7 +10,6 @@ module Nixon.Logging
 where
 
 import Control.Monad (when)
-import Data.Text (Text)
 import Nixon.Prelude
 import Nixon.Utils (printErr)
 

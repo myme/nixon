@@ -12,10 +12,7 @@ import Nixon.Project (parents)
 import Nixon.Types (Config (use_direnv), Env (config), Nixon, ask)
 import Nixon.Utils (find_dominating_file)
 import Turtle
-  ( FilePath,
-    MonadIO (liftIO),
-    Text,
-    dirname,
+  ( dirname,
     format,
     fp,
     fromText,

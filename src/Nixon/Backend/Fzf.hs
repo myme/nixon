@@ -49,12 +49,9 @@ import Nixon.Utils
     (<<?),
   )
 import Turtle
-  ( Alternative ((<|>)),
-    ExitCode (ExitFailure, ExitSuccess),
+  ( ExitCode (ExitFailure, ExitSuccess),
     Line,
-    MonadIO,
     Shell,
-    Text,
     d,
     format,
     fp,

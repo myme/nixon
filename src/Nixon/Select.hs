@@ -36,14 +36,7 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import GHC.Generics (Generic)
 import Nixon.Prelude
-import Turtle
-  ( Alternative ((<|>)),
-    Line,
-    MonadIO,
-    Shell,
-    Text,
-    textToLine,
-  )
+import Turtle (Line, Shell, textToLine)
 
 data SelectionType = Default | Edit | Show | Visit deriving (Eq, Show)
 

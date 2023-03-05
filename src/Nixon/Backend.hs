@@ -1,6 +1,5 @@
 module Nixon.Backend (Backend (..)) where
 
-import Data.Text (Text)
 import Nixon.Command (Command)
 import Nixon.Prelude
 import Nixon.Project (Project)

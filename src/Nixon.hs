@@ -4,7 +4,6 @@ module Nixon
   )
 where
 
-import Control.Applicative ((<|>))
 import Control.Exception (throwIO, try)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -54,9 +53,6 @@ import System.Environment (withArgs)
 import Turtle
   ( Alternative (empty),
     ExitCode (ExitFailure),
-    FilePath,
-    MonadIO (..),
-    Text,
     d,
     exit,
     format,

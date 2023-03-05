@@ -1,8 +1,6 @@
 module Test.Nixon.TestLib where
 
-import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.State (get, StateT, evalStateT)
-import Data.Text (Text)
 import Nixon.Prelude
 import Nixon.Process (HasProc (..))
 import System.Exit (ExitCode)

@@ -17,11 +17,7 @@ import Nixon.Process (Env, RunArgs, arg, build_args, run, spawn)
 import Nixon.Types (Config (use_nix), Nixon, ask, config)
 import Nixon.Utils (find_dominating_file, quote)
 import Turtle
-  ( Alternative ((<|>)),
-    FilePath,
-    MonadIO (..),
-    Text,
-    format,
+  ( format,
     fp,
     parent,
     testpath,

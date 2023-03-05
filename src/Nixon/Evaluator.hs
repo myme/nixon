@@ -30,12 +30,8 @@ import Nixon.Utils (quote, shell_to_list)
 import System.Directory (XdgDirectory (..), getXdgDirectory)
 import qualified System.IO as IO
 import Turtle
-  ( Alternative ((<|>)),
-    FilePath,
-    Line,
-    MonadIO (..),
+  ( Line,
     Shell,
-    Text,
     decodeString,
     die,
     format,

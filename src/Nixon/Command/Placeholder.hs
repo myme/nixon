@@ -4,7 +4,6 @@ module Nixon.Command.Placeholder
   )
 where
 
-import Data.Text (Text)
 import Nixon.Prelude
 
 data PlaceholderType = Arg | EnvVar { envName :: Text } | Stdin

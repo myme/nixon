@@ -14,13 +14,12 @@ module Nixon.Command
   )
 where
 
-import Data.Text (Text)
 import qualified Data.Text as T
 import Nixon.Command.Placeholder (Placeholder)
 import qualified Nixon.Command.Placeholder as P
 import Nixon.Language (Language (None))
 import Nixon.Prelude
-import Turtle (FilePath, format, s, (%))
+import Turtle (format, s, (%))
 
 data Command = Command
   { cmdName :: Text,

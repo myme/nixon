@@ -7,12 +7,10 @@ module Nixon.Language
   )
 where
 
-import Control.Monad.IO.Class (MonadIO)
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Data.Text (Text, unpack)
+import Data.Text (unpack)
 import Nixon.Prelude
-import Options.Applicative ((<|>))
-import Turtle (FilePath, need)
+import Turtle (need)
 import qualified Turtle
 
 data Language
