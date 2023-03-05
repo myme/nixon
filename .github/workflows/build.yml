@@ -17,13 +17,16 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Hpack
+    - name: Install packages
       run: |
         sudo apt-get update
-        sudo apt-get install hpack
-        hpack
-    
-    - uses: haskell/actions/setup@v2
+        sudo apt-get install hlint hpack
+
+    - name: Hpack
+      run: hpack
+
+    - name: Install Haskell
+      uses: haskell/actions/setup@v2
       with:
         ghc-version: '9.0'
 
@@ -43,6 +46,9 @@ jobs:
       run: |
         cabal update
         cabal build --only-dependencies --enable-tests --enable-benchmarks
+
+    - name: Hlint
+      run: hlint .
 
     - name: Build
       run: cabal build --enable-tests --enable-benchmarks all
