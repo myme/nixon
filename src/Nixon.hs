@@ -118,15 +118,17 @@ findProjectCommands project = do
 
 -- | Find executables within a "bin" directory in the project
 findBinCommands :: Project -> Nixon [Command]
-findBinCommands project = shell_to_list $ do
-  -- TODO: Check project config for "bin" directories
-  let binPath = project_path project </> "bin"
-  path <- lsif isExecutable binPath
-  pure
-    Cmd.empty
-      { cmdName = format fp (basename path),
-        cmdSource = format fp path
-      }
+findBinCommands project = do
+  binDirs <- Config.bin_dirs . config <$> ask
+  shell_to_list $ do
+    dir <- select binDirs
+    let binPath = project_path project </> dir
+    path <- lsif isExecutable binPath
+    pure
+      Cmd.empty
+        { cmdName = format fp (basename path),
+          cmdSource = format fp path
+        }
   where
     isExecutable = fmap _executable . getmod
 

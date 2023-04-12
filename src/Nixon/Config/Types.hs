@@ -22,6 +22,7 @@ isGuiBackend Rofi = True
 
 data Config = Config
   { backend :: Maybe BackendType,
+    bin_dirs :: [FilePath],
     exact_match :: Maybe Bool,
     ignore_case :: Maybe Bool,
     force_tty :: Maybe Bool,
@@ -39,6 +40,7 @@ instance Semigroup Config where
   (<>) lhs rhs =
     lhs
       { backend = backend rhs <|> backend lhs,
+        bin_dirs = bin_dirs lhs ++ bin_dirs rhs,
         exact_match = exact_match rhs <|> exact_match lhs,
         ignore_case = ignore_case rhs <|> ignore_case lhs,
         force_tty = force_tty rhs <|> force_tty lhs,
@@ -55,6 +57,7 @@ defaultConfig :: Config
 defaultConfig =
   Config
     { backend = Nothing,
+      bin_dirs = [],
       exact_match = Nothing,
       ignore_case = Nothing,
       force_tty = Nothing,

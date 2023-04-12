@@ -14,7 +14,8 @@ import Nixon.Project (ProjectMarker (..), ProjectType (..))
 import Turtle (fromText)
 
 data Config = Config
-  { exact_match :: Maybe Bool,
+  { bin_dirs :: [FilePath],
+    exact_match :: Maybe Bool,
     ignore_case :: Maybe Bool,
     project_dirs :: [FilePath],
     project_types :: [ProjectType],
@@ -27,7 +28,8 @@ data Config = Config
 empty :: Config
 empty =
   Config
-    { exact_match = Nothing,
+    { bin_dirs = [],
+      exact_match = Nothing,
       ignore_case = Nothing,
       project_dirs = [],
       project_types = [],
@@ -39,7 +41,8 @@ empty =
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \v ->
     Config
-      <$> v .:? "exact_match"
+      <$> (maybe [] (fmap fromText) <$> v .:? "bin_dirs")
+      <*> v .:? "exact_match"
       <*> v .:? "ignore_case"
       <*> (maybe [] (fmap fromText) <$> v .:? "project_dirs")
       <*> (maybe [] (fmap mkptype) <$> v .:? "project_types")

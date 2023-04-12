@@ -35,6 +35,7 @@ config_tests = describe "config section" $ do
               [ "# Config {.config}",
                 "```",
                 "{",
+                "  \"bin_dirs\": [\"bin\"],",
                 "  \"exact_match\": true,",
                 "  \"ignore_case\": true,",
                 "  \"project_dirs\": [\"foo\", \"bar\"],",
@@ -47,6 +48,7 @@ config_tests = describe "config section" $ do
           `shouldBe` Right
             Cfg.Config
               { Cfg.backend = Nothing,
+                Cfg.bin_dirs = ["bin"],
                 Cfg.exact_match = Just True,
                 Cfg.ignore_case = Just True,
                 Cfg.force_tty = Nothing,

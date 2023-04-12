@@ -26,7 +26,8 @@ import qualified Nixon.Command.Placeholder as Cmd
 import qualified Nixon.Config.JSON as JSON
 import Nixon.Config.Types
   ( Config
-      ( commands,
+      ( bin_dirs,
+        commands,
         exact_match,
         ignore_case,
         project_dirs,
@@ -60,7 +61,8 @@ defaultPath = liftIO $ fromString <$> getXdgDirectory XdgConfig "nixon.md"
 buildConfig :: (JSON.Config, [Cmd.Command]) -> Config
 buildConfig (cfg, cmds) =
   defaultConfig
-    { exact_match = JSON.exact_match cfg,
+    { bin_dirs = JSON.bin_dirs cfg,
+      exact_match = JSON.exact_match cfg,
       ignore_case = JSON.ignore_case cfg,
       project_dirs = JSON.project_dirs cfg,
       project_types = JSON.project_types cfg,

@@ -141,6 +141,7 @@ parser default_config mkcompleter =
     parseConfig =
       Config.Config
         <$> optional (opt parseBackend "backend" 'b' "Backend to use: fzf, rofi")
+        <*> pure [] -- Bin dirs are not CLI args
         <*> maybeSwitch "exact" 'e' "Enable exact match"
         <*> maybeSwitch "ignore-case" 'i' "Case-insensitive match"
         <*> maybeSwitch "force-tty" 'T' "Never fork or spawn off separate processes"
