@@ -9,8 +9,9 @@ import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Reader (ask, local)
 import Data.Foldable (find)
+import Data.Function (on)
 import Data.Functor (void)
-import Data.List (intersect)
+import Data.List (intersect, sortBy)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
@@ -47,16 +48,19 @@ import Nixon.Types
     NixonError (EmptyError, NixonError),
     runNixon,
   )
-import Nixon.Utils (implode_home)
+import Nixon.Utils (implode_home, shell_to_list)
 import System.Console.Haskeline (defaultSettings, getInputLineWithInitial, runInputT)
 import System.Environment (withArgs)
 import Turtle
   ( Alternative (empty),
     ExitCode (ExitFailure),
+    basename,
     d,
     exit,
     format,
     fp,
+    getmod,
+    lsif,
     need,
     printf,
     pwd,
@@ -65,6 +69,8 @@ import Turtle
     select,
     w,
     (%),
+    (</>),
+    _executable,
   )
 
 -- | List projects, filtering if a query is specified.
@@ -98,12 +104,31 @@ withLocalConfig filepath action = do
     Just cfg -> local (\env -> env {config = config env <> cfg}) action
 
 findProjectCommands :: Project -> Nixon [Command]
-findProjectCommands project = filter filter_cmd . commands . config <$> ask
+findProjectCommands project = do
+  markdownCmds <- filter filter_cmd . commands . config <$> ask
+  binCmds <- findBinCommands project
+  let commands = markdownCmds <> binCmds
+      sortedCmds = sortBy (compare `on` cmdName) commands
+  pure sortedCmds
   where
     ptypes = map project_id $ P.project_types project
     filter_cmd cmd =
       let ctypes = cmdProjectTypes cmd
        in null ctypes || not (null $ intersect ptypes ctypes)
+
+-- | Find executables within a "bin" directory in the project
+findBinCommands :: Project -> Nixon [Command]
+findBinCommands project = shell_to_list $ do
+  -- TODO: Check project config for "bin" directories
+  let binPath = project_path project </> "bin"
+  path <- lsif isExecutable binPath
+  pure
+    Cmd.empty
+      { cmdName = format fp (basename path),
+        cmdSource = format fp path
+      }
+  where
+    isExecutable = fmap _executable . getmod
 
 -- | Find and handle a command in a project.
 findAndHandleCmd :: Project -> RunOpts -> Nixon ()
