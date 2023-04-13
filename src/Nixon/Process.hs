@@ -13,9 +13,9 @@ module Nixon.Process
   )
 where
 
-import Control.Applicative (Alternative (empty))
 import Control.Arrow ((***))
 import Control.Monad.Trans.Reader (ReaderT)
+import qualified Data.ByteString as BS
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (catMaybes)
 import qualified Data.Text as T
@@ -32,11 +32,22 @@ import Turtle
     system,
     void,
   )
+import qualified Turtle
+import qualified Turtle.Bytes as BS
 import Turtle.Shell (Shell)
 
 type Cwd = Maybe FilePath
 
 type Env = [(Text, Text)]
+
+class HasStdin a where
+  getStdin :: Shell a
+
+instance HasStdin Line where
+  getStdin = Turtle.stdin
+
+instance HasStdin BS.ByteString where
+  getStdin = BS.stdin
 
 flag :: a -> Bool -> Maybe [a]
 flag key value = if value then Just [key] else Nothing
@@ -77,17 +88,17 @@ run :: MonadIO m => RunArgs Line m ()
 run cmd cwd' env' stdin = sh $ do
   cmd' <- build_cmd cmd cwd' env'
   case stdin of
-    Nothing -> system cmd' empty
+    Nothing -> system cmd' getStdin
     Just stdin' -> system cmd' {std_in = CreatePipe} stdin'
 
 type Runner m a = CreateProcess -> Shell a -> m a
 
 -- | Run a process and return the output
-run_with_output :: (MonadIO m, Alternative m) => Runner m a -> RunArgs a m a
+run_with_output :: HasStdin a => (MonadIO m, Alternative m) => Runner m a -> RunArgs a m a
 run_with_output stream' cmd cwd' env' stdin = do
   cmd' <- build_cmd cmd cwd' env'
   case stdin of
-    Nothing -> stream' cmd' empty
+    Nothing -> stream' cmd' getStdin
     Just stdin' -> stream' cmd' {std_in = CreatePipe} stdin'
 
 -- | Spawn/fork off a command in the background
