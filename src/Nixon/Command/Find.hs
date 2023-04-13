@@ -65,7 +65,7 @@ findBinCommands project = do
   where
     isExecutable = fmap _executable . getmod
 
-type CommandHandler = FilePath -> Selection Command -> RunOpts -> Nixon ()
+type CommandHandler = Project -> Selection Command -> RunOpts -> Nixon ()
 
 -- | Find and handle a command in a project.
 findAndHandleCmd :: CommandHandler -> Project -> RunOpts -> Nixon ()
@@ -73,7 +73,7 @@ findAndHandleCmd handleCmd project opts = withLocalConfig (project_path project)
   find_command <- Backend.commandSelector <$> getBackend
   cmds <- filter (not . Cmd.cmdIsHidden) <$> findProjectCommands project
   cmd <- liftIO $ find_command project (Opts.runCommand opts) cmds
-  handleCmd (project_path project) cmd opts
+  handleCmd project cmd opts
 
 findProject :: [Project] -> Select.SelectorOpts -> Maybe Text -> Nixon (Selection Project)
 findProject projects selectOpts query = do

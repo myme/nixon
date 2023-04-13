@@ -22,7 +22,7 @@ import Nixon.Backend.Fzf
   )
 import Nixon.Command (Command (..), show_command_with_description)
 import qualified Nixon.Command as Cmd
-import Nixon.Command.Find (findProjectCommands, findAndHandleCmd, withLocalConfig, findProject, getBackend)
+import Nixon.Command.Find (findAndHandleCmd, findProject, findProjectCommands, getBackend, withLocalConfig)
 import qualified Nixon.Command.Run as Cmd
 import Nixon.Config.Options (CompletionType, EvalOpts (..), EvalSource (..), GCOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
@@ -87,8 +87,8 @@ fail :: MonadIO m => NixonError -> m a
 fail err = liftIO (throwIO err)
 
 -- | Find and run a command in a project.
-handleCmd :: FilePath -> Selection Command -> RunOpts -> Nixon ()
-handleCmd path cmd opts = do
+handleCmd :: Project -> Selection Command -> RunOpts -> Nixon ()
+handleCmd project cmd opts = do
   selector <- Backend.selector <$> getBackend
   case cmd of
     EmptySelection -> fail $ EmptyError "No command selected."
@@ -98,24 +98,24 @@ handleCmd path cmd opts = do
       if Opts.runSelect opts
         then do
           let selectOpts = Select.defaults {Select.selector_multiple = Just True}
-          resolved <- Cmd.resolveCmd path selector cmd' selectOpts
+          resolved <- Cmd.resolveCmd project selector cmd' selectOpts
           printf (s % "\n") (T.unlines resolved)
         else do
           case selectionType of
-            Select.Default -> Cmd.runCmd selector path cmd' (Opts.runArgs opts)
-            Select.Edit -> editCmd path cmd' (Opts.runArgs opts)
+            Select.Default -> Cmd.runCmd selector project cmd' (Opts.runArgs opts)
+            Select.Edit -> editCmd project cmd' (Opts.runArgs opts)
             Select.Show -> showCmd cmd'
             Select.Visit -> visitCmd cmd'
     Selection _ _ -> fail $ NixonError "Multiple commands selected."
 
 -- | Edit the command source before execution
-editCmd :: FilePath -> Command -> [Text] -> Nixon ()
-editCmd path cmd args = do
+editCmd :: Project -> Command -> [Text] -> Nixon ()
+editCmd project cmd args = do
   selector <- Backend.selector <$> getBackend
   edited <- editSelection (T.strip $ Cmd.cmdSource cmd)
   case edited of
     Nothing -> fail $ EmptyError "Empty command."
-    Just source -> Cmd.runCmd selector path (cmd {Cmd.cmdSource = source}) args
+    Just source -> Cmd.runCmd selector project (cmd {Cmd.cmdSource = source}) args
 
 -- | Print the command
 showCmd :: Command -> Nixon ()
@@ -178,7 +178,7 @@ evalAction projects (EvalOpts source placeholders lang projSelect) = do
             runSelect = False
           }
 
-  handleCmd (project_path project) (Selection Default [cmd']) runOpts
+  handleCmd project (Selection Default [cmd']) runOpts
 
 -- | Garbage collect cached scripts
 gcAction :: GCOpts -> Nixon ()
