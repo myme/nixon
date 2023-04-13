@@ -277,7 +277,7 @@ command_tests = describe "commands section" $ do
             `shouldBe` Right
               [ ( "hello",
                   True,
-                  [Placeholder Arg "arg" False, Placeholder Arg "another-arg" False]
+                  [Placeholder Arg "arg" False [], Placeholder Arg "another-arg" False []]
                 )
               ]
 
@@ -323,35 +323,35 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses arg part" $ do
     parseCommandName "cat ${arg}"
-      `shouldBe` Right ("cat", [Placeholder Arg "arg" False])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" False []])
 
   it "parses stdin arg part" $ do
     parseCommandName "cat <{arg}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" False])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" False []])
 
   it "parses envvar arg part" $ do
     parseCommandName "cat ={arg}"
-      `shouldBe` Right ("cat", [Placeholder (EnvVar "arg") "arg" False])
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "arg") "arg" False []])
 
   it "parses envvar part with alias" $ do
     parseCommandName "cat FOO={bar}"
-      `shouldBe` Right ("cat", [Placeholder (EnvVar "FOO") "bar" False])
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "FOO") "bar" False []])
 
   it "parses arg modifiers" $ do
     parseCommandName "cat ${arg:m}"
-      `shouldBe` Right ("cat", [Placeholder Arg "arg" True])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" True []])
 
   it "parses stdin arg modifiers" $ do
     parseCommandName "cat <{arg:m}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" True])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" True []])
 
   it "parses text and placeholder part" $ do
     parseCommandName "cat \"${arg}\""
-      `shouldBe` Right ("cat", [Placeholder Arg "arg" False])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" False []])
 
   it "replaces '-' with '_' in env var name" $ do
     parseCommandName "cat \"={some-arg}\""
-      `shouldBe` Right ("cat", [Placeholder (EnvVar "some_arg") "some-arg" False])
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "some_arg") "some-arg" False []])
 
   it "allows use of $ not matching '${'" $ do
     parseCommandName "echo $SOME_VAR" `shouldBe` Right ("echo", [])

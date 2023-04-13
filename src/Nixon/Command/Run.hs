@@ -17,7 +17,7 @@ import Nixon.Evaluator (evaluate, getEvaluator)
 import Nixon.Prelude
 import Nixon.Process (run_with_output)
 import qualified Nixon.Process
-import Nixon.Select (Selection (..), Selector, SelectorOpts (..))
+import Nixon.Select (Selection (..), Selector, selector_multiple)
 import qualified Nixon.Select as Select
 import Nixon.Types (Nixon)
 import qualified Nixon.Types as Types
@@ -39,27 +39,42 @@ runCmd selector projectPath cmd args = do
 -- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
 resolveEnv :: FilePath -> Selector Nixon -> Command -> [Text] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv projectPath selector cmd args = do
-  let mappedArgs = zip (Cmd.cmdPlaceholders cmd) (map Select.search args <> repeat Select.defaults)
-  (stdin, args', envs) <- foldM resolveEach (Nothing, [], []) mappedArgs
+  let mappedArgs = zipArgs (Cmd.cmdPlaceholders cmd) args
+  (stdin, args', envs) <- resolveEnv' projectPath selector mappedArgs
   pure (stdin, args', nixonEnvs ++ envs)
   where
     nixonEnvs = [("nixon_project_path", format fp projectPath)]
 
-    resolveEach (stdin, args', envs) (Cmd.Placeholder envType cmdName multiple, select_opts) = do
-      cmd' <- assertCommand cmdName
-      let select_opts' = select_opts {selector_multiple = Just multiple}
-      resolved <- resolveCmd projectPath selector cmd' select_opts'
-      pure $ case envType of
+-- | Zip placeholders with arguments, filling in missing placeholders with overflow arguments.
+zipArgs :: [Cmd.Placeholder] -> [Text] -> [(Cmd.Placeholder, Select.SelectorOpts)]
+zipArgs [] args' = zip (map argOverflow args') (repeat Select.defaults)
+  where
+    argOverflow = Cmd.Placeholder Cmd.Arg "arg" False . pure
+zipArgs placeholders [] = zip placeholders (repeat Select.defaults)
+zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
+
+-- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
+resolveEnv' :: FilePath -> Selector Nixon -> [(Cmd.Placeholder, Select.SelectorOpts)] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
+resolveEnv' projectPath selector = foldM resolveEach (Nothing, [], [])
+  where
+    resolveEach (stdin, args', envs) (Cmd.Placeholder envType cmdName multiple value, select_opts) = do
+      resolved <- case value of
+        [] -> do
+          cmd' <- assertCommand cmdName
+          let select_opts' = select_opts {selector_multiple = Just multiple}
+          resolveCmd projectPath selector cmd' select_opts'
+        _ -> pure value
+      case envType of
         -- Standard inputs are concatenated
         Cmd.Stdin ->
           let stdinCombined = Just $ case stdin of
                 Nothing -> select resolved
                 Just prev -> prev <|> select resolved
-           in (stdinCombined, args', envs)
+           in pure (stdinCombined, args', envs)
         -- Each line counts as one positional argument
-        Cmd.Arg -> (stdin, args' <> resolved, envs)
+        Cmd.Arg -> pure (stdin, args' <> resolved, envs)
         -- Environment variables are concatenated into space-separated line
-        Cmd.EnvVar name -> (stdin, args', envs <> [(name, T.unwords resolved)])
+        Cmd.EnvVar name -> pure (stdin, args', envs <> [(name, T.unwords resolved)])
 
     assertCommand cmd_name = do
       cmd' <- find ((==) cmd_name . Cmd.cmdName) . Types.commands . Types.config <$> ask

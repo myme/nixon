@@ -26,14 +26,15 @@ import Nixon.Utils (shell_to_list)
 import Turtle
   ( Permissions (_executable),
     basename,
+    format,
     fp,
     getmod,
+    lsif,
     pwd,
     select,
+    (%),
     (</>),
   )
-import Turtle.Format (format)
-import Turtle.Prelude (lsif)
 
 findProjectCommands :: Project -> Nixon [Command]
 findProjectCommands project = do
@@ -59,7 +60,7 @@ findBinCommands project = do
     pure
       Cmd.empty
         { cmdName = format fp (basename path),
-          cmdSource = format fp path
+          cmdSource = format (fp % " \"$@\"") path
         }
   where
     isExecutable = fmap _executable . getmod

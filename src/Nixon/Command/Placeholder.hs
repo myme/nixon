@@ -6,7 +6,7 @@ where
 
 import Nixon.Prelude
 
-data PlaceholderType = Arg | EnvVar { envName :: Text } | Stdin
+data PlaceholderType = Arg | EnvVar {_envName :: Text} | Stdin
   deriving (Eq, Show)
 
 -- | Placeholders for environment variables
@@ -16,6 +16,8 @@ data Placeholder = Placeholder
     -- | The command it's referencing
     name :: Text,
     -- | If the placeholder can select multiple
-    multiple :: Bool
+    multiple :: Bool,
+    -- | Pre-expanded value of the placeholder
+    value :: [Text]
   }
   deriving (Eq, Show)

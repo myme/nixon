@@ -273,7 +273,7 @@ parseCommandArg' = do
         Cmd.EnvVar "" -> Cmd.EnvVar $ fixup name
         Cmd.EnvVar alias -> Cmd.EnvVar $ fixup alias
         same -> same
-  pure $ Cmd.Placeholder placeholderWithName name multiple
+  pure $ Cmd.Placeholder placeholderWithName name multiple []
 
 splitOn :: Text -> Text -> NonEmpty Text
 splitOn delim input = case T.splitOn delim input of
