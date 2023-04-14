@@ -30,6 +30,7 @@ import Nixon.Config.Types
         commands,
         exact_match,
         ignore_case,
+        loglevel,
         project_dirs,
         project_types,
         use_direnv,
@@ -68,7 +69,8 @@ buildConfig (cfg, cmds) =
       project_types = JSON.project_types cfg,
       use_direnv = JSON.use_direnv cfg,
       use_nix = JSON.use_nix cfg,
-      commands = cmds
+      commands = cmds,
+      loglevel = Nothing
     }
 
 parseMarkdown :: FilePath -> Text -> Either Text Config
