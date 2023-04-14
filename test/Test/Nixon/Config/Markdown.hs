@@ -6,7 +6,7 @@ import qualified Data.Text as T
 import qualified Nixon.Command as Cmd
 import Nixon.Command.Placeholder (Placeholder (..), PlaceholderType (..))
 import Nixon.Config.Markdown (parseCommandName, parseHeaderArgs, parseMarkdown)
-import Nixon.Config.Types (LogLevel (LogWarning), defaultConfig)
+import Nixon.Config.Types (defaultConfig)
 import qualified Nixon.Config.Types as Cfg
 import Nixon.Language (Language (Bash))
 import Nixon.Prelude
@@ -26,7 +26,7 @@ config_tests = describe "config section" $ do
                 "{}",
                 "```"
               ]
-     in result `shouldBe` Right defaultConfig
+     in result `shouldBe` Right defaultConfig { Cfg.loglevel = Nothing }
 
   it "parses JSON structure" $
     let result =
@@ -58,7 +58,7 @@ config_tests = describe "config section" $ do
                 Cfg.use_direnv = Just True,
                 Cfg.use_nix = Just True,
                 Cfg.terminal = Nothing,
-                Cfg.loglevel = Just LogWarning
+                Cfg.loglevel = Nothing
               }
 
   describe "errors" $ do
