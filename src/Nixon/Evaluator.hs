@@ -19,7 +19,7 @@ import Nixon.Command (Command (..))
 import qualified Nixon.Config.Types as Config
 import Nixon.Direnv (direnv_cmd)
 import Nixon.Language (extension, interpreter)
-import Nixon.Logging (log_info)
+import Nixon.Logging (log_debug, log_info)
 import Nixon.Nix (nix_cmd)
 import Nixon.Prelude
 import Nixon.Process (Cwd, Env, RunArgs)
