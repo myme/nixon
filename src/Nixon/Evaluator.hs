@@ -52,9 +52,7 @@ getCacheDir :: MonadIO m => m FilePath
 getCacheDir = liftIO $ decodeString <$> getXdgDirectory XdgCache "nixon"
 
 writeCommand :: MonadIO m => Command -> m FilePath
-writeCommand cmd = liftIO $ do
-  cacheDir <- getCacheDir
-  mktree cacheDir
+writeCommand cmd = do
   let content = cmdSource cmd
       sha1 = digestToHexByteString (hash (encodeUtf8 content) :: Digest SHA1)
       basename =
@@ -63,8 +61,13 @@ writeCommand cmd = liftIO $ do
             <> "-"
             <> cmdName cmd
             <> extension (cmdLang cmd)
-      path = cacheDir </> basename
-  writeTextFile path content
+
+  path <- liftIO $ do
+    cacheDir <- getCacheDir
+    mktree cacheDir
+    pure (cacheDir </> basename)
+
+  liftIO $ writeTextFile path content
   pure path
 
 -- | Clean up all cache files in $XDG_CACHE_DIR/nixon
@@ -95,6 +98,7 @@ getEvaluator run cmd args cwd env stdin = do
       Nothing -> die $ format ("No interpreter for " % w) (cmdLang cmd)
       Just int -> pure int
   int_cmd <- maybeWrapCmd cwd (int <> (format fp path :| args))
+  log_info (format ("Evaluating " % fp) path)
   pure $ run int_cmd cwd env stdin
 
 -- | Run the evaluator for a command
