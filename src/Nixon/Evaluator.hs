@@ -105,7 +105,10 @@ withEvaluator run cmd args cwd env stdin = join (getEvaluator run cmd args cwd e
 evaluate :: Command -> [Text] -> Cwd -> Env -> Maybe (Shell Line) -> Nixon ()
 evaluate cmd args path env' stdin = do
   let source = cmdSource cmd
+
   log_info (format ("Running command " % w) source)
+  log_debug (format ("Args: " % w) args)
+  log_debug (format ("Env: " % w) env')
 
   isNotGUIBackend <- not . Config.isGuiBackend . T.backend <$> ask
   isTTY <- liftIO $ IO.hIsTerminalDevice IO.stdin
