@@ -4,11 +4,12 @@
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
 
   outputs = { self, nixpkgs }:
-    let system = "x86_64-linux";
-        pkgs = import nixpkgs {
-          system = "x86_64-linux";
-          overlays = [self.overlay];
-        };
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs {
+        system = "x86_64-linux";
+        overlays = [ self.overlay ];
+      };
     in {
       overlay = (final: prev: {
         nixon = import ./default.nix {
@@ -23,5 +24,5 @@
         inherit pkgs;
         inherit (pkgs) haskellPackages;
       };
-  };
+    };
 }
