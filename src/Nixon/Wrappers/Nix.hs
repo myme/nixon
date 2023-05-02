@@ -1,4 +1,4 @@
-module Nixon.Nix
+module Nixon.Wrappers.Nix
   ( find_nix_file,
     nix_files,
     nix_shell,

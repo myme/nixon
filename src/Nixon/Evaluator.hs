@@ -17,16 +17,16 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Nixon.Command (Command (..))
 import qualified Nixon.Config.Types as Config
-import Nixon.Direnv (direnv_cmd)
 import Nixon.Language (extension, interpreter)
 import Nixon.Logging (log_debug, log_info)
-import Nixon.Nix (nix_cmd)
 import Nixon.Prelude
 import Nixon.Process (Cwd, Env, RunArgs)
 import qualified Nixon.Process as Proc
 import Nixon.Types (Nixon)
 import qualified Nixon.Types as T
 import Nixon.Utils (quote, shell_to_list)
+import Nixon.Wrappers.Direnv (direnv_cmd)
+import Nixon.Wrappers.Nix (nix_cmd)
 import System.Directory (XdgDirectory (..), getXdgDirectory)
 import qualified System.IO as IO
 import Turtle

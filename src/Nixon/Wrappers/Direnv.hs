@@ -1,4 +1,4 @@
-module Nixon.Direnv
+module Nixon.Wrappers.Direnv
   ( direnv_cmd,
   )
 where
