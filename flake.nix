@@ -12,9 +12,13 @@
       };
     in {
       overlay = (final: prev: {
-        nixon = import ./default.nix {
-          pkgs = final;
-          inherit (final) haskellPackages;
+        nixon = pkgs.haskell.lib.compose.justStaticExecutables
+          final.haskellPackages.nixon;
+        haskellPackages = prev.haskellPackages // {
+          nixon = import ./default.nix {
+            pkgs = final;
+            inherit (final) haskellPackages;
+          };
         };
       });
 
