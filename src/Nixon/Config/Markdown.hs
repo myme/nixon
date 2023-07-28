@@ -170,16 +170,16 @@ parse fileName = go (S 0 []) (JSON.empty, [])
               (stateHeaderLevel st)
               l
               name
-    go st (cfg, ps) (Head pos l name attr : rest)
+    go st (cfg, ps) (Head pos l name attrs : rest)
       -- We found a config
-      | hasArgs "config" attr = case parseConfig rest of
+      | hasArgs "config" attrs = case parseConfig rest of
           (Left err, _) -> Left err
           (Right cfg', rest') -> go st (cfg', ps) rest'
       -- We found a command
-      | hasArgs "command" attr =
-          let pt = getKwargs "type" attr <> stateProjectTypes st
-              isBg = hasArgs "bg" attr
-              isJson = hasArgs "json" attr
+      | hasArgs "command" attrs =
+          let pt = getKwargs "type" attrs <> stateProjectTypes st
+              isBg = hasArgs "bg" attrs
+              isJson = hasArgs "json" attrs
            in case parseCommand (PosInfo fileName pos) name pt rest of
                 (Left err, _) -> Left err
                 (Right p, rest') -> go st (cfg, p <! bg isBg <! json isJson : ps) rest'
@@ -189,7 +189,7 @@ parse fileName = go (S 0 []) (JSON.empty, [])
         st' =
           st
             { stateHeaderLevel = l,
-              stateProjectTypes = getKwargs "type" attr <> parentTypes
+              stateProjectTypes = getKwargs "type" attrs <> parentTypes
             }
         parentTypes
           | l == stateHeaderLevel st = []
