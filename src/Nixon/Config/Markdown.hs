@@ -15,6 +15,7 @@ import Data.Aeson (eitherDecodeStrict)
 import Data.Bifunctor (Bifunctor (first))
 import Data.Char (isSpace)
 import Data.Either (partitionEithers)
+import Data.Functor (($>))
 import Data.List (find)
 import Data.Maybe (mapMaybe)
 import Data.Text (pack, strip)
@@ -52,6 +53,7 @@ import Turtle
     s,
     (%),
   )
+import Turtle.Format (fp)
 
 data PosInfo = PosInfo
   { posName :: FilePath,
@@ -92,11 +94,7 @@ extract (M.Node pos nodeType children) = case nodeType of
             ++ ["command" | isCommand && "command" `notElem` args]
             ++ args
      in [Head pos level name (name, args', kwargs)]
-  M.CODE_BLOCK info text ->
-    let lang = case T.words info of
-          [] -> Nothing
-          (l : _) -> Just l
-     in [Source lang text]
+  M.CODE_BLOCK info text -> [Source info text]
   M.PARAGRAPH -> [Paragraph $ getText children]
   _ -> concatMap extract children
   where
@@ -146,8 +144,8 @@ type Pos = Maybe M.PosInfo
 data Node
   = -- | level name command type
     Head Pos Int Text Attrs
-  | -- | lang src
-    Source (Maybe Text) Text
+  | -- | info src
+    Source Text Text
   | Paragraph Text
   deriving (Show)
 
@@ -208,19 +206,26 @@ getKwargs key (_, _, kwargs) = map snd $ filter ((== key) . fst) kwargs
 
 parseConfig :: [Node] -> (Either Text JSON.Config, [Node])
 parseConfig (Source lang src : rest') = case lang of
-  Nothing -> (parsed, rest')
-  Just "json" -> (parsed, rest')
-  Just lang' -> (Left $ format ("Invalid config language: " % s) lang', rest')
+  "json" -> (parsed, rest')
+  "" -> (parsed, rest')
+  _ -> (Left $ format ("Invalid config language: " % s) lang, rest')
   where
     parsed :: Either Text JSON.Config
     parsed = first pack (eitherDecodeStrict $ encodeUtf8 src)
 parseConfig rest = (Left "Expecting config source after header", rest)
 
+withPosition :: PosInfo -> Text -> Text
+withPosition pos output = T.unwords [positionStr, output]
+  where
+    positionStr = format (fp % s) (posName pos) lineInfo
+    lineInfo = maybe "" (T.pack . (":" ++) . show . M.startLine) location
+    location = posLocation pos
+
 parseCommand :: PosInfo -> Text -> [Text] -> [Node] -> (Either Text Cmd.Command, [Node])
 parseCommand pos name projectTypes (Paragraph desc : rest) =
   let (cmd, rest') = parseCommand pos name projectTypes rest
    in (Cmd.description (strip desc) <$> cmd, rest')
-parseCommand pos name projectTypes (Source lang src : rest) = (cmd, rest)
+parseCommand pos name projectTypes (Source info src : rest) = (cmd, rest)
   where
     loc =
       Cmd.CommandLocation
@@ -229,16 +234,25 @@ parseCommand pos name projectTypes (Source lang src : rest) = (cmd, rest)
         }
     cmd = do
       (name', args) <- parseCommandName name
-      pure
-        Cmd.empty
-          { Cmd.cmdName = name',
-            Cmd.cmdLang = maybe Lang.None Lang.parseLang lang,
-            Cmd.cmdPlaceholders = args,
-            Cmd.cmdProjectTypes = projectTypes,
-            Cmd.cmdSource = src,
-            Cmd.cmdLocation = Just loc,
-            Cmd.cmdIsHidden = "_" `T.isPrefixOf` name'
-          }
+      (lang, parsedSourceArgs) <- parseCommandName info
+      if not (null args) && not (null parsedSourceArgs)
+        then
+          Left $
+            withPosition pos $
+              format
+                (s % " uses placeholders in both command header and source code block")
+                name'
+        else
+          pure
+            Cmd.empty
+              { Cmd.cmdName = name',
+                Cmd.cmdLang = Lang.parseLang lang,
+                Cmd.cmdPlaceholders = args ++ parsedSourceArgs,
+                Cmd.cmdProjectTypes = projectTypes,
+                Cmd.cmdSource = src,
+                Cmd.cmdLocation = Just loc,
+                Cmd.cmdIsHidden = "_" `T.isPrefixOf` name'
+              }
 parseCommand _ name _ rest = (Left $ format ("Expecting source block for " % s) name, rest)
 
 parseCommandName :: Text -> Either Text (Text, [Cmd.Placeholder])
@@ -246,9 +260,10 @@ parseCommandName = first (T.pack . show) . P.parse parser ""
   where
     parser = do
       P.spaces
-      name <- T.pack <$> P.many1 (P.satisfy (not . isSpace))
-      args <- parseCommandArgs
-      pure (name, args)
+      (P.eof $> ("", [])) <|> do
+        name <- T.pack <$> P.many1 (P.satisfy (not . isSpace))
+        args <- parseCommandArgs
+        pure (name, args)
 
 parseCommandArgs :: Parser [Cmd.Placeholder]
 parseCommandArgs =

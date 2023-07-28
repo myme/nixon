@@ -281,6 +281,32 @@ command_tests = describe "commands section" $ do
                 )
               ]
 
+  it "extracts code block placeholders" $ do
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "# `hello`",
+                "```bash ${arg}",
+                "echo Hello \"$arg\"",
+                "```"
+              ]
+        selector Cmd.Command {Cmd.cmdPlaceholders = placeholders} = placeholders
+    fmap selector . Cfg.commands <$> result
+      `shouldBe` Right [[Placeholder Arg "arg" [] False []]]
+
+  it "complains on both header & code block placeholders" $ do
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "# `hello` ${foo}",
+                "```bash ${bar}",
+                "echo Hello \"$bar\"",
+                "```"
+              ]
+        selector Cmd.Command {Cmd.cmdPlaceholders = placeholders} = placeholders
+    fmap selector . Cfg.commands <$> result
+      `shouldBe` Left "some-file.md:1 hello uses placeholders in both command header and source code block"
+
 parse_header_tests :: SpecWith ()
 parse_header_tests = describe "parseHeaderArgs" $ do
   it "extracts name" $
@@ -313,6 +339,9 @@ parse_header_tests = describe "parseHeaderArgs" $ do
 
 parse_command_name_tests :: SpecWith ()
 parse_command_name_tests = describe "parseCommandName" $ do
+  it "parses empty name" $ do
+    parseCommandName "" `shouldBe` Right ("", [])
+
   it "parses text part" $ do
     parseCommandName "echo 'foo bar baz'"
       `shouldBe` Right ("echo", [])
