@@ -28,7 +28,7 @@ jobs:
     - name: Install Haskell
       uses: haskell/actions/setup@v2
       with:
-        ghc-version: '9.0'
+        ghc-version: '9.2'
 
     - name: Cache
       uses: actions/cache@v3
