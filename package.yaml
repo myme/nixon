@@ -19,7 +19,7 @@ library:
     - src
   dependencies:
     - base
-    - aeson
+    - aeson >= 2.0 && < 2.1
     - bytestring
     - cmark
     - containers
