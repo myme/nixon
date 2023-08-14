@@ -353,6 +353,10 @@ parse_command_name_tests = describe "parseCommandName" $ do
     parseCommandName "cat \"={some-arg}\""
       `shouldBe` Right ("cat", [Placeholder (EnvVar "some_arg") "some-arg" False []])
 
+  it "supports '_' in env var alias" $ do
+    parseCommandName "cat some_arg={some-arg}"
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "some_arg") "some-arg" False []])
+
   it "allows use of $ not matching '${'" $ do
     parseCommandName "echo $SOME_VAR" `shouldBe` Right ("echo", [])
 
