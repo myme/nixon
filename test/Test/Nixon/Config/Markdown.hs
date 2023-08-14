@@ -286,13 +286,17 @@ command_tests = describe "commands section" $ do
           parseMarkdown "some-file.md" $
             T.unlines
               [ "# `hello`",
-                "```bash ${arg}",
+                "``` bash ${arg}",
                 "echo Hello \"$arg\"",
                 "```"
               ]
-        selector Cmd.Command {Cmd.cmdPlaceholders = placeholders} = placeholders
+        selector
+          Cmd.Command
+            { Cmd.cmdLang = lang,
+              Cmd.cmdPlaceholders = placeholders
+            } = (lang, placeholders)
     fmap selector . Cfg.commands <$> result
-      `shouldBe` Right [[Placeholder Arg "arg" [] False []]]
+      `shouldBe` Right [(Bash, [Placeholder Arg "arg" [] False []])]
 
   it "complains on both header & code block placeholders" $ do
     let result =
