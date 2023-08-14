@@ -60,7 +60,7 @@ import Turtle
     (%),
   )
 
-fzfBackend :: Config -> Backend
+fzfBackend :: (HasProc m, MonadIO m) => Config -> Backend m
 fzfBackend cfg =
   let fzf_opts opts =
         mconcat $

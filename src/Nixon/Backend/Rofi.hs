@@ -41,7 +41,7 @@ import Turtle
   )
 import qualified Turtle as Tu
 
-rofiBackend :: Config -> Backend
+rofiBackend :: MonadIO m => Config -> Backend m
 rofiBackend cfg =
   let rofi_opts opts =
         mconcat $

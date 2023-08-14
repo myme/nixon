@@ -16,6 +16,7 @@ import qualified Nixon.Config.Options as Opts
 import Nixon.Config.Types (Config (project_types), commands)
 import qualified Nixon.Config.Types as Config
 import Nixon.Prelude
+import Nixon.Process (HasProc)
 import Nixon.Project (Project, ProjectType (..), project_path)
 import qualified Nixon.Project as P
 import Nixon.Select (Selection (..))
@@ -87,7 +88,7 @@ findProject projects selectOpts query = do
         Just project -> pure $ Selection Select.Default [project]
     _ -> liftIO $ projectSelector selectOpts query projects
 
-getBackend :: Nixon Backend
+getBackend :: (HasProc m, MonadIO m) => Nixon (Backend m)
 getBackend = do
   env <- ask
   let cfg = config env

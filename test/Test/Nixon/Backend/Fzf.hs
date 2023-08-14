@@ -7,12 +7,15 @@ module Test.Nixon.Backend.Fzf where
 
 import Data.Functor ((<&>))
 import qualified Data.Text as T
-import Nixon.Backend.Fzf (fzf, fzfExpect, fzfFilter, fzfProjects)
+import qualified Nixon.Backend as Backend
+import Nixon.Backend.Fzf (fzf, fzfBackend, fzfExpect, fzfFilter, fzfProjects)
 import qualified Nixon.Backend.Fzf as Fzf
 import qualified Nixon.Command as Cmd
+import Nixon.Config.Types (defaultConfig)
 import Nixon.Prelude
 import Nixon.Project (Project (..))
 import Nixon.Select (Candidate (Identity), Selection (..), SelectionType (Default, Edit))
+import qualified Nixon.Select as Select
 import System.Exit (ExitCode (..))
 import Test.Hspec
 import Test.Nixon.TestLib (runProc)
@@ -136,6 +139,19 @@ fzfTests = do
           it "sets --no_sort" $ do
             Fzf.fzfBuildArgs Fzf.fzfNoSort `shouldBe` ["--no-sort"]
     )
+
+  describe "Fzf backend" $ do
+    it "multi-select" $ do
+      let candidates = map Identity ["one two three", "four five six", "seven eight nine"]
+          selector = Backend.selector $ fzfBackend defaultConfig
+          selectOpts = Select.defaults
+
+      result <-
+        runProc (ExitSuccess, "1\n3") $
+          Select.runSelect selector $
+            Select.select selectOpts (select candidates)
+
+      result `shouldBe` Selection Default ["one two three", "seven eight nine"]
 
   describe
     "Fzf command"
