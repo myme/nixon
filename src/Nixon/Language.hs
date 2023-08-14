@@ -20,6 +20,7 @@ data Language
   | JSON
   | Plain
   | Python
+  | YAML
   | Unknown Text
   | None
   deriving (Eq)
@@ -32,6 +33,7 @@ instance Show Language where
     JSON -> "json"
     Plain -> "plain"
     Python -> "python"
+    YAML -> "yaml"
     Unknown l -> unpack l
     None -> ""
 
@@ -45,6 +47,7 @@ parseLang = \case
   "json" -> JSON
   "plain" -> Plain
   "python" -> Python
+  "yaml" -> YAML
   "" -> None
   lang -> Unknown lang
 
@@ -68,6 +71,7 @@ extension = \case
   JSON -> ".json"
   Plain -> ".txt"
   Python -> ".py"
+  YAML -> ".yaml"
   Unknown _ -> ".txt"
 
 interpreter :: MonadIO m => Language -> m (Maybe (NonEmpty Text))
@@ -81,4 +85,5 @@ interpreter = \case
   JSON -> pure $ Just ("jq" :| ["-r", "."])
   Plain -> pure $ Just (pure "cat")
   Python -> pure $ Just (pure "python3")
+  YAML -> pure $ Just ("yq" :| ["-r", "."])
   Unknown _ -> pure Nothing

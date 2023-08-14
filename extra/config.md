@@ -2,6 +2,8 @@
 
 ## Config
 
+The following source code block defines a `nixon` configuration using `JSON`:
+
 ``` json config
 {
   "exact_match": true,
@@ -23,6 +25,44 @@
     { "name": "project", "desc": "Generic project"}
   ]
 }
+```
+
+`YAML` is also supported. Although in the following code block `yaml` is used as
+opposed to `yaml config`. That is to keep this file a valid `nixon` file as only
+one configuration block is allowed per file:
+
+``` yaml
+exact_match: true
+ignore_case: true
+use_direnv: true
+use_nix: true
+project_dirs:
+  - ~/code/*
+  - ~/code/**/*
+project_types:
+  - name: cabal
+    test: ["cabal.project"]
+    desc: Cabal new-style project
+  - name: npm
+    test: ["package.json"]
+    desc: NPM project
+  - name: yarn
+    test: ["yarn.lock"]
+    desc: Yarn project
+  - name: nix
+    test: ["default.nix", "shell.nix"]
+    desc: Nix project
+  - name: direnv
+    test: [".envrc"]
+    desc: Direnv project
+  - name: git
+    test: [".git"]
+    desc: Git repository
+  - name: hg
+    test: [".hg"]
+    desc: Mercurial project
+  - name: project
+    desc: Generic project
 ```
 
 ## Generic commands

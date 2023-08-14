@@ -11,7 +11,8 @@ where
 
 import CMark (commonmarkToNode)
 import qualified CMark as M
-import Data.Aeson (eitherDecodeStrict)
+import qualified Data.Aeson as Aeson
+import qualified Data.Yaml as Yaml
 import Data.Bifunctor (Bifunctor (first))
 import Data.Char (isSpace)
 import Data.Either (partitionEithers)
@@ -224,12 +225,15 @@ getKwargs key (_, _, kwargs) = map snd $ filter ((== key) . fst) kwargs
 
 parseConfig :: [Node] -> (Either Text JSON.Config, [Node])
 parseConfig (Source lang _ src : rest') = case lang of
-  Lang.JSON -> (parsed, rest')
-  Lang.None -> (parsed, rest')
+  Lang.JSON -> (parseJSON, rest')
+  Lang.None -> (parseJSON, rest')
+  Lang.YAML -> (parseYAML, rest')
   _ -> (Left $ format ("Invalid config language: " % w) lang, rest')
   where
-    parsed :: Either Text JSON.Config
-    parsed = first pack (eitherDecodeStrict $ encodeUtf8 src)
+    parseJSON :: Either Text JSON.Config
+    parseJSON = first pack (Aeson.eitherDecodeStrict $ encodeUtf8 src)
+    parseYAML :: Either Text JSON.Config
+    parseYAML = first (pack . show) (Yaml.decodeEither' $ encodeUtf8 src)
 parseConfig rest = (Left "Expecting config source after header", rest)
 
 withPosition :: PosInfo -> Text -> Text

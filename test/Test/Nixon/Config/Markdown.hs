@@ -93,6 +93,39 @@ config_tests = describe "config section" $ do
                 Cfg.loglevel = Nothing
               }
 
+  it "parses YAML structure" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "``` yaml config",
+                "bin_dirs:",
+                "  - bin",
+                "exact_match: true",
+                "ignore_case: true",
+                "project_dirs:",
+                "  - foo",
+                "  - bar",
+                "use_direnv: true",
+                "use_nix: true",
+                "```"
+              ]
+     in result
+          `shouldBe` Right
+            Cfg.Config
+              { Cfg.backend = Nothing,
+                Cfg.bin_dirs = ["bin"],
+                Cfg.exact_match = Just True,
+                Cfg.ignore_case = Just True,
+                Cfg.force_tty = Nothing,
+                Cfg.project_dirs = ["foo", "bar"],
+                Cfg.project_types = [],
+                Cfg.commands = [],
+                Cfg.use_direnv = Just True,
+                Cfg.use_nix = Just True,
+                Cfg.terminal = Nothing,
+                Cfg.loglevel = Nothing
+              }
+
   describe "errors" $ do
     it "without config block" $
       let result =
