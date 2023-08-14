@@ -281,35 +281,36 @@ command_tests = describe "commands section" $ do
                 )
               ]
 
-  it "extracts code block placeholders" $ do
-    let result =
-          parseMarkdown "some-file.md" $
-            T.unlines
-              [ "# `hello`",
-                "``` bash ${arg}",
-                "echo Hello \"$arg\"",
-                "```"
-              ]
-        selector
-          Cmd.Command
-            { Cmd.cmdLang = lang,
-              Cmd.cmdPlaceholders = placeholders
-            } = (lang, placeholders)
-    fmap selector . Cfg.commands <$> result
-      `shouldBe` Right [(Bash, [Placeholder Arg "arg" [] False []])]
+  describe "source code blocks" $ do
+    it "extracts code block placeholders" $ do
+      let result =
+            parseMarkdown "some-file.md" $
+              T.unlines
+                [ "# `hello`",
+                  "``` bash ${arg}",
+                  "echo Hello \"$arg\"",
+                  "```"
+                ]
+          selector
+            Cmd.Command
+              { Cmd.cmdLang = lang,
+                Cmd.cmdPlaceholders = placeholders
+              } = (lang, placeholders)
+      fmap selector . Cfg.commands <$> result
+        `shouldBe` Right [(Bash, [Placeholder Arg "arg" [] False []])]
 
-  it "complains on both header & code block placeholders" $ do
-    let result =
-          parseMarkdown "some-file.md" $
-            T.unlines
-              [ "# `hello` ${foo}",
-                "```bash ${bar}",
-                "echo Hello \"$bar\"",
-                "```"
-              ]
-        selector Cmd.Command {Cmd.cmdPlaceholders = placeholders} = placeholders
-    fmap selector . Cfg.commands <$> result
-      `shouldBe` Left "some-file.md:1 hello uses placeholders in both command header and source code block"
+    it "complains on both header & code block placeholders" $ do
+      let result =
+            parseMarkdown "some-file.md" $
+              T.unlines
+                [ "# `hello` ${foo}",
+                  "```bash ${bar}",
+                  "echo Hello \"$bar\"",
+                  "```"
+                ]
+          selector Cmd.Command {Cmd.cmdPlaceholders = placeholders} = placeholders
+      fmap selector . Cfg.commands <$> result
+        `shouldBe` Left "some-file.md:1 hello uses placeholders in both command header and source code block"
 
 parse_header_tests :: SpecWith ()
 parse_header_tests = describe "parseHeaderArgs" $ do
