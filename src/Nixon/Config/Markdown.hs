@@ -17,7 +17,7 @@ import Data.Char (isSpace)
 import Data.Either (partitionEithers)
 import Data.Functor (($>))
 import Data.List (find)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (pack, strip)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
@@ -162,7 +162,7 @@ data ParseState = S
 
 -- | Parse Command blocks from a list of nodes
 parse :: FilePath -> [Node] -> Either Text (JSON.Config, [Cmd.Command])
-parse fileName = go (S 0 []) (JSON.empty, [])
+parse fileName nodes = first (fromMaybe JSON.empty) <$> go (S 0 []) (Nothing, []) nodes
   where
     go _ ps [] = Right ps
     go st ps nodes'@(Head _ l name _ : _)
@@ -180,7 +180,8 @@ parse fileName = go (S 0 []) (JSON.empty, [])
       -- We found a config
       | hasArgs "config" attrs = case parseConfig rest of
           (Left err, _) -> Left err
-          (Right cfg', rest') -> go st (cfg', ps) rest'
+          (Right cfg', rest') -> goWithSingleConfig st (cfg, ps) rest' cfg'
+
       -- We found a command
       | hasArgs "command" attrs =
           let pt = getKwargs "type" attrs <> stateProjectTypes st
@@ -189,6 +190,7 @@ parse fileName = go (S 0 []) (JSON.empty, [])
            in case parseCommand (PosInfo fileName pos) name pt rest of
                 (Left err, _) -> Left err
                 (Right p, rest') -> go st (cfg, p <! bg isBg <! json isJson : ps) rest'
+
       -- Pick up project type along the way
       | otherwise = go st' (cfg, ps) rest
       where
@@ -202,13 +204,17 @@ parse fileName = go (S 0 []) (JSON.empty, [])
           | otherwise = stateProjectTypes st
 
     -- We found a config block
-    go st (_, ps) (Source lang attrs src : rest)
+    go st (cfg, ps) (Source lang attrs src : rest)
       | "config" `elem` attrs = case parseConfig (Source lang attrs src : rest) of
           (Left err, _) -> Left err
-          (Right cfg', rest') -> go st (cfg', ps) rest'
+          (Right cfg', rest') -> goWithSingleConfig st (cfg, ps) rest' cfg'
 
     -- All other nodes are ignored
     go st ps (_ : rest) = go st ps rest
+
+    goWithSingleConfig st (cfg, ps) rest cfg' = case cfg of
+      Just _ -> Left "Found multiple configuration blocks"
+      Nothing -> go st (Just cfg', ps) rest
 
 hasArgs :: Text -> Attrs -> Bool
 hasArgs key (_, args, _) = key `elem` args

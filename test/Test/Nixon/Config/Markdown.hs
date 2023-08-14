@@ -133,6 +133,34 @@ config_tests = describe "config section" $ do
                 ]
        in result `shouldSatisfy` match_error "object key"
 
+    it "fail on multiple config sections" $
+      let result =
+            parseMarkdown "some-file.md" $
+              T.unlines
+                [ "# Config {.config}",
+                  "```json",
+                  "{}",
+                  "```",
+                  "# Config {.config}",
+                  "```json",
+                  "{}",
+                  "```"
+                ]
+       in result `shouldSatisfy` match_error "Found multiple configuration blocks"
+
+    it "fail on multiple config blocks" $
+      let result =
+            parseMarkdown "some-file.md" $
+              T.unlines
+                [ "```json config",
+                  "{}",
+                  "```",
+                  "```json config",
+                  "{}",
+                  "```"
+                ]
+       in result `shouldSatisfy` match_error "Found multiple configuration blocks"
+
 command_tests :: SpecWith ()
 command_tests = describe "commands section" $ do
   describe "errors" $ do
