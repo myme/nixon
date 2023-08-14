@@ -4,6 +4,18 @@ Project environment and command launcher.
 
 ## Configuration
 
+`nixon` bases its configuration around `nixon.md` files. The configuration files
+are generic markdown files, with some syntactic markers to indicate which part
+of the file is supposed to be treated as either commands or configuration by
+`nixon`.
+
+General configuration may be done by placing a `nixon.md` in
+`$XDG_CONFIG_DIRS/nixon`. Project specific configuration may be done by placing
+a `nixon.md` (or `.nixon.md`) in the root of the project.
+
+Following is an example configuration. There is also an inspirational
+configuration under [./extra/config.md](./extra/config.md).
+
 Example configuration:
 
 ~~~~~~markdown
@@ -40,7 +52,7 @@ project_types:
 
 `JSON` is also supported:
 
-``` json config
+``` json #config
 {
   "exact_match": true,
   "ignore_case": true,
@@ -103,7 +115,7 @@ detected as `git` projects. That is determined by the `name: git` test in the
 git ls-files
 ```
 
-### `vim-file ${git-files}`
+### `vim-file`
 
 This `vim-file` command references the `git-files` command as an argument
 placeholder. In this case `nixon` will first execute the `git-files` command to
@@ -112,47 +124,47 @@ with an interactive, fuzzy-finding prompt. Once the user makes their selection
 the selected file will be passed as `$1` (first argument) to the `vim-file`
 command.
 
-```bash
+```bash ${git-files}
 vim "$1"
 ```
 
-### `vim-files ${git-files:m}`
+### `vim-files`
 
 It's possible to specify a multi-selection modifier to let the user select
 multiple files to pass to `vim`. In the `fzf` interface marking files for
 selection is done using `<tab>`.
 
-```bash
+```bash ${git-files:m}
 vim -p "$@"
 ```
 
-### `vim-stdin <{git-files:m}`
+### `vim-stdin`
 
 The `stdin` placeholder may be used to select candidates that will be passed to
 the command's `stdin`. Here we're using the `xargs` command to relay that as
 positional arguments to `vim`.
 
-```bash
+```bash <{git-files:m}
 xargs vim -p
 ```
 
-### `vim-env FILES={git-files:m}`
+### `vim-env`
 
 The `environment variable` placeholder places the selection of a placeholder
 into an environmental variable. The name of environment variable is placed
 before the `=`, in this case `FILES`.
 
-```bash
+```bash FILES={git-files:m}
 vim -p $FILES
 ```
 
-### `vim-env-2 ={git-files:m}`
+### `vim-env-2`
 
 The `environment variable` alias is optional and can be empty, in which case the
 name will be the name of the placeholder action with `-` *(dashes)* replaced by
 `_` *(underscore)*, `git_files` in this case.
 
-```bash
+```bash ={git-files:m}
 vim -p $git_files
 ```
 
