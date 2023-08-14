@@ -51,6 +51,7 @@ import Turtle
     d,
     format,
     s,
+    w,
     (%),
   )
 import Turtle.Format (fp)
@@ -94,12 +95,17 @@ extract (M.Node pos nodeType children) = case nodeType of
             ++ ["command" | isCommand && "command" `notElem` args]
             ++ args
      in [Head pos level name (name, args', kwargs)]
-  M.CODE_BLOCK info text -> [Source info text]
+  M.CODE_BLOCK info text ->
+    let (lang, attrs) = parseInfo info
+     in [Source lang attrs text]
   M.PARAGRAPH -> [Paragraph $ getText children]
   _ -> concatMap extract children
   where
     isCode (M.Node _ (M.CODE _) _) = True
     isCode _ = False
+    parseInfo info = case T.words info of
+      (lang : attrs) -> (Lang.parseLang lang, attrs)
+      attrs -> (Lang.None, attrs)
 
 type Attrs =
   -- | name args kwargs
@@ -145,7 +151,7 @@ data Node
   = -- | level name command type
     Head Pos Int Text Attrs
   | -- | info src
-    Source Text Text
+    Source Lang.Language [Text] Text
   | Paragraph Text
   deriving (Show)
 
@@ -195,6 +201,12 @@ parse fileName = go (S 0 []) (JSON.empty, [])
           | l == stateHeaderLevel st = []
           | otherwise = stateProjectTypes st
 
+    -- We found a config block
+    go st (_, ps) (Source lang attrs src : rest)
+      | "config" `elem` attrs = case parseConfig (Source lang attrs src : rest) of
+          (Left err, _) -> Left err
+          (Right cfg', rest') -> go st (cfg', ps) rest'
+
     -- All other nodes are ignored
     go st ps (_ : rest) = go st ps rest
 
@@ -205,10 +217,10 @@ getKwargs :: Text -> Attrs -> [Text]
 getKwargs key (_, _, kwargs) = map snd $ filter ((== key) . fst) kwargs
 
 parseConfig :: [Node] -> (Either Text JSON.Config, [Node])
-parseConfig (Source lang src : rest') = case lang of
-  "json" -> (parsed, rest')
-  "" -> (parsed, rest')
-  _ -> (Left $ format ("Invalid config language: " % s) lang, rest')
+parseConfig (Source lang _ src : rest') = case lang of
+  Lang.JSON -> (parsed, rest')
+  Lang.None -> (parsed, rest')
+  _ -> (Left $ format ("Invalid config language: " % w) lang, rest')
   where
     parsed :: Either Text JSON.Config
     parsed = first pack (eitherDecodeStrict $ encodeUtf8 src)
@@ -225,7 +237,7 @@ parseCommand :: PosInfo -> Text -> [Text] -> [Node] -> (Either Text Cmd.Command,
 parseCommand pos name projectTypes (Paragraph desc : rest) =
   let (cmd, rest') = parseCommand pos name projectTypes rest
    in (Cmd.description (strip desc) <$> cmd, rest')
-parseCommand pos name projectTypes (Source info src : rest) = (cmd, rest)
+parseCommand pos name projectTypes (Source lang attrs src : rest) = (cmd, rest)
   where
     loc =
       Cmd.CommandLocation
@@ -234,7 +246,7 @@ parseCommand pos name projectTypes (Source info src : rest) = (cmd, rest)
         }
     cmd = do
       (name', args) <- parseCommandName name
-      (lang, parsedSourceArgs) <- parseCommandName info
+      parsedSourceArgs <- first (T.pack . show) $ P.parse parseCommandArgs "" (T.unwords attrs)
       if not (null args) && not (null parsedSourceArgs)
         then
           Left $
@@ -246,7 +258,7 @@ parseCommand pos name projectTypes (Source info src : rest) = (cmd, rest)
           pure
             Cmd.empty
               { Cmd.cmdName = name',
-                Cmd.cmdLang = Lang.parseLang lang,
+                Cmd.cmdLang = lang,
                 Cmd.cmdPlaceholders = args ++ parsedSourceArgs,
                 Cmd.cmdProjectTypes = projectTypes,
                 Cmd.cmdSource = src,

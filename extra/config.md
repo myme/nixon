@@ -1,14 +1,15 @@
 # Nixon commands
 
-## Config {.config}
+## Config
 
-```json
+``` json config
 {
   "exact_match": true,
   "ignore_case": true,
   "use_direnv":true,
   "use_nix":true,
   "project_dirs": [
+    "~/code/*",
     "~/code/**/*"
   ],
   "project_types": [
