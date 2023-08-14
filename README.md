@@ -52,7 +52,7 @@ project_types:
 
 `JSON` is also supported:
 
-``` json #config
+``` json config
 {
   "exact_match": true,
   "ignore_case": true,
