@@ -16,10 +16,11 @@ import Data.Bifunctor (Bifunctor (first))
 import Data.Char (isSpace)
 import Data.Either (partitionEithers)
 import Data.List (find)
-import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Maybe (mapMaybe)
 import Data.Text (pack, strip)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import Data.Tuple (swap)
 import Nixon.Command (bg, json, (<!))
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Command.Placeholder as Cmd
@@ -43,6 +44,7 @@ import Nixon.Prelude
 import System.Directory (XdgDirectory (..), getXdgDirectory)
 import qualified Text.Parsec as P
 import Text.Parsec.Text (Parser)
+import Text.Read (readMaybe)
 import Turtle
   ( IsString (fromString),
     d,
@@ -267,17 +269,24 @@ parseCommandArg' = do
           <|> (Cmd.Arg <$ P.char '$')
           <|> (Cmd.EnvVar . T.pack <$> P.many (P.alphaNum <|> P.char '_') <* P.char '=')
   placeholderType <- P.try $ startCmdArg <* P.char '{'
-  spec <- T.pack <$> P.manyTill (P.noneOf "}") (P.char '}')
-  let (name :| flags) = splitOn ":" spec
-      multiple = "m" `elem` flags
-      fixup = T.replace "-" "_"
+  (name, fields, multiple) <- parseSpec <* P.char '}'
+  let fixup = T.replace "-" "_"
       placeholderWithName = case placeholderType of
         Cmd.EnvVar "" -> Cmd.EnvVar $ fixup name
         Cmd.EnvVar alias -> Cmd.EnvVar $ fixup alias
         same -> same
-  pure $ Cmd.Placeholder placeholderWithName name multiple []
+  pure $ Cmd.Placeholder placeholderWithName name fields multiple []
 
-splitOn :: Text -> Text -> NonEmpty Text
-splitOn delim input = case T.splitOn delim input of
-  [] -> input :| []
-  (first' : rest) -> first' :| rest
+parseSpec :: Parser (Text, [Integer], Bool)
+parseSpec = do
+  name <- T.pack <$> P.many1 (P.noneOf ":}")
+  P.option (name, [], False) $ do
+    _ <- P.char ':'
+    -- Accept fields and multiple in any order
+    (fields, multiple) <-
+      ((,) <$> parseFields <*> parseMultiple)
+        <|> (fmap swap . (,) <$> parseMultiple <*> P.option [] parseFields)
+    pure (name, fields, multiple)
+  where
+    parseMultiple = P.option False (True <$ P.char 'm')
+    parseFields = mapMaybe readMaybe <$> (P.many1 P.digit `P.sepBy1` P.char ',')

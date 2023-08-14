@@ -51,7 +51,7 @@ resolveEnv project selector cmd args = do
 zipArgs :: [Cmd.Placeholder] -> [Text] -> [(Cmd.Placeholder, Select.SelectorOpts)]
 zipArgs [] args' = zip (map argOverflow args') (repeat Select.defaults)
   where
-    argOverflow = Cmd.Placeholder Cmd.Arg "arg" False . pure
+    argOverflow = Cmd.Placeholder Cmd.Arg "arg" [] False . pure
 zipArgs placeholders [] = zip placeholders (repeat Select.defaults)
 zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 
@@ -59,7 +59,7 @@ zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 resolveEnv' :: Project -> Selector Nixon -> [(Cmd.Placeholder, Select.SelectorOpts)] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv' project selector = foldM resolveEach (Nothing, [], [])
   where
-    resolveEach (stdin, args', envs) (Cmd.Placeholder envType cmdName multiple value, select_opts) = do
+    resolveEach (stdin, args', envs) (Cmd.Placeholder envType cmdName _fields multiple value, select_opts) = do
       resolved <- case value of
         [] -> do
           cmd' <- assertCommand cmdName
