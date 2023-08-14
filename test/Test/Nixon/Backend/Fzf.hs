@@ -37,14 +37,16 @@ fzfTests = do
 
         describe "fzfBorder" $ do
           it "respects identity" $
-            monoid_law $ const Fzf.fzfBorder
+            monoid_law $
+              const Fzf.fzfBorder
 
           it "includes --border" $
             Fzf.fzfBuildArgs Fzf.fzfBorder `shouldBe` ["--border"]
 
         describe "fzf_exact" $ do
           it "respects identity" $
-            property $ monoid_law Fzf.fzfExact
+            property $
+              monoid_law Fzf.fzfExact
 
           it "`False` excludes --exact" $ do
             Fzf.fzfBuildArgs (Fzf.fzfExact False) `shouldBe` []
@@ -54,7 +56,8 @@ fzfTests = do
 
         describe "fzf_ignore_case" $ do
           it "respects identity" $
-            property $ monoid_law Fzf.fzfIgnoreCase
+            property $
+              monoid_law Fzf.fzfIgnoreCase
 
           it "`False` excludes -i" $ do
             Fzf.fzfBuildArgs (Fzf.fzfIgnoreCase False) `shouldBe` []
@@ -64,7 +67,8 @@ fzfTests = do
 
         describe "fzfHeader" $ do
           it "respects identity" $
-            property $ monoid_law (Fzf.fzfHeader . T.pack)
+            property $
+              monoid_law (Fzf.fzfHeader . T.pack)
 
           it "sets --header" $ do
             Fzf.fzfBuildArgs (Fzf.fzfHeader "<header>") `shouldBe` ["--header", "<header>"]
@@ -74,21 +78,24 @@ fzfTests = do
 
         describe "fzf_query" $ do
           it "respects identity" $
-            property $ monoid_law (Fzf.fzfQuery . T.pack)
+            property $
+              monoid_law (Fzf.fzfQuery . T.pack)
 
           it "sets --query" $ do
             Fzf.fzfBuildArgs (Fzf.fzfQuery "<query>") `shouldBe` ["--query", "<query>"]
 
         describe "fzf_filter" $ do
           it "respects identity" $
-            property $ monoid_law (Fzf.fzfFilter . T.pack)
+            property $
+              monoid_law (Fzf.fzfFilter . T.pack)
 
           it "sets --filter" $ do
             Fzf.fzfBuildArgs (Fzf.fzfFilter "<filter>") `shouldBe` ["--filter", "<filter>"]
 
         describe "fzf_preview" $ do
           it "respects identity" $
-            property $ monoid_law (Fzf.fzfPreview . T.pack)
+            property $
+              monoid_law (Fzf.fzfPreview . T.pack)
 
           it "sets --preview" $ do
             Fzf.fzfBuildArgs (Fzf.fzfPreview "<preview>") `shouldBe` ["--preview", "<preview>"]

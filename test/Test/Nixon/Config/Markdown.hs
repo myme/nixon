@@ -26,7 +26,7 @@ config_tests = describe "config section" $ do
                 "{}",
                 "```"
               ]
-     in result `shouldBe` Right defaultConfig { Cfg.loglevel = Nothing }
+     in result `shouldBe` Right defaultConfig {Cfg.loglevel = Nothing}
 
   it "parses JSON structure" $
     let result =
