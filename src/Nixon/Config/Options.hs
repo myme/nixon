@@ -207,7 +207,7 @@ parseArgs :: MonadIO m => (CompletionType -> Completer) -> m (Either ConfigError
 parseArgs mkcompleter = do
   defaultConfig <- implode_home =<< MD.defaultPath
   let completer = Opts.listIOCompleter . completionArgs . mkcompleter
-  opts <- Turtle.options "Launch project environment" (parser defaultConfig completer)
+  opts <- Turtle.options "Command & environment launcher" (parser defaultConfig completer)
   configPath <- maybe MD.defaultPath pure (configFile opts)
   liftIO $ do
     cfg <- readConfig configPath
