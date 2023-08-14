@@ -241,17 +241,17 @@ There are some additional bindings available when selection commands through the
 
 ## Some history, inspirations & similar projects
 
-`nixon` draws inspiration from several places.
+`nixon` draws inspiration from several places:
 
 First and foremost the combination of text and documentation with runnable code
 undeniably draws inspiration from [literate
 programming](https://en.wikipedia.org/wiki/Literate_programming). Although first
 coined by Donald Knuth I never paid the idea of literate programming much
-attention before [switching my main editor to
-emacs](https://myme.no/posts/2017-12-24-move-to-spacemacs.html) and getting down
-and dirty with [Org Mode](https://orgmode.org/). Org mode's ability to
-seamlessly evaluate code blocks written in all kinds of languages from a single
-document was fascinating.
+attention. That was until I [switched my main editor to
+emacs](https://myme.no/posts/2017-12-24-move-to-spacemacs.html) and started
+getting down and dirty with [Org Mode](https://orgmode.org/). Org mode's ability
+to seamlessly evaluate code blocks written in all kinds of languages from a
+single document was fascinating.
 
 Secondly, when I first [got into
 NixOS](https://myme.no/posts/2019-07-01-nixos-into-the-deep-end.html) I had
@@ -259,20 +259,20 @@ plenty of issues getting into the environments I wanted for my various projects
 and ecosystems. I wanted a quick way to not have to think about `nix-shell` and
 various other papercuts that I experienced.
 
-`nixon` started off as a way for me to write and execute, in somewhat literate,
+`nixon` started off as a way for me to write and execute, in somewhat literate fashion,
 Org Model-inspired style, small commands in a file I could dump into my various
 projects. As the name indicates, it would also be `nix`-aware and run commands
 in a `nix-shell`, if configured to do so. It also gained support for `direnv`.
 
-Although this project is in `Haskell` and one of the most popular `Haskell`
-libraries, [Pandoc](https://pandoc.org/), is a document parser that understand
-Org Mode syntax quite well, I eventually felt like `Markdown` was more
-appropriate simply due to its popularity.
+Although this project is written in `Haskell` and one of the most popular
+`Haskell` libraries, [Pandoc](https://pandoc.org/), is a document parser that
+understand Org Mode syntax quite well, I eventually felt like `Markdown` was
+more appropriate simply due to its popularity.
 
 After starting `nixon` I've become aware of various projects that has made
 similar approaches to markdown-based code evaluation. Here's a short-list of
 some of the projects I've both drawn inspiration from, and coincidentally landed
 on similar approaches to:
 
- - [mask](https://github.com/jacobdeichert/mask)
- - [tesh](https://github.com/OceanSprint/tesh)
+ - [mask](https://github.com/jacobdeichert/mask) - A CLI task runner defined by a simple markdown file
+ - [tesh](https://github.com/OceanSprint/tesh) - TEstable SHell sessions in Markdown
