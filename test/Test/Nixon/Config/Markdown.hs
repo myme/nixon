@@ -26,7 +26,7 @@ config_tests = describe "config section" $ do
                 "{}",
                 "```"
               ]
-     in result `shouldBe` Right defaultConfig { Cfg.loglevel = Nothing }
+     in result `shouldBe` Right defaultConfig {Cfg.loglevel = Nothing}
 
   it "parses JSON structure" $
     let result =
@@ -42,6 +42,71 @@ config_tests = describe "config section" $ do
                 "  \"use_direnv\": true,",
                 "  \"use_nix\": true",
                 "}",
+                "```"
+              ]
+     in result
+          `shouldBe` Right
+            Cfg.Config
+              { Cfg.backend = Nothing,
+                Cfg.bin_dirs = ["bin"],
+                Cfg.exact_match = Just True,
+                Cfg.ignore_case = Just True,
+                Cfg.force_tty = Nothing,
+                Cfg.project_dirs = ["foo", "bar"],
+                Cfg.project_types = [],
+                Cfg.commands = [],
+                Cfg.use_direnv = Just True,
+                Cfg.use_nix = Just True,
+                Cfg.terminal = Nothing,
+                Cfg.loglevel = Nothing
+              }
+
+  it "parses block-annotated config" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "``` json  config",
+                "{",
+                "  \"bin_dirs\": [\"bin\"],",
+                "  \"exact_match\": true,",
+                "  \"ignore_case\": true,",
+                "  \"project_dirs\": [\"foo\", \"bar\"],",
+                "  \"use_direnv\": true,",
+                "  \"use_nix\": true",
+                "}",
+                "```"
+              ]
+     in result
+          `shouldBe` Right
+            Cfg.Config
+              { Cfg.backend = Nothing,
+                Cfg.bin_dirs = ["bin"],
+                Cfg.exact_match = Just True,
+                Cfg.ignore_case = Just True,
+                Cfg.force_tty = Nothing,
+                Cfg.project_dirs = ["foo", "bar"],
+                Cfg.project_types = [],
+                Cfg.commands = [],
+                Cfg.use_direnv = Just True,
+                Cfg.use_nix = Just True,
+                Cfg.terminal = Nothing,
+                Cfg.loglevel = Nothing
+              }
+
+  it "parses YAML structure" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "``` yaml config",
+                "bin_dirs:",
+                "  - bin",
+                "exact_match: true",
+                "ignore_case: true",
+                "project_dirs:",
+                "  - foo",
+                "  - bar",
+                "use_direnv: true",
+                "use_nix: true",
                 "```"
               ]
      in result
@@ -100,6 +165,34 @@ config_tests = describe "config section" $ do
                   "```"
                 ]
        in result `shouldSatisfy` match_error "object key"
+
+    it "fail on multiple config sections" $
+      let result =
+            parseMarkdown "some-file.md" $
+              T.unlines
+                [ "# Config {.config}",
+                  "```json",
+                  "{}",
+                  "```",
+                  "# Config {.config}",
+                  "```json",
+                  "{}",
+                  "```"
+                ]
+       in result `shouldSatisfy` match_error "Found multiple configuration blocks"
+
+    it "fail on multiple config blocks" $
+      let result =
+            parseMarkdown "some-file.md" $
+              T.unlines
+                [ "```json config",
+                  "{}",
+                  "```",
+                  "```json config",
+                  "{}",
+                  "```"
+                ]
+       in result `shouldSatisfy` match_error "Found multiple configuration blocks"
 
 command_tests :: SpecWith ()
 command_tests = describe "commands section" $ do
@@ -277,9 +370,40 @@ command_tests = describe "commands section" $ do
             `shouldBe` Right
               [ ( "hello",
                   True,
-                  [Placeholder Arg "arg" False [], Placeholder Arg "another-arg" False []]
+                  [Placeholder Arg "arg" [] False [], Placeholder Arg "another-arg" [] False []]
                 )
               ]
+
+  describe "source code blocks" $ do
+    it "extracts code block placeholders" $ do
+      let result =
+            parseMarkdown "some-file.md" $
+              T.unlines
+                [ "# `hello`",
+                  "``` bash ${arg}",
+                  "echo Hello \"$arg\"",
+                  "```"
+                ]
+          selector
+            Cmd.Command
+              { Cmd.cmdLang = lang,
+                Cmd.cmdPlaceholders = placeholders
+              } = (lang, placeholders)
+      fmap selector . Cfg.commands <$> result
+        `shouldBe` Right [(Bash, [Placeholder Arg "arg" [] False []])]
+
+    it "complains on both header & code block placeholders" $ do
+      let result =
+            parseMarkdown "some-file.md" $
+              T.unlines
+                [ "# `hello` ${foo}",
+                  "```bash ${bar}",
+                  "echo Hello \"$bar\"",
+                  "```"
+                ]
+          selector Cmd.Command {Cmd.cmdPlaceholders = placeholders} = placeholders
+      fmap selector . Cfg.commands <$> result
+        `shouldBe` Left "some-file.md:1 hello uses placeholders in both command header and source code block"
 
 parse_header_tests :: SpecWith ()
 parse_header_tests = describe "parseHeaderArgs" $ do
@@ -313,6 +437,9 @@ parse_header_tests = describe "parseHeaderArgs" $ do
 
 parse_command_name_tests :: SpecWith ()
 parse_command_name_tests = describe "parseCommandName" $ do
+  it "parses empty name" $ do
+    parseCommandName "" `shouldBe` Right ("", [])
+
   it "parses text part" $ do
     parseCommandName "echo 'foo bar baz'"
       `shouldBe` Right ("echo", [])
@@ -323,39 +450,55 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses arg part" $ do
     parseCommandName "cat ${arg}"
-      `shouldBe` Right ("cat", [Placeholder Arg "arg" False []])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" [] False []])
 
   it "parses stdin arg part" $ do
     parseCommandName "cat <{arg}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" False []])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [] False []])
 
   it "parses envvar arg part" $ do
     parseCommandName "cat ={arg}"
-      `shouldBe` Right ("cat", [Placeholder (EnvVar "arg") "arg" False []])
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "arg") "arg" [] False []])
 
   it "parses envvar part with alias" $ do
     parseCommandName "cat FOO={bar}"
-      `shouldBe` Right ("cat", [Placeholder (EnvVar "FOO") "bar" False []])
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "FOO") "bar" [] False []])
+
+  it "parses arg field selector" $ do
+    parseCommandName "cat <{arg:1}"
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1] False []])
+
+  it "parses several arg field selectors" $ do
+    parseCommandName "cat <{arg:1,3,5}"
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1,3,5] False []])
 
   it "parses arg modifiers" $ do
     parseCommandName "cat ${arg:m}"
-      `shouldBe` Right ("cat", [Placeholder Arg "arg" True []])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" [] True []])
 
   it "parses stdin arg modifiers" $ do
     parseCommandName "cat <{arg:m}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" True []])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [] True []])
+
+  it "parses arg field and multiple selector" $ do
+    parseCommandName "cat <{arg:m1,3,5}"
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] True []])
+
+  it "parses arg field and multiple selector (flipped)" $ do
+    parseCommandName "cat <{arg:1,3,5m}"
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] True []])
 
   it "parses text and placeholder part" $ do
     parseCommandName "cat \"${arg}\""
-      `shouldBe` Right ("cat", [Placeholder Arg "arg" False []])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" [] False []])
 
   it "replaces '-' with '_' in env var name" $ do
     parseCommandName "cat \"={some-arg}\""
-      `shouldBe` Right ("cat", [Placeholder (EnvVar "some_arg") "some-arg" False []])
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "some_arg") "some-arg" [] False []])
 
   it "supports '_' in env var alias" $ do
     parseCommandName "cat some_arg={some-arg}"
-      `shouldBe` Right ("cat", [Placeholder (EnvVar "some_arg") "some-arg" False []])
+      `shouldBe` Right ("cat", [Placeholder (EnvVar "some_arg") "some-arg" [] False []])
 
   it "allows use of $ not matching '${'" $ do
     parseCommandName "echo $SOME_VAR" `shouldBe` Right ("echo", [])

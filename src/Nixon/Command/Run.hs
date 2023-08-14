@@ -19,7 +19,7 @@ import Nixon.Process (run_with_output)
 import qualified Nixon.Process
 import Nixon.Project (Project)
 import qualified Nixon.Project as Project
-import Nixon.Select (Selection (..), Selector, selector_multiple)
+import Nixon.Select (Selection (..), Selector, selector_fields, selector_multiple)
 import qualified Nixon.Select as Select
 import Nixon.Types (Nixon)
 import Nixon.Utils (toLines)
@@ -51,7 +51,7 @@ resolveEnv project selector cmd args = do
 zipArgs :: [Cmd.Placeholder] -> [Text] -> [(Cmd.Placeholder, Select.SelectorOpts)]
 zipArgs [] args' = zip (map argOverflow args') (repeat Select.defaults)
   where
-    argOverflow = Cmd.Placeholder Cmd.Arg "arg" False . pure
+    argOverflow = Cmd.Placeholder Cmd.Arg "arg" [] False . pure
 zipArgs placeholders [] = zip placeholders (repeat Select.defaults)
 zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 
@@ -59,11 +59,15 @@ zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 resolveEnv' :: Project -> Selector Nixon -> [(Cmd.Placeholder, Select.SelectorOpts)] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv' project selector = foldM resolveEach (Nothing, [], [])
   where
-    resolveEach (stdin, args', envs) (Cmd.Placeholder envType cmdName multiple value, select_opts) = do
+    resolveEach (stdin, args', envs) (Cmd.Placeholder envType cmdName fields multiple value, select_opts) = do
       resolved <- case value of
         [] -> do
           cmd' <- assertCommand cmdName
-          let select_opts' = select_opts {selector_multiple = Just multiple}
+          let select_opts' =
+                select_opts
+                  { selector_fields = fields,
+                    selector_multiple = Just multiple
+                  }
           resolveCmd project selector cmd' select_opts'
         _ -> pure value
       case envType of

@@ -4,14 +4,13 @@ import Nixon.Command (Command)
 import Nixon.Prelude
 import Nixon.Project (Project)
 import Nixon.Select (Selection (), Selector, SelectorOpts)
-import Nixon.Types (Nixon)
 
-type ProjectSelector = SelectorOpts -> Maybe Text -> [Project] -> IO (Selection Project)
+type ProjectSelector m = SelectorOpts -> Maybe Text -> [Project] -> m (Selection Project)
 
-type CommandSelector = Project -> Maybe Text -> [Command] -> IO (Selection Command)
+type CommandSelector m = Project -> Maybe Text -> [Command] -> m (Selection Command)
 
-data Backend = Backend
-  { projectSelector :: ProjectSelector,
-    commandSelector :: CommandSelector,
-    selector :: Selector Nixon
+data Backend m = Backend
+  { projectSelector :: ProjectSelector m,
+    commandSelector :: CommandSelector m,
+    selector :: Selector m
   }

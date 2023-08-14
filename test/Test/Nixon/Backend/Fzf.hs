@@ -7,12 +7,15 @@ module Test.Nixon.Backend.Fzf where
 
 import Data.Functor ((<&>))
 import qualified Data.Text as T
-import Nixon.Backend.Fzf (fzf, fzfExpect, fzfFilter, fzfProjects)
+import qualified Nixon.Backend as Backend
+import Nixon.Backend.Fzf (fzf, fzfBackend, fzfExpect, fzfFilter, fzfProjects)
 import qualified Nixon.Backend.Fzf as Fzf
 import qualified Nixon.Command as Cmd
+import Nixon.Config.Types (defaultConfig)
 import Nixon.Prelude
 import Nixon.Project (Project (..))
 import Nixon.Select (Candidate (Identity), Selection (..), SelectionType (Default, Edit))
+import qualified Nixon.Select as Select
 import System.Exit (ExitCode (..))
 import Test.Hspec
 import Test.Nixon.TestLib (runProc)
@@ -37,14 +40,16 @@ fzfTests = do
 
         describe "fzfBorder" $ do
           it "respects identity" $
-            monoid_law $ const Fzf.fzfBorder
+            monoid_law $
+              const Fzf.fzfBorder
 
           it "includes --border" $
             Fzf.fzfBuildArgs Fzf.fzfBorder `shouldBe` ["--border"]
 
         describe "fzf_exact" $ do
           it "respects identity" $
-            property $ monoid_law Fzf.fzfExact
+            property $
+              monoid_law Fzf.fzfExact
 
           it "`False` excludes --exact" $ do
             Fzf.fzfBuildArgs (Fzf.fzfExact False) `shouldBe` []
@@ -54,7 +59,8 @@ fzfTests = do
 
         describe "fzf_ignore_case" $ do
           it "respects identity" $
-            property $ monoid_law Fzf.fzfIgnoreCase
+            property $
+              monoid_law Fzf.fzfIgnoreCase
 
           it "`False` excludes -i" $ do
             Fzf.fzfBuildArgs (Fzf.fzfIgnoreCase False) `shouldBe` []
@@ -64,7 +70,8 @@ fzfTests = do
 
         describe "fzfHeader" $ do
           it "respects identity" $
-            property $ monoid_law (Fzf.fzfHeader . T.pack)
+            property $
+              monoid_law (Fzf.fzfHeader . T.pack)
 
           it "sets --header" $ do
             Fzf.fzfBuildArgs (Fzf.fzfHeader "<header>") `shouldBe` ["--header", "<header>"]
@@ -74,21 +81,24 @@ fzfTests = do
 
         describe "fzf_query" $ do
           it "respects identity" $
-            property $ monoid_law (Fzf.fzfQuery . T.pack)
+            property $
+              monoid_law (Fzf.fzfQuery . T.pack)
 
           it "sets --query" $ do
             Fzf.fzfBuildArgs (Fzf.fzfQuery "<query>") `shouldBe` ["--query", "<query>"]
 
         describe "fzf_filter" $ do
           it "respects identity" $
-            property $ monoid_law (Fzf.fzfFilter . T.pack)
+            property $
+              monoid_law (Fzf.fzfFilter . T.pack)
 
           it "sets --filter" $ do
             Fzf.fzfBuildArgs (Fzf.fzfFilter "<filter>") `shouldBe` ["--filter", "<filter>"]
 
         describe "fzf_preview" $ do
           it "respects identity" $
-            property $ monoid_law (Fzf.fzfPreview . T.pack)
+            property $
+              monoid_law (Fzf.fzfPreview . T.pack)
 
           it "sets --preview" $ do
             Fzf.fzfBuildArgs (Fzf.fzfPreview "<preview>") `shouldBe` ["--preview", "<preview>"]
@@ -129,6 +139,31 @@ fzfTests = do
           it "sets --no_sort" $ do
             Fzf.fzfBuildArgs Fzf.fzfNoSort `shouldBe` ["--no-sort"]
     )
+
+  describe "Fzf backend" $ do
+    it "multi-select" $ do
+      let candidates = map Identity ["one two three", "four five six", "seven eight nine"]
+          selector = Backend.selector $ fzfBackend defaultConfig
+          selectOpts = Select.defaults
+
+      result <-
+        runProc (ExitSuccess, "1\n3") $
+          Select.runSelect selector $
+            Select.select selectOpts (select candidates)
+
+      result `shouldBe` Selection Default ["one two three", "seven eight nine"]
+
+    it "filters fields based on selector options (words 1 & 3)" $ do
+      let candidates = map Identity ["one two three", "four five six", "seven eight nine"]
+          selector = Backend.selector $ fzfBackend defaultConfig
+          selectOpts = Select.defaults {Select.selector_fields = [1, 3]}
+
+      result <-
+        runProc (ExitSuccess, "1") $
+          Select.runSelect selector $
+            Select.select selectOpts (select candidates)
+
+      result `shouldBe` Selection Default ["one three"]
 
   describe
     "Fzf command"

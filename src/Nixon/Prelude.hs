@@ -14,6 +14,7 @@ where
 
 import Prelude hiding (FilePath, fail, log)
 import Control.Applicative as Applicative (Alternative ((<|>)))
+import Control.Monad as Monads ((<=<), (>=>))
 import Control.Monad.IO.Class as Monads (MonadIO (..), liftIO)
 import Data.Text as Text (Text)
 import Turtle (FilePath)

@@ -20,6 +20,7 @@ module Nixon.Select
     title,
     defaults,
     catMaybeSelection,
+    withProcessSelection,
   )
 where
 
@@ -32,8 +33,10 @@ import Data.Aeson
     (.:),
   )
 import Data.Aeson.Types (unexpected)
+import Data.Function ((&))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, fromMaybe)
+import qualified Data.Text as T
 import GHC.Generics (Generic)
 import Nixon.Prelude
 import Turtle (Line, Shell, textToLine)
@@ -83,6 +86,7 @@ instance Functor Selection where
 data SelectorOpts = SelectorOpts
   { selector_title :: Maybe Text,
     selector_search :: Maybe Text,
+    selector_fields :: [Integer],
     selector_multiple :: Maybe Bool
   }
 
@@ -91,6 +95,7 @@ defaults =
   SelectorOpts
     { selector_title = Nothing,
       selector_search = Nothing,
+      selector_fields = [],
       selector_multiple = Nothing
     }
 
@@ -99,6 +104,7 @@ instance Semigroup SelectorOpts where
     SelectorOpts
       { selector_title = selector_title rhs <|> selector_title lhs,
         selector_search = selector_search rhs <|> selector_search lhs,
+        selector_fields = selector_fields rhs <> selector_fields lhs,
         selector_multiple = selector_multiple rhs <|> selector_multiple lhs
       }
 
@@ -129,6 +135,29 @@ select :: MonadIO m => SelectorOpts -> Shell Candidate -> Select m (Selection Te
 select opts input = do
   selector <- ask
   lift $ selector opts input
+
+processSelection :: Monad m => SelectorOpts -> Selection Text -> m (Selection Text)
+processSelection opts selection'
+  | null fields = pure selection'
+  -- NOTE: Unsure about this `T.stripEnd` here. It might remove too much trailing whitespace.
+  | otherwise = pure (T.stripEnd . T.unlines . map pickFields . T.lines <$> selection')
+  where
+    fields = selector_fields opts
+    pickFields line =
+      T.words line
+        -- 1 indexed, to reserve 0 for the whole line
+        & zip [1 ..]
+        & filter ((`elem` fields) . fst)
+        & map snd
+        & T.unwords
+
+withProcessSelection ::
+  Monad m =>
+  (SelectorOpts -> a -> m (Selection Text)) ->
+  SelectorOpts ->
+  a ->
+  m (Selection Text)
+withProcessSelection f opts = f opts >=> processSelection opts
 
 text_to_line :: Text -> Line
 text_to_line = fromMaybe "" . textToLine

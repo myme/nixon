@@ -26,7 +26,7 @@ import qualified Nixon.Config.Types as Config
 import Nixon.Prelude
 import Nixon.Process (arg, arg_fmt, build_args, flag)
 import Nixon.Project (Project (project_dir, project_name))
-import Nixon.Select (Candidate, Selection (..), SelectionType (..))
+import Nixon.Select (Candidate, Selection (..), SelectionType (..), withProcessSelection)
 import qualified Nixon.Select as Select
 import Nixon.Utils (implode_home, shell_to_list, toLines, (<<?))
 import Turtle
@@ -41,7 +41,7 @@ import Turtle
   )
 import qualified Turtle as Tu
 
-rofiBackend :: Config -> Backend
+rofiBackend :: MonadIO m => Config -> Backend m
 rofiBackend cfg =
   let rofi_opts opts =
         mconcat $
@@ -56,7 +56,7 @@ rofiBackend cfg =
    in Backend
         { projectSelector = rofiProjects . rofi_opts,
           commandSelector = const $ rofiProjectCommand rofi_opts',
-          selector = rofi . rofi_opts
+          selector = withProcessSelection (rofi . rofi_opts)
         }
 
 -- | Data type for command line options to rofi

@@ -38,6 +38,7 @@ library:
     - unix
     - unordered-containers
     - wordexp
+    - yaml
 
 tests:
   nixon-test:

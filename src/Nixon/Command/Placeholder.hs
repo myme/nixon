@@ -15,6 +15,8 @@ data Placeholder = Placeholder
     type_ :: PlaceholderType,
     -- | The command it's referencing
     name :: Text,
+    -- | The field numbers to extract
+    fields :: [Integer],
     -- | If the placeholder can select multiple
     multiple :: Bool,
     -- | Pre-expanded value of the placeholder
