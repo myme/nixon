@@ -151,21 +151,21 @@ xargs vim -p
 ### `vim-env`
 
 The `environment variable` placeholder places the selection of a placeholder
-into an environmental variable. The name of environment variable is placed
-before the `=`, in this case `FILES`.
-
-```bash FILES={git-files:m}
-vim -p $FILES
-```
-
-### `vim-env-2`
-
-The `environment variable` alias is optional and can be empty, in which case the
-name will be the name of the placeholder action with `-` *(dashes)* replaced by
-`_` *(underscore)*, `git_files` in this case.
+into an environmental variable. The `environment variable` is named after the
+placeholder action with `-` *(dashes)* replaced by `_` *(underscore)*,
+`git_files` in this case.
 
 ```bash ={git-files:m}
 vim -p $git_files
+```
+
+### `vim-env-alias`
+
+It is possible to give the environment variable an explicit name by placing and
+alias before the `=`, in this case `FILES`.
+
+```bash FILES={git-files:m}
+vim -p $FILES
 ```
 
 ~~~~~~

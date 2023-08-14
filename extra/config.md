@@ -28,30 +28,6 @@ project_types:
     desc: Generic project
 ```
 
-`JSON` is also supported:
-
-``` json config
-{
-  "exact_match": true,
-  "ignore_case": true,
-  "use_direnv":true,
-  "use_nix":true,
-  "project_dirs": [
-    "~/src"
-  ],
-  "project_types": [
-    { "name": "cabal", "test": ["cabal.project"], "desc": "Cabal new-style project"},
-    { "name": "npm", "test": ["package.json"], "desc": "NPM project"},
-    { "name": "nix", "test": ["default.nix", "shell.nix"], "desc": "Nix project"},
-    { "name": "git", "test": [".git"], "desc": "Git repository"},
-    { "name": "project", "desc": "Generic project"}
-  ]
-}
-```
-
-Please note that only one configuration source code block is allowed per file,
-to avoid misconfiguration.
-
 ## Generic commands
 
 ### `terminal &`
@@ -76,9 +52,9 @@ emacs
 ]
 ```
 
-### `hello-world <{json-greetings:m}`
+### `hello-world`
 
-```bash
+```bash <{json-greetings:m}
 cat
 ```
 
@@ -88,9 +64,9 @@ cat
 nmcli -t connection | cut -d':' -f1
 ```
 
-### `network-connect ${networks}`
+### `network-connect`
 
-```bash
+```bash ${networks}
 nmcli connection up "$1"
 ```
 
@@ -126,11 +102,11 @@ List all `npm` scripts in a `package.json`.
 jq '.scripts | to_entries | map({ title: (.key + " → " + .value), value: .key })' package.json
 ```
 
-### `npm-run ${npm-scripts}`
+### `npm-run`
 
 Run a `npm` script from `package.json`.
 
-```bash
+```bash ${npm-scripts}
 npm run "$1"
 ```
 
@@ -142,9 +118,9 @@ npm install
 
 ## yarn stuff {type="yarn"}
 
-### `yarn-run ${npm-scripts}`
+### `yarn-run`
 
-```bash
+```bash ${npm-scripts}
 yarn run "$1"
 ```
 
@@ -174,7 +150,7 @@ cabal run
 cabal test
 ```
 
-## Git stuff {type="git"}
+## Git stuff
 
 ### `git-log`
 
@@ -188,15 +164,15 @@ git log --oneline --color
 git ls-files
 ```
 
-### `git-rev ${git-log}`
+### `git-rev`
 
-```bash
+```bash ${git-log}
 echo "$1"
 ```
 
-### `git-show ${git-rev}`
+### `git-show`
 
-```bash
+```bash ${git-rev}
 git show $(echo "$1" | cut -f1 -d' ')
 ```
 
@@ -216,51 +192,51 @@ cat
 rg --files
 ```
 
-### `vim-stdin <{rg-files:m}`
+### `vim-stdin`
 
 Open files in `vim` passing files to open in through `stdin` and `xargs`.
 
-```bash
+```bash <{rg-files:m}
 xargs vim -p
 ```
 
-### `vim-stdin-concat <{git-files:m} <{rg-files:m}`
+### `vim-stdin-concat`
 
 Open files in `vim` passing files to open in through `stdin` and `xargs`
 concatenating every `stdin` input.
 
-```bash
+```bash <{git-files:m} <{rg-files:m}
 xargs vim -p
 ```
 
-### `vim-arg ${rg-files}`
+### `vim-arg`
 
 Open files in `vim` passing files as a single positional argument.
 
-```bash
+```bash ${rg-files}
 vim -p "$1"
 ```
 
-### `vim-args ${rg-files:m}`
+### `vim-args`
 
 Open files in `vim` passing files as positional arguments.
 
-```bash
+```bash ${rg-files:m}
 vim -p "$@"
 ```
 
-### `vim-env ={rg-files:m}`
+### `vim-env`
 
 Open files in `vim` passing files in an environment variable.
 
-```bash
+```bash ={rg-files:m}
 vim -p $rg_files
 ```
 
-### `vim-env-alias FILES={rg-files:m}`
+### `vim-env-alias`
 
 Open files in `vim` passing files in an environment variable.
 
-```bash
+```bash FILES={rg-files:m}
 vim -p $FILES
 ```
