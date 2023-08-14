@@ -39,7 +39,7 @@ import Nixon.Project
   ( Project (project_dir, project_name),
     project_path,
   )
-import Nixon.Select (Candidate, Selection (..), SelectionType (..))
+import Nixon.Select (Candidate, Selection (..), SelectionType (..), withProcessSelection)
 import qualified Nixon.Select as Select
 import Nixon.Utils
   ( implode_home,
@@ -75,7 +75,7 @@ fzfBackend cfg =
    in Backend
         { projectSelector = fzfProjects . fzf_opts,
           commandSelector = fzfProjectCommand fzf_opts',
-          selector = fzf . fzf_opts
+          selector = withProcessSelection (fzf . fzf_opts)
         }
 
 data FzfOpts = FzfOpts
