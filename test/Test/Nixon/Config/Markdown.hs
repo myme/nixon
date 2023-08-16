@@ -402,7 +402,12 @@ command_tests = describe "commands section" $ do
                   "```",
                   "",
                   "# `two`",
-                  "``` bash ${arg-two}",
+                  "``` bash ${arg-two:m}",
+                  "echo Hello \"$1\"",
+                  "```",
+                  "",
+                  "# `three`",
+                  "``` bash ${arg-three:1,2}",
                   "echo Hello \"$1\"",
                   "```"
                 ]
@@ -414,7 +419,8 @@ command_tests = describe "commands section" $ do
       fmap selector . Cfg.commands <$> result
         `shouldBe` Right
           [ (Bash, [Placeholder Arg "arg-one" [] False []]),
-            (Bash, [Placeholder Arg "arg-two" [] False []])
+            (Bash, [Placeholder Arg "arg-two" [] True []]),
+            (Bash, [Placeholder Arg "arg-three" [1, 2] False []])
           ]
 
     it "complains on both header & code block placeholders" $ do

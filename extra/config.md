@@ -164,16 +164,13 @@ git log --oneline --color
 git ls-files
 ```
 
-### `git-rev`
-
-```bash ${git-log}
-echo "$1"
-```
-
 ### `git-show`
 
-```bash ${git-rev:1}
-git show $1
+Invoke `git show` on commits selected from `git log`. It uses multiple selection
+and a field selector of `1` to pick the commit `SHA1` from the log.
+
+```bash ${git-log:m1}
+git show "$@"
 ```
 
 ## Files
