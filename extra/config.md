@@ -172,8 +172,8 @@ echo "$1"
 
 ### `git-show`
 
-```bash ${git-rev}
-git show $(echo "$1" | cut -f1 -d' ')
+```bash ${git-rev:1}
+git show $1
 ```
 
 ## Files
