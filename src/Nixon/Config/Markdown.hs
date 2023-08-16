@@ -13,7 +13,7 @@ import CMark (commonmarkToNode)
 import qualified CMark as M
 import qualified Data.Aeson as Aeson
 import qualified Data.Yaml as Yaml
-import Data.Bifunctor (Bifunctor (first))
+import Data.Bifunctor (Bifunctor (bimap, first))
 import Data.Char (isSpace)
 import Data.Either (partitionEithers)
 import Data.Functor (($>))
@@ -163,7 +163,7 @@ data ParseState = S
 
 -- | Parse Command blocks from a list of nodes
 parse :: FilePath -> [Node] -> Either Text (JSON.Config, [Cmd.Command])
-parse fileName nodes = first (fromMaybe JSON.empty) <$> go (S 0 []) (Nothing, []) nodes
+parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 []) (Nothing, []) nodes
   where
     go _ ps [] = Right ps
     go st ps nodes'@(Head _ l name _ : _)

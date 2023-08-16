@@ -392,6 +392,31 @@ command_tests = describe "commands section" $ do
       fmap selector . Cfg.commands <$> result
         `shouldBe` Right [(Bash, [Placeholder Arg "arg" [] False []])]
 
+    it "extracts code block placeholders" $ do
+      let result =
+            parseMarkdown "some-file.md" $
+              T.unlines
+                [ "# `one`",
+                  "``` bash ${arg-one}",
+                  "echo Hello \"$1\"",
+                  "```",
+                  "",
+                  "# `two`",
+                  "``` bash ${arg-two}",
+                  "echo Hello \"$1\"",
+                  "```"
+                ]
+          selector
+            Cmd.Command
+              { Cmd.cmdLang = lang,
+                Cmd.cmdPlaceholders = placeholders
+              } = (lang, placeholders)
+      fmap selector . Cfg.commands <$> result
+        `shouldBe` Right
+          [ (Bash, [Placeholder Arg "arg-one" [] False []]),
+            (Bash, [Placeholder Arg "arg-two" [] False []])
+          ]
+
     it "complains on both header & code block placeholders" $ do
       let result =
             parseMarkdown "some-file.md" $
@@ -470,7 +495,7 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses several arg field selectors" $ do
     parseCommandName "cat <{arg:1,3,5}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1,3,5] False []])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] False []])
 
   it "parses arg modifiers" $ do
     parseCommandName "cat ${arg:m}"
