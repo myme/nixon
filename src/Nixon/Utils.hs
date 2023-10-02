@@ -25,7 +25,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Nixon.Prelude
 import qualified System.IO as IO
-import qualified Turtle as Turtle
+import qualified Turtle
 import Turtle
   ( Fold (Fold),
     Line,

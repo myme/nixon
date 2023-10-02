@@ -49,10 +49,10 @@ resolveEnv project selector cmd args = do
 
 -- | Zip placeholders with arguments, filling in missing placeholders with overflow arguments.
 zipArgs :: [Cmd.Placeholder] -> [Text] -> [(Cmd.Placeholder, Select.SelectorOpts)]
-zipArgs [] args' = zip (map argOverflow args') (repeat Select.defaults)
+zipArgs [] args' = map ((, Select.defaults) . argOverflow) args'
   where
     argOverflow = Cmd.Placeholder Cmd.Arg "arg" [] False . pure
-zipArgs placeholders [] = zip placeholders (repeat Select.defaults)
+zipArgs placeholders [] = map (, Select.defaults) placeholders
 zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 
 -- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
