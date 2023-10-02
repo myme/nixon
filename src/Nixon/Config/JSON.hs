@@ -11,7 +11,7 @@ import Data.Aeson (FromJSON (parseJSON), withObject, (.:), (.:?))
 import GHC.Generics (Generic)
 import Nixon.Prelude
 import Nixon.Project (ProjectMarker (..), ProjectType (..))
-import Turtle (fromText)
+import Nixon.Utils (fromText)
 
 data Config = Config
   { bin_dirs :: [FilePath],

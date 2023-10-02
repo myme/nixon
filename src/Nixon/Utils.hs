@@ -1,7 +1,11 @@
+{-# LANGUAGE CPP #-}
+
 module Nixon.Utils
   ( escape,
     find_dominating_file,
     first_word,
+    fromPath,
+    fromText,
     quote,
     printErr,
     shell_to_list,
@@ -21,12 +25,11 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Nixon.Prelude
 import qualified System.IO as IO
+import qualified Turtle as Turtle
 import Turtle
   ( Fold (Fold),
     Line,
     Shell,
-    fold,
-    home,
     parent,
     root,
     select,
@@ -67,7 +70,7 @@ printErr = liftIO . T.hPutStrLn IO.stderr
 
 -- | Convert a Shell of as to [a]
 shell_to_list :: MonadIO m => Shell a -> m [a]
-shell_to_list shell' = fold shell' (Fold (flip (:)) [] reverse)
+shell_to_list shell' = Turtle.fold shell' (Fold (flip (:)) [] reverse)
 
 toLines :: Shell Text -> Shell Line
 toLines = ((select . toList . textToLines) =<<)
@@ -78,10 +81,26 @@ takeToSpace = T.takeWhile (not . isSpace)
 filter_elems :: Eq a => [a] -> [(a, [b])] -> [b]
 filter_elems x xs = concatMap (fromMaybe [] . flip lookup xs) x
 
+fromPath :: FilePath -> IO.FilePath
+fromPath =
+#if MIN_VERSION_turtle(1,6,0)
+  id
+#else
+  Turtle.encodeString
+#endif
+
+fromText :: Text -> FilePath
+fromText =
+#if MIN_VERSION_turtle(1,6,0)
+  T.unpack
+#else
+  Turtle.fromText
+#endif
+
 -- | Replace the value of $HOME in a path with "~"
 implode_home :: MonadIO m => FilePath -> m FilePath
 implode_home path' = do
-  home' <- home
+  home' <- Turtle.home
   pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')
 
 -- | Return a if the bool within the Maybe is True

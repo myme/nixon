@@ -22,18 +22,16 @@ import Control.Monad (filterM)
 import Data.Function (on)
 import Data.List (intercalate, sortBy)
 import Data.Maybe (fromMaybe)
-import Data.Text (isInfixOf)
 import qualified Data.Text as T
 import Nixon.Command (Command (..))
 import Nixon.Prelude
+import Nixon.Utils (fromPath, fromText)
 import System.Wordexp (nosubst, wordexp)
 import Turtle
   ( IsString (..),
-    encodeString,
     filename,
     format,
     fp,
-    fromText,
     guard,
     ls,
     parent,
@@ -134,7 +132,7 @@ find_projects_by_name :: MonadIO m => FilePath -> [ProjectType] -> [FilePath] ->
 find_projects_by_name project ptypes = liftIO . fmap find_matching . find_projects 1 ptypes
   where
     find_matching = filter ((project `isInfix`) . toText . project_name)
-    isInfix p = isInfixOf (toText p)
+    isInfix p = T.isInfixOf (toText p)
     toText = format fp
 
 find_project :: MonadIO m => [ProjectType] -> FilePath -> m (Maybe Project)
@@ -174,7 +172,7 @@ find_projects max_depth ptypes source_dirs
 
 expand_path :: MonadIO m => FilePath -> m [FilePath]
 expand_path path' = do
-  expanded <- liftIO $ wordexp nosubst (encodeString path')
+  expanded <- liftIO $ wordexp nosubst (fromPath path')
   pure $ either (const []) (map fromString) expanded
 
 sort_projects :: [Project] -> [Project]

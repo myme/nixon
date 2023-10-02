@@ -10,12 +10,12 @@ import Data.Bifunctor (Bifunctor (first))
 import Data.Char (isSpace)
 import Data.Monoid (First (First, getFirst))
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Nixon.Config.Markdown (parseMarkdown)
 import Nixon.Config.Types (Config, ConfigError (..))
 import Nixon.Prelude
-import Nixon.Utils (find_dominating_file)
+import Nixon.Utils (find_dominating_file, fromPath)
 import System.IO.Error (isDoesNotExistError, tryIOError)
-import Turtle (readTextFile)
 
 findLocalConfig :: MonadIO m => FilePath -> m (Maybe Config)
 findLocalConfig path = runMaybeT $ do
@@ -34,7 +34,7 @@ firstOf f xs = getFirst . mconcat . map First <$> traverse f xs
 readConfig :: MonadIO m => FilePath -> m (Either ConfigError Config)
 readConfig path = do
   liftIO $
-    tryIOError (readTextFile path) >>= \case
+    tryIOError (T.readFile $ fromPath path) >>= \case
       Left err
         | isDoesNotExistError err -> pure (Left NoSuchFile)
         | otherwise -> ioError err

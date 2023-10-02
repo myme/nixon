@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Nixon.Language
   ( Language (..),
     extension,
@@ -8,7 +10,7 @@ module Nixon.Language
 where
 
 import Data.List.NonEmpty (NonEmpty ((:|)))
-import Data.Text (unpack)
+import qualified Data.Text as T
 import Nixon.Prelude
 import Turtle (need)
 import qualified Turtle
@@ -34,7 +36,7 @@ instance Show Language where
     Plain -> "plain"
     Python -> "python"
     YAML -> "yaml"
-    Unknown l -> unpack l
+    Unknown l -> T.unpack l
     None -> ""
 
 parseLang :: Text -> Language
@@ -52,7 +54,7 @@ parseLang = \case
   lang -> Unknown lang
 
 fromFilePath :: FilePath -> Language
-fromFilePath path = case Turtle.extension path of
+fromFilePath path = case ext of
   Just "sh" -> Bash
   Just "hs" -> Haskell
   Just "js" -> JavaScript
@@ -61,6 +63,13 @@ fromFilePath path = case Turtle.extension path of
   Just "py" -> Python
   Just lang -> Unknown lang
   Nothing -> Unknown ""
+  where
+    ext =
+#if MIN_VERSION_turtle(1,6,0)
+      T.pack <$> Turtle.extension path
+#else
+      Turtle.extension path
+#endif
 
 extension :: Language -> Text
 extension = \case

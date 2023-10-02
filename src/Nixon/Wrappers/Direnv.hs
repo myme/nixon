@@ -10,12 +10,11 @@ import qualified Data.Text as T
 import Nixon.Prelude
 import Nixon.Project (parents)
 import Nixon.Types (Config (use_direnv), Env (config), Nixon, ask)
-import Nixon.Utils (find_dominating_file)
+import Nixon.Utils (find_dominating_file, fromText)
 import Turtle
   ( dirname,
     format,
     fp,
-    fromText,
     need,
   )
 

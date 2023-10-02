@@ -43,7 +43,7 @@ import Nixon.Types
     NixonError (EmptyError, NixonError),
     runNixon,
   )
-import Nixon.Utils (implode_home)
+import Nixon.Utils (fromPath, implode_home)
 import System.Console.Haskeline (defaultSettings, getInputLineWithInitial, runInputT)
 import System.Environment (withArgs)
 import Turtle
@@ -56,7 +56,6 @@ import Turtle
     need,
     printf,
     pwd,
-    readTextFile,
     s,
     select,
     w,
@@ -161,7 +160,7 @@ evalAction projects (EvalOpts source placeholders lang projSelect) = do
     EvalInline inline -> pure (inline, fromMaybe Bash lang)
     EvalFile filePath ->
       let lang' = fromMaybe (fromFilePath filePath) lang
-       in liftIO ((,) <$> readTextFile filePath <*> pure lang')
+       in liftIO ((,) <$> T.readFile (fromPath filePath) <*> pure lang')
 
   let cmd' =
         Cmd.empty

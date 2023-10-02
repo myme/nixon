@@ -14,6 +14,7 @@ import Crypto.Hash.Types (Digest)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Nixon.Command (Command (..))
 import qualified Nixon.Config.Types as Config
@@ -24,7 +25,7 @@ import Nixon.Process (Cwd, Env, RunArgs)
 import qualified Nixon.Process as Proc
 import Nixon.Types (Nixon)
 import qualified Nixon.Types as T
-import Nixon.Utils (quote, shell_to_list)
+import Nixon.Utils (fromPath, fromText, quote, shell_to_list)
 import Nixon.Wrappers.Direnv (direnv_cmd)
 import Nixon.Wrappers.Nix (nix_cmd)
 import System.Directory (XdgDirectory (..), getXdgDirectory)
@@ -32,24 +33,21 @@ import qualified System.IO as IO
 import Turtle
   ( Line,
     Shell,
-    decodeString,
     die,
     format,
     fp,
-    fromText,
     join,
     ls,
     mktree,
     need,
     rm,
     w,
-    writeTextFile,
     (%),
     (</>),
   )
 
 getCacheDir :: MonadIO m => m FilePath
-getCacheDir = liftIO $ decodeString <$> getXdgDirectory XdgCache "nixon"
+getCacheDir = liftIO $ fromText . T.pack <$> getXdgDirectory XdgCache "nixon"
 
 writeCommand :: MonadIO m => Command -> m FilePath
 writeCommand cmd = do
@@ -67,7 +65,7 @@ writeCommand cmd = do
     mktree cacheDir
     pure (cacheDir </> basename)
 
-  liftIO $ writeTextFile path content
+  liftIO $ T.writeFile (fromPath path) content
   pure path
 
 -- | Clean up all cache files in $XDG_CACHE_DIR/nixon

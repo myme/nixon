@@ -19,7 +19,7 @@ library:
     - src
   dependencies:
     - base
-    - aeson >= 2.0 && < 2.1
+    - aeson
     - bytestring
     - cmark
     - containers
@@ -34,7 +34,7 @@ library:
     - strip-ansi-escape
     - text
     - transformers
-    - turtle == 1.5.*
+    - turtle
     - unix
     - unordered-containers
     - wordexp
@@ -53,7 +53,7 @@ tests:
     - quickcheck-instances
     - text
     - transformers
-    - turtle == 1.5.*
+    - turtle
 
 default-extensions:
   - GeneralizedNewtypeDeriving
