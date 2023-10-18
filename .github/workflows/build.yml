@@ -34,7 +34,7 @@ jobs:
       run: hpack
 
     - name: Install Haskell
-      uses: haskell/actions/setup@v2
+      uses: haskell-actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
 
