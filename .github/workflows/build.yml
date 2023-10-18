@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: [ "main", "nix-workflows" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "nix-workflows" ]
+    branches: [ "main" ]
 
 permissions:
   contents: read
