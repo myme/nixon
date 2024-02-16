@@ -7,6 +7,7 @@ module Nixon.Evaluator
   )
 where
 
+import Control.Monad.Catch (bracket)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Reader (ask)
 import Crypto.Hash (SHA1, digestToHexByteString, hash)
@@ -14,8 +15,8 @@ import Crypto.Hash.Types (Digest)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
+import qualified Data.Text.IO as T
 import Nixon.Command (Command (..))
 import qualified Nixon.Config.Types as Config
 import Nixon.Language (extension, interpreter)
@@ -30,6 +31,7 @@ import Nixon.Wrappers.Direnv (direnv_cmd)
 import Nixon.Wrappers.Nix (nix_cmd)
 import System.Directory (XdgDirectory (..), getXdgDirectory)
 import qualified System.IO as IO
+import System.Posix.Signals (Handler (Catch, Default), installHandler, sigINT)
 import Turtle
   ( Line,
     Shell,
@@ -118,7 +120,13 @@ evaluate cmd args path env' stdin = do
   let useTTY = isNotGUIBackend && isTTY
 
   if useTTY || forceTTY
-    then withEvaluator Proc.run cmd args path env' stdin
+    then do
+      -- Catch SIGINT to avoid killing the terminal, seems like child processes
+      -- still get killed on ^C. Might need more tweaks.
+      let setupHandler = liftIO $ installHandler sigINT (Catch (pure ())) Nothing
+      let teardownHandler = liftIO $ installHandler sigINT Default Nothing
+      bracket setupHandler (const teardownHandler) $ \_ ->
+        withEvaluator Proc.run cmd args path env' stdin
     else
       if cmdIsBg cmd
         then withEvaluator Proc.spawn cmd args path env' stdin
