@@ -41,12 +41,13 @@ jobs:
     - name: Cache
       uses: actions/cache@v4
       env:
-        cache-name: cache-ghc-${{ matrix.ghc }}-cabal
+        cache-name: cache-cabal
       with:
         path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        key: ${{ runner.os }}-build-ghc-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
         restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-ghc-${{ matrix.ghc }}-${{ env.cache-name }}-
+          ${{ runner.os }}-build-ghc-${{ matrix.ghc }}-
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
