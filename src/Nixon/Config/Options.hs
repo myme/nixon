@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Nixon.Config.Options
   ( Completer,
     CompletionType (..),
@@ -27,7 +29,10 @@ import qualified Options.Applicative as Opts
 import System.Environment (getArgs)
 import Turtle
   ( Alternative (many),
+#if MIN_VERSION_GLASGOW_HASKELL(9, 6, 0, 0)
+#else
     Applicative (liftA2),
+#endif
     IsString (fromString),
     Parser,
     format,
