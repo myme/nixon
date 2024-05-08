@@ -13,8 +13,17 @@ jobs:
   build-cabal:
     runs-on: ubuntu-22.04
 
+    strategy:
+      matrix:
+        ghc:
+          - "9.2"
+          - "9.4"
+          - "9.6"
+          # - "9.8"
+      fail-fast: false
+
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install packages
       run: |
@@ -25,14 +34,14 @@ jobs:
       run: hpack
 
     - name: Install Haskell
-      uses: haskell/actions/setup@v2
+      uses: haskell-actions/setup@v2
       with:
-        ghc-version: '9.2'
+        ghc-version: ${{ matrix.ghc }}
 
     - name: Cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       env:
-        cache-name: cache-cabal
+        cache-name: cache-ghc-${{ matrix.ghc }}-cabal
       with:
         path: ~/.cabal
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
@@ -58,7 +67,7 @@ jobs:
   build-nix:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - uses: cachix/install-nix-action@v20
       with:
