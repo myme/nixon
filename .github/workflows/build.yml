@@ -28,7 +28,7 @@ jobs:
     - name: Install packages
       run: |
         sudo apt-get update
-        sudo apt-get install hlint hpack
+        sudo apt-get install hpack
 
     - name: Hpack
       run: hpack
@@ -54,6 +54,7 @@ jobs:
     - name: Install dependencies
       run: |
         cabal update
+        cabal install hlint
         cabal build --only-dependencies --enable-tests --enable-benchmarks
 
     - name: Hlint
