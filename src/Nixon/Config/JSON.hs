@@ -40,15 +40,14 @@ empty =
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \v ->
-    Config
-      <$> (maybe [] (fmap fromText) <$> v .:? "bin_dirs")
-      <*> v .:? "exact_match"
-      <*> v .:? "ignore_case"
+    (Config . maybe [] (fmap fromText) <$> (v .:? "bin_dirs"))
+      <*> (v .:? "exact_match")
+      <*> (v .:? "ignore_case")
       <*> (maybe [] (fmap fromText) <$> v .:? "project_dirs")
       <*> (maybe [] (fmap mkptype) <$> v .:? "project_types")
-      <*> v .:? "use_direnv"
-      <*> v .:? "use_nix"
-      <*> v .:? "terminal"
+      <*> (v .:? "use_direnv")
+      <*> (v .:? "use_nix")
+      <*> (v .:? "terminal")
 
 newtype JsonProjectType = JsonProjectType ProjectType
 
