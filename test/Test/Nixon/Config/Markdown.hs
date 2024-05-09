@@ -241,6 +241,22 @@ command_tests = describe "commands section" $ do
           selector = fmap (Cmd.cmdName &&& Cmd.cmdIsHidden) . Cfg.commands
        in selector <$> result `shouldBe` Right [("_hidden", True)]
 
+  it "can bump header level gaps (0 -> 2, 2 -> 4)" $
+    let result =
+          parseMarkdown "some-file.md" $
+            T.unlines
+              [ "## `hello`",
+                "```bash",
+                "echo Hello World",
+                "```",
+                "#### `world`",
+                "```bash",
+                "echo World",
+                "```"
+              ]
+        selector = fmap Cmd.cmdName . Cfg.commands
+     in selector <$> result `shouldBe` Right ["hello", "world"]
+
   it "command name is first word" $
     let result =
           parseMarkdown "some-file.md" $

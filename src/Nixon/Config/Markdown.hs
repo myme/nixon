@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Nixon.Config.Markdown
@@ -12,7 +13,6 @@ where
 import CMark (commonmarkToNode)
 import qualified CMark as M
 import qualified Data.Aeson as Aeson
-import qualified Data.Yaml as Yaml
 import Data.Bifunctor (Bifunctor (bimap, first))
 import Data.Char (isSpace)
 import Data.Either (partitionEithers)
@@ -23,6 +23,7 @@ import Data.Text (pack, strip)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Tuple (swap)
+import qualified Data.Yaml as Yaml
 import Nixon.Command (bg, json, (<!))
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Command.Placeholder as Cmd
@@ -49,7 +50,6 @@ import Text.Parsec.Text (Parser)
 import Text.Read (readMaybe)
 import Turtle
   ( IsString (fromString),
-    d,
     format,
     s,
     w,
@@ -62,7 +62,7 @@ data PosInfo = PosInfo
     posLocation :: Maybe M.PosInfo
   }
 
-defaultPath :: MonadIO m => m FilePath
+defaultPath :: (MonadIO m) => m FilePath
 defaultPath = liftIO $ fromString <$> getXdgDirectory XdgConfig "nixon.md"
 
 buildConfig :: (JSON.Config, [Cmd.Command]) -> Config
@@ -166,23 +166,14 @@ parse :: FilePath -> [Node] -> Either Text (JSON.Config, [Cmd.Command])
 parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 []) (Nothing, []) nodes
   where
     go _ ps [] = Right ps
-    go st ps nodes'@(Head _ l name _ : _)
+    go st ps nodes'@(Head _ l _ _ : _)
       -- Going back up or next sibling
-      | l < stateHeaderLevel st = go (S l []) ps nodes'
-      -- Skipping levels on the way down
-      | l > stateHeaderLevel st + 1 =
-          Left $
-            format
-              ("Unexpected header level bump (" % d % " to " % d % "): " % s)
-              (stateHeaderLevel st)
-              l
-              name
+      | l < st.stateHeaderLevel = go (S l []) ps nodes'
     go st (cfg, ps) (Head pos l name attrs : rest)
       -- We found a config
       | hasArgs "config" attrs = case parseConfig rest of
           (Left err, _) -> Left err
           (Right cfg', rest') -> goWithSingleConfig st (cfg, ps) rest' cfg'
-
       -- We found a command
       | hasArgs "command" attrs =
           let pt = getKwargs "type" attrs <> stateProjectTypes st
@@ -191,7 +182,6 @@ parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 []) (Not
            in case parseCommand (PosInfo fileName pos) name pt rest of
                 (Left err, _) -> Left err
                 (Right p, rest') -> go st (cfg, p <! bg isBg <! json isJson : ps) rest'
-
       -- Pick up project type along the way
       | otherwise = go st' (cfg, ps) rest
       where
@@ -209,7 +199,6 @@ parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 []) (Not
       | "config" `elem` attrs = case parseConfig (Source lang attrs src : rest) of
           (Left err, _) -> Left err
           (Right cfg', rest') -> goWithSingleConfig st (cfg, ps) rest' cfg'
-
     -- All other nodes are ignored
     go st ps (_ : rest) = go st ps rest
 
@@ -259,11 +248,11 @@ parseCommand pos name projectTypes (Source lang attrs src : rest) = (cmd, rest)
       parsedSourceArgs <- first (T.pack . show) $ P.parse parseCommandArgs "" (T.unwords attrs)
       if not (null args) && not (null parsedSourceArgs)
         then
-          Left $
-            withPosition pos $
-              format
-                (s % " uses placeholders in both command header and source code block")
-                name'
+          Left
+            $ withPosition pos
+            $ format
+              (s % " uses placeholders in both command header and source code block")
+              name'
         else
           pure
             Cmd.empty
