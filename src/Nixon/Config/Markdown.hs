@@ -279,23 +279,23 @@ parseCommandName = first (T.pack . show) . P.parse parser ""
 parseCommandArgs :: Parser [Cmd.Placeholder]
 parseCommandArgs =
   P.choice
-    [ (:) <$> parseCommandArg' <*> parseCommandArgs,
+    [ (:) <$> parseCommandPlaceholder <*> parseCommandArgs,
       P.anyChar *> parseCommandArgs,
       [] <$ P.eof
     ]
 
 -- | Convenience wrapper for running placeholder parser
 parseCommandArg :: String -> Either String Cmd.Placeholder
-parseCommandArg = first show . P.parse parseCommandArg' "" . T.pack
+parseCommandArg = first show . P.parse parseCommandPlaceholder "" . T.pack
 
-parseCommandArg' :: Parser Cmd.Placeholder
-parseCommandArg' = do
+parseCommandPlaceholder :: Parser Cmd.Placeholder
+parseCommandPlaceholder = do
   let startCmdArg =
         (Cmd.Stdin <$ P.char '<')
           <|> (Cmd.Arg <$ P.char '$')
           <|> (Cmd.EnvVar . T.pack <$> P.many (P.alphaNum <|> P.char '_') <* P.char '=')
   placeholderType <- P.try $ startCmdArg <* P.char '{'
-  (name, fields, multiple) <- parseSpec <* P.char '}'
+  (name, fields, multiple) <- parsePlaceholderSpec <* P.char '}'
   let fixup = T.replace "-" "_"
       placeholderWithName = case placeholderType of
         Cmd.EnvVar "" -> Cmd.EnvVar $ fixup name
@@ -303,8 +303,8 @@ parseCommandArg' = do
         same -> same
   pure $ Cmd.Placeholder placeholderWithName name fields multiple []
 
-parseSpec :: Parser (Text, [Integer], Bool)
-parseSpec = do
+parsePlaceholderSpec :: Parser (Text, [Integer], Bool)
+parsePlaceholderSpec = do
   name <- T.pack <$> P.many1 (P.noneOf ":}")
   P.option (name, [], False) $ do
     _ <- P.char ':'
