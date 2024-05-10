@@ -1,10 +1,19 @@
-nixon-widget() {
+nixon-insert-selection() {
   local selected="$(nixon -b fzf -T run -s)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
   READLINE_POINT=$(( READLINE_POINT + ${#selected} ))
 }
 
-bind -x '"\ei": "nixon-widget"'
+bind -x '"\ei": "nixon-insert-selection"'
+
+nixon-insert-command ()
+{
+    local command="$(nixon -b fzf -T run -i)"
+    READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$command${READLINE_LINE:$READLINE_POINT}";
+    READLINE_POINT=$(( READLINE_POINT + ${#command} ))
+}
+
+bind -x '"\eI": nixon-insert-command'
 
 nixon-insert-project () 
 {

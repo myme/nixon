@@ -86,6 +86,7 @@ data ProjectOpts = ProjectOpts
   { projProject :: Maybe Text,
     projCommand :: Maybe Text,
     projArgs :: [Text],
+    projInsert :: Bool,
     projList :: Bool,
     projSelect :: Bool
   }
@@ -94,6 +95,7 @@ data ProjectOpts = ProjectOpts
 data RunOpts = RunOpts
   { runCommand :: Maybe Text,
     runArgs :: [Text],
+    runInsert :: Bool,
     runList :: Bool,
     runSelect :: Bool
   }
@@ -196,6 +198,7 @@ projectParser mkcompleter =
             <> Opts.completer (mkcompleter Run)
       )
     <*> many (Opts.strArgument $ Opts.metavar "args..." <> Opts.help "Arguments to command")
+    <*> switch "insert" 'i' "Select a project command and output its source"
     <*> switch "list" 'l' "List projects"
     <*> switch "select" 's' "Select a project and output on stdout"
 
@@ -204,8 +207,9 @@ runParser completer =
   RunOpts
     <$> optional (Opts.strArgument $ Opts.metavar "command" <> Opts.help "Command to run" <> Opts.completer completer)
     <*> many (Opts.strArgument $ Opts.metavar "args..." <> Opts.help "Arguments to command")
+    <*> switch "insert" 'i' "Select a command and output its source"
     <*> switch "list" 'l' "List commands"
-    <*> switch "select" 's' "Select a command and output on stdout"
+    <*> switch "select" 's' "Output command selection on stdout"
 
 -- | Read configuration from config file and command line arguments
 parseArgs :: MonadIO m => (CompletionType -> Completer) -> m (Either ConfigError (SubCommand, Config))

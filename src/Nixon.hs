@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Nixon
   ( nixon,
     nixonWithConfig,
@@ -82,7 +84,7 @@ listProjectCommands project query = do
     Selection _ matching -> liftIO $ T.putStr (T.unlines matching)
     _ -> log_error "No commands."
 
-fail :: MonadIO m => NixonError -> m a
+fail :: (MonadIO m) => NixonError -> m a
 fail err = liftIO (throwIO err)
 
 -- | Find and run a command in a project.
@@ -93,13 +95,13 @@ handleCmd project cmd opts = do
     EmptySelection -> fail $ EmptyError "No command selected."
     CanceledSelection -> fail $ EmptyError "Command selection canceled."
     Selection _ [] -> fail $ EmptyError "No command selected."
-    Selection selectionType [cmd'] ->
-      if Opts.runSelect opts
-        then do
+    Selection selectionType [cmd']
+      | opts.runInsert -> liftIO $ T.putStrLn cmd'.cmdSource
+      | opts.runSelect -> do
           let selectOpts = Select.defaults {Select.selector_multiple = Just True}
           resolved <- Cmd.resolveCmd project selector cmd' selectOpts
           printf (s % "\n") (T.unlines resolved)
-        else do
+      | otherwise -> do
           case selectionType of
             Select.Default -> Cmd.runCmd selector project cmd' (Opts.runArgs opts)
             Select.Edit -> editCmd project cmd' (Opts.runArgs opts)
@@ -173,6 +175,7 @@ evalAction projects (EvalOpts source placeholders lang projSelect) = do
         RunOpts
           { runCommand = Nothing,
             runArgs = [],
+            runInsert = False,
             runList = False,
             runSelect = False
           }
@@ -201,7 +204,13 @@ projectAction projects opts
             then void . liftIO . for ps $ printf (fp % "\n") . project_path
             else case ps of
               [project] ->
-                let opts' = RunOpts (Opts.projCommand opts) (Opts.projArgs opts) (Opts.projList opts) (Opts.projSelect opts)
+                let opts' =
+                      RunOpts
+                        opts.projCommand
+                        opts.projArgs
+                        opts.projInsert
+                        opts.projList
+                        opts.projSelect
                  in findAndHandleCmd handleCmd project opts'
               _ -> liftIO (throwIO $ NixonError "Multiple projects selected.")
 
@@ -226,12 +235,13 @@ getSortedProjects = do
 
 -- If switching to a project takes a long time it would be nice to see a window
 -- showing the progress of starting the environment.
-nixonWithConfig :: MonadIO m => Config.Config -> m ()
+nixonWithConfig :: (MonadIO m) => Config.Config -> m ()
 nixonWithConfig userConfig = liftIO $ do
   (sub_cmd, cfg) <- either die pure =<< Opts.parseArgs (nixonCompleter userConfig)
 
-  err <- try $
-    runNixon (userConfig <> cfg) $ do
+  err <- try
+    $ runNixon (userConfig <> cfg)
+    $ do
       projects <- getSortedProjects
       case sub_cmd of
         EvalCommand evalOpts -> do
@@ -252,12 +262,13 @@ nixonWithConfig userConfig = liftIO $ do
     Left (NixonError msg) -> die msg
     Right _ -> pure ()
 
-nixonCompleter :: MonadIO m => Config.Config -> CompletionType -> [String] -> m [String]
+nixonCompleter :: (MonadIO m) => Config.Config -> CompletionType -> [String] -> m [String]
 nixonCompleter userConfig compType args = do
   let parse_args = Opts.parseArgs $ nixonCompleter userConfig
   (_, cfg) <- liftIO $ either die pure =<< withArgs args parse_args
-  liftIO $
-    runNixon (userConfig <> cfg) $ do
+  liftIO
+    $ runNixon (userConfig <> cfg)
+    $ do
       projects <- getSortedProjects
       case compType of
         Opts.Eval -> pure []
@@ -275,5 +286,5 @@ nixonCompleter userConfig compType args = do
           pure $ map (T.unpack . cmdName) commands
 
 -- | Nixon with default configuration
-nixon :: MonadIO m => m ()
+nixon :: (MonadIO m) => m ()
 nixon = nixonWithConfig Config.defaultConfig
