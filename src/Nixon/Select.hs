@@ -33,11 +33,11 @@ import Data.Aeson
     (.:),
   )
 import Data.Aeson.Types (unexpected)
-import Data.Function ((&))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Text as T
 import GHC.Generics (Generic)
+import qualified Nixon.Command.Placeholder as Cmd
 import Nixon.Prelude
 import Turtle (Line, Shell, textToLine)
 
@@ -86,7 +86,7 @@ instance Functor Selection where
 data SelectorOpts = SelectorOpts
   { selector_title :: Maybe Text,
     selector_search :: Maybe Text,
-    selector_fields :: [Integer],
+    selector_fields :: [Cmd.PlaceholderField],
     selector_multiple :: Maybe Bool
   }
 
@@ -131,12 +131,12 @@ build_map f = Map.fromList . map (f &&& id)
 runSelect :: Selector m -> Select m a -> m a
 runSelect = flip runReaderT
 
-select :: MonadIO m => SelectorOpts -> Shell Candidate -> Select m (Selection Text)
+select :: (MonadIO m) => SelectorOpts -> Shell Candidate -> Select m (Selection Text)
 select opts input = do
   selector <- ask
   lift $ selector opts input
 
-processSelection :: Monad m => SelectorOpts -> Selection Text -> m (Selection Text)
+processSelection :: (Monad m) => SelectorOpts -> Selection Text -> m (Selection Text)
 processSelection opts selection'
   | null fields = pure selection'
   -- NOTE: Unsure about this `T.stripEnd` here. It might remove too much trailing whitespace.
@@ -144,15 +144,12 @@ processSelection opts selection'
   where
     fields = selector_fields opts
     pickFields line =
-      T.words line
-        -- 1 indexed, to reserve 0 for the whole line
-        & zip [1 ..]
-        & filter ((`elem` fields) . fst)
-        & map snd
-        & T.unwords
+      let pickItem (Cmd.Col i) = undefined !! (i - 1)
+          pickItem (Cmd.Field i) = T.words line !! (i - 1)
+      in T.unwords $ map pickItem fields
 
 withProcessSelection ::
-  Monad m =>
+  (Monad m) =>
   (SelectorOpts -> a -> m (Selection Text)) ->
   SelectorOpts ->
   a ->

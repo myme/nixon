@@ -23,7 +23,7 @@ import Data.Text (pack, strip)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Yaml as Yaml
-import Nixon.Command (bg, json, (<!))
+import Nixon.Command (bg, (<!), outFmt)
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Command.Placeholder as Cmd
 import qualified Nixon.Config.JSON as JSON
@@ -187,12 +187,15 @@ parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 [] initP
       | hasArgs "command" attrs =
           let pt = getKwargs "type" attrs <> st.stateProjectTypes
               isBg = hasArgs "bg" attrs
-              isJson = hasArgs "json" attrs
+              fmt
+                | hasArgs "json" attrs = Cmd.JSON
+                | hasArgs "cols" attrs = Cmd.Columns
+                | otherwise = Cmd.Lines
               posInfo = PosInfo fileName pos l
            in case parseCommand posInfo name pt rest of
                 (Left err, _) -> Left err
                 (Right p, rest') ->
-                  let cmd = p <! bg isBg <! json isJson
+                  let cmd = p <! bg isBg <! outFmt fmt
                       cmds = addLocation st.stateLastPos posInfo ps
                       st' =
                         st
@@ -363,7 +366,9 @@ parsePlaceholderModifiers placeholder = do
       _ <- P.many P.space
       P.option p' (parsePipeModifiers p')
 
-    parsePipeFields p = P.string "fields" *> P.many P.space *> parseFields p
+    parsePipeFields p =
+      (P.string "cols" *> P.many P.space *> parseFields Cmd.Col p) <|>
+      (P.string "fields" *> P.many P.space *> parseFields Cmd.Field p)
 
     parsePipeMultiple p = (P.string "multi" :: Parser String) $> p {Cmd.multiple = True}
 
@@ -372,12 +377,12 @@ parsePlaceholderModifiers placeholder = do
     parseColonModifiers p = do
       _ <- P.char ':'
       -- Accept fields and multiple in any order
-      (parseFields p >>= perhaps parseMultiple) <|> (parseMultiple p >>= perhaps parseFields)
+      (parseFields Cmd.Field p >>= perhaps parseMultiple) <|> (parseMultiple p >>= perhaps (parseFields Cmd.Field))
 
-    parseFields :: Cmd.Placeholder -> Parser Cmd.Placeholder
-    parseFields p' = do
-      fields <- mapMaybe readMaybe <$> (P.many1 P.digit `P.sepBy1` P.char ',')
-      pure $ p' {Cmd.fields = fields}
+    parseFields :: (Int -> Cmd.PlaceholderField) -> Cmd.Placeholder -> Parser Cmd.Placeholder
+    parseFields fieldType p' = do
+      fields <-  mapMaybe readMaybe <$> (P.many1 P.digit `P.sepBy1` P.char ',')
+      pure $ p' {Cmd.fields = p'.fields <> (fieldType <$> fields)}
 
     parseMultiple :: Cmd.Placeholder -> Parser Cmd.Placeholder
     parseMultiple p' = do

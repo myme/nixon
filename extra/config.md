@@ -79,14 +79,14 @@ cat
 Use `nmcli` to list available networks.
 
 ```bash
-nmcli -t connection | cut -d':' -f1
+nmcli connection
 ```
 
 ### `network-connect`
 
 Use the `networks` placeholder to select a network to connect to.
 
-```bash ${networks}
+```bash ${networks | cols 1}
 nmcli connection up "$1"
 ```
 

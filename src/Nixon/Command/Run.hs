@@ -6,7 +6,7 @@ module Nixon.Command.Run
 where
 
 import Control.Monad (foldM)
-import Data.Aeson (eitherDecodeStrict)
+import Data.Aeson (eitherDecodeStrict, encode)
 import Data.Foldable (find)
 import qualified Data.Text as T
 import Nixon.Command (Command, CommandOutput (..))
@@ -22,10 +22,11 @@ import qualified Nixon.Project as Project
 import Nixon.Select (Selection (..), Selector, selector_fields, selector_multiple)
 import qualified Nixon.Select as Select
 import Nixon.Types (Nixon)
-import Nixon.Utils (toLines)
-import Turtle (Shell, cd, format, fp, select, stream)
+import Nixon.Utils (toLines, shell_to_list, parseColumns)
+import Turtle (Shell, cd, format, fp, select, stream, printf)
 import qualified Turtle.Bytes as BS
 import Turtle.Line (lineToText)
+import Turtle.Format (w)
 
 -- | Actually run a command
 runCmd :: Selector Nixon -> Project -> Command -> [Text] -> Nixon ()
@@ -95,6 +96,10 @@ resolveCmd project selector cmd select_opts = do
   jsonEval <- getEvaluator (run_with_output BS.stream) cmd args projectPath env' (BS.fromUTF8 <$> stdin)
   selection <- selector select_opts $ do
     case Cmd.cmdOutput cmd of
+      Columns -> do
+        cols <- parseColumns . map lineToText <$> shell_to_list linesEval
+        printf w (encode cols)
+        pure $ Select.Identity "asdf"
       Lines -> Select.Identity . lineToText <$> linesEval
       JSON -> do
         output <- BS.strict jsonEval

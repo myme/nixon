@@ -14,8 +14,9 @@ module Nixon.Utils
     filter_elems,
     implode_home,
     (<<?),
-    openEditor,
     confirm,
+    openEditor,
+    parseColumns,
   )
 where
 
@@ -23,6 +24,8 @@ import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.Bool (bool)
 import Data.Char (isSpace)
 import Data.List.NonEmpty (NonEmpty ((:|)), toList)
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, listToMaybe, maybeToList)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -135,3 +138,10 @@ openEditor path lineNr = do
         ( MaybeT (need "VISUAL") <|> MaybeT (need "EDITOR")
         )
   run (editor :| args) Nothing [] empty
+
+parseColumns :: [Text] -> [Map Text Text]
+parseColumns input = case input of
+  [] -> []
+  header : body ->
+    let headers = T.words header
+     in map (Map.fromList . zip headers . T.words) body

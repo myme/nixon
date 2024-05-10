@@ -4,7 +4,7 @@ import Control.Arrow ((&&&))
 import Data.Either (isLeft)
 import qualified Data.Text as T
 import qualified Nixon.Command as Cmd
-import Nixon.Command.Placeholder (Placeholder (..), PlaceholderType (..))
+import Nixon.Command.Placeholder (Placeholder (..), PlaceholderField (..), PlaceholderType (..))
 import Nixon.Config.Markdown (parseCommandName, parseHeaderArgs, parseMarkdown)
 import Nixon.Config.Types (defaultConfig)
 import qualified Nixon.Config.Types as Cfg
@@ -14,6 +14,9 @@ import Test.Hspec
 
 match_error :: Text -> Either Text b -> Bool
 match_error match = either (T.isInfixOf match) (const False)
+
+fs :: [Int] -> [PlaceholderField]
+fs = fmap Field
 
 config_tests :: SpecWith ()
 config_tests = describe "config section" $ do
@@ -317,6 +320,32 @@ command_tests = describe "commands section" $ do
               [ ("hello", Bash, "echo Hello World\n", [], False)
               ]
 
+  it "detects columns output format"
+    $ let result =
+            parseMarkdown "some-file.md"
+              $ T.unlines
+                [ "# `hello`",
+                  "```bash ${placeholder | cols 1}",
+                  "echo Hello World",
+                  "```"
+                ]
+          selector = fmap (Cmd.cmdName &&& Cmd.cmdPlaceholders) . Cfg.commands
+          placeholder = Placeholder Arg "placeholder" [Col 1] False []
+       in selector <$> result `shouldBe` Right [("hello", [placeholder])]
+
+  it "combines columns and fields output format"
+    $ let result =
+            parseMarkdown "some-file.md"
+              $ T.unlines
+                [ "# `hello`",
+                  "```bash ${placeholder | cols 1 | fields 2}",
+                  "echo Hello World",
+                  "```"
+                ]
+          selector = fmap (Cmd.cmdName &&& Cmd.cmdPlaceholders) . Cfg.commands
+          placeholder = Placeholder Arg "placeholder" [Col 1, Field 2] False []
+       in selector <$> result `shouldBe` Right [("hello", [placeholder])]
+
   it "detects json output format"
     $ let result =
             parseMarkdown "some-file.md"
@@ -440,8 +469,8 @@ command_tests = describe "commands section" $ do
         `shouldBe` Right
           [ (Bash, [Placeholder Arg "arg-one" [] False []]),
             (Bash, [Placeholder Arg "arg-two" [] True []]),
-            (Bash, [Placeholder Arg "arg-three" [1, 2] False []]),
-            (Bash, [Placeholder Arg "arg-four" [1, 2] True []])
+            (Bash, [Placeholder Arg "arg-three" (fs [1, 2]) False []]),
+            (Bash, [Placeholder Arg "arg-four" (fs [1, 2]) True []])
           ]
 
     it "complains on both header & code block placeholders" $ do
@@ -602,11 +631,11 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses arg field selector" $ do
     parseCommandName "cat <{arg:1}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1] False []])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" (fs [1]) False []])
 
   it "parses several arg field selectors" $ do
     parseCommandName "cat <{arg:1,3,5}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] False []])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" (fs [1, 3, 5]) False []])
 
   it "parses arg modifiers" $ do
     parseCommandName "cat ${arg:m}"
@@ -614,7 +643,7 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses arg modifiers" $ do
     parseCommandName "cat ${arg | fields 1,3}"
-      `shouldBe` Right ("cat", [Placeholder Arg "arg" [1, 3] False []])
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" (fs [1, 3]) False []])
 
   it "parses arg modifiers" $ do
     parseCommandName "cat ${arg | multi}"
@@ -626,19 +655,19 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses arg field and multiple selector" $ do
     parseCommandName "cat <{arg:m1,3,5}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] True []])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" (fs [1, 3, 5]) True []])
 
   it "parses arg field and multiple selector (flipped)" $ do
     parseCommandName "cat <{arg:1,3,5m}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] True []])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" (fs [1, 3, 5]) True []])
 
   it "parses arg field and pipe fields" $ do
     parseCommandName "cat <{arg | fields 1,3,5}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] False []])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" (fs [1, 3, 5]) False []])
 
   it "parses arg field, pipe fields and pipe multiple" $ do
     parseCommandName "cat <{arg | fields 1,3,5 | multi}"
-      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] True []])
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" (fs [1, 3, 5]) True []])
 
   it "parses text and placeholder part" $ do
     parseCommandName "cat \"${arg}\""

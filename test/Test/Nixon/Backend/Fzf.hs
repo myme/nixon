@@ -11,6 +11,7 @@ import qualified Nixon.Backend as Backend
 import Nixon.Backend.Fzf (fzf, fzfBackend, fzfExpect, fzfFilter, fzfProjects)
 import qualified Nixon.Backend.Fzf as Fzf
 import qualified Nixon.Command as Cmd
+import qualified Nixon.Command.Placeholder as Cmd
 import Nixon.Config.Types (defaultConfig)
 import Nixon.Prelude
 import Nixon.Project (Project (..))
@@ -161,7 +162,7 @@ fzfTests = do
     it "filters fields based on selector options (words 1 & 3)" $ do
       let candidates = map Identity ["one two three", "four five six", "seven eight nine"]
           selector = Backend.selector $ fzfBackend defaultConfig
-          selectOpts = Select.defaults {Select.selector_fields = [1, 3]}
+          selectOpts = Select.defaults {Select.selector_fields = Cmd.Field <$> [1, 3]}
 
       result <-
         runProc (ExitSuccess, "1")

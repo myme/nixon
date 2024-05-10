@@ -8,7 +8,7 @@ module Nixon.Command
     (<!),
     description,
     bg,
-    json,
+    outFmt,
     show_command,
     show_command_with_description,
   )
@@ -62,7 +62,7 @@ empty =
       cmdLocation = Nothing
     }
 
-data CommandOutput = Lines | JSON deriving (Eq, Show)
+data CommandOutput = Columns | Lines | JSON deriving (Eq, Show)
 
 show_command :: Command -> Text
 show_command cmd = T.unwords $ cmdName cmd : map (format ("${" % s % "}") . P.name) (cmdPlaceholders cmd)
@@ -83,8 +83,8 @@ description d cmd = cmd {cmdDesc = Just d}
 bg :: Bool -> Command -> Command
 bg g cmd = cmd {cmdIsBg = g}
 
-json :: Bool -> Command -> Command
-json j cmd = cmd {cmdOutput = if j then JSON else Lines}
+outFmt :: CommandOutput -> Command -> Command
+outFmt o cmd = cmd {cmdOutput = o}
 
 is_bg_command :: Command -> Bool
 is_bg_command _ = False
