@@ -1,5 +1,5 @@
 nixon-insert-selection() {
-  local selected="$(nixon -b fzf -T run -s)"
+  local selected="$(nixon -b fzf -T run -s | while read -r item; do printf '%q ' "$item"; done)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
   READLINE_POINT=$(( READLINE_POINT + ${#selected} ))
 }
