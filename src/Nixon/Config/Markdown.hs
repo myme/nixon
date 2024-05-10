@@ -22,7 +22,6 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (pack, strip)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.Tuple (swap)
 import qualified Data.Yaml as Yaml
 import Nixon.Command (bg, json, (<!))
 import qualified Nixon.Command as Cmd
@@ -279,40 +278,86 @@ parseCommandName = first (T.pack . show) . P.parse parser ""
 parseCommandArgs :: Parser [Cmd.Placeholder]
 parseCommandArgs =
   P.choice
-    [ (:) <$> parseCommandArg' <*> parseCommandArgs,
+    [ (:) <$> parseCommandPlaceholder <*> parseCommandArgs,
       P.anyChar *> parseCommandArgs,
       [] <$ P.eof
     ]
 
 -- | Convenience wrapper for running placeholder parser
 parseCommandArg :: String -> Either String Cmd.Placeholder
-parseCommandArg = first show . P.parse parseCommandArg' "" . T.pack
+parseCommandArg = first show . P.parse parseCommandPlaceholder "" . T.pack
 
-parseCommandArg' :: Parser Cmd.Placeholder
-parseCommandArg' = do
+parseCommandPlaceholder :: Parser Cmd.Placeholder
+parseCommandPlaceholder = do
   let startCmdArg =
         (Cmd.Stdin <$ P.char '<')
           <|> (Cmd.Arg <$ P.char '$')
           <|> (Cmd.EnvVar . T.pack <$> P.many (P.alphaNum <|> P.char '_') <* P.char '=')
   placeholderType <- P.try $ startCmdArg <* P.char '{'
-  (name, fields, multiple) <- parseSpec <* P.char '}'
-  let fixup = T.replace "-" "_"
-      placeholderWithName = case placeholderType of
-        Cmd.EnvVar "" -> Cmd.EnvVar $ fixup name
-        Cmd.EnvVar alias -> Cmd.EnvVar $ fixup alias
-        same -> same
-  pure $ Cmd.Placeholder placeholderWithName name fields multiple []
+  placeholder <- do
+    name <- T.pack <$> P.many1 (P.noneOf " :|}")
+    let fixup = T.replace "-" "_"
+        placeholderWithName = case placeholderType of
+          Cmd.EnvVar "" -> Cmd.EnvVar $ fixup name
+          Cmd.EnvVar alias -> Cmd.EnvVar $ fixup alias
+          same -> same
+    pure $ Cmd.Placeholder placeholderWithName name [] False []
+  parsePlaceholderModifiers placeholder <* P.char '}'
 
-parseSpec :: Parser (Text, [Integer], Bool)
-parseSpec = do
-  name <- T.pack <$> P.many1 (P.noneOf ":}")
-  P.option (name, [], False) $ do
-    _ <- P.char ':'
-    -- Accept fields and multiple in any order
-    (fields, multiple) <-
-      ((,) <$> parseFields <*> parseMultiple)
-        <|> (fmap swap . (,) <$> parseMultiple <*> P.option [] parseFields)
-    pure (name, fields, multiple)
+-- | Parse the "modifiers" which affect how command placeholders are handled.
+--
+-- This includes:
+--
+--   * If the placeholder can select multiple values.
+--   * Which fields to include from selections.
+--   * TODO: Interpret the input as JSON.
+--   * TODO: Access JSON attributes through jq-like expressions.
+--
+-- Formats take on two types, shorthand and pipelines. The following are
+-- equivalent:
+--
+-- Pipeline: `some-command ${placeholder | multiple | fields 1,3}`
+-- Shorthand: `some-command ${placeholder:m1,3}`
+parsePlaceholderModifiers :: Cmd.Placeholder -> Parser Cmd.Placeholder
+parsePlaceholderModifiers placeholder = do
+  P.choice
+    [ parsePipeModifiers placeholder,
+      parseColonModifiers placeholder,
+      pure placeholder
+    ]
   where
-    parseMultiple = P.option False (True <$ P.char 'm')
-    parseFields = mapMaybe readMaybe <$> (P.many1 P.digit `P.sepBy1` P.char ',')
+    -- Parse `command-name | fields 1,2 | multiple`
+    parsePipeModifiers :: Cmd.Placeholder -> Parser Cmd.Placeholder
+    parsePipeModifiers p = do
+      _ <- P.many P.space *> P.char '|' *> P.many P.space
+      p' <-
+        P.choice
+          [ parsePipeFields p,
+            parsePipeMultiple p
+          ]
+      _ <- P.many P.space
+      P.option p' (parsePipeModifiers p')
+
+    parsePipeFields p = P.string "fields" *> P.many P.space *> parseFields p
+
+    parsePipeMultiple p = (P.string "multi" :: Parser String) $> p {Cmd.multiple = True}
+
+    -- Parse `command-name:1,2`
+    parseColonModifiers :: Cmd.Placeholder -> Parser Cmd.Placeholder
+    parseColonModifiers p = do
+      _ <- P.char ':'
+      -- Accept fields and multiple in any order
+      (parseFields p >>= perhaps parseMultiple) <|> (parseMultiple p >>= perhaps parseFields)
+
+    parseFields :: Cmd.Placeholder -> Parser Cmd.Placeholder
+    parseFields p' = do
+      fields <- mapMaybe readMaybe <$> (P.many1 P.digit `P.sepBy1` P.char ',')
+      pure $ p' {Cmd.fields = fields}
+
+    parseMultiple :: Cmd.Placeholder -> Parser Cmd.Placeholder
+    parseMultiple p' = do
+      multiple <- P.option False (True <$ P.char 'm')
+      pure $ p' {Cmd.multiple = multiple}
+
+    -- Try a parser or default to `value`
+    perhaps parser value = P.option value (parser value)

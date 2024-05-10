@@ -425,6 +425,10 @@ command_tests = describe "commands section" $ do
                   "# `three`",
                   "``` bash ${arg-three:1,2}",
                   "echo Hello \"$1\"",
+                  "```",
+                  "# `four`",
+                  "``` bash ${arg-four | fields 1,2 | multi}",
+                  "echo Hello \"$1\"",
                   "```"
                 ]
           selector
@@ -436,7 +440,8 @@ command_tests = describe "commands section" $ do
         `shouldBe` Right
           [ (Bash, [Placeholder Arg "arg-one" [] False []]),
             (Bash, [Placeholder Arg "arg-two" [] True []]),
-            (Bash, [Placeholder Arg "arg-three" [1, 2] False []])
+            (Bash, [Placeholder Arg "arg-three" [1, 2] False []]),
+            (Bash, [Placeholder Arg "arg-four" [1, 2] True []])
           ]
 
     it "complains on both header & code block placeholders" $ do
@@ -523,6 +528,14 @@ parse_command_name_tests = describe "parseCommandName" $ do
     parseCommandName "cat ${arg:m}"
       `shouldBe` Right ("cat", [Placeholder Arg "arg" [] True []])
 
+  it "parses arg modifiers" $ do
+    parseCommandName "cat ${arg | fields 1,3}"
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" [1, 3] False []])
+
+  it "parses arg modifiers" $ do
+    parseCommandName "cat ${arg | multi}"
+      `shouldBe` Right ("cat", [Placeholder Arg "arg" [] True []])
+
   it "parses stdin arg modifiers" $ do
     parseCommandName "cat <{arg:m}"
       `shouldBe` Right ("cat", [Placeholder Stdin "arg" [] True []])
@@ -533,6 +546,14 @@ parse_command_name_tests = describe "parseCommandName" $ do
 
   it "parses arg field and multiple selector (flipped)" $ do
     parseCommandName "cat <{arg:1,3,5m}"
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] True []])
+
+  it "parses arg field and pipe fields" $ do
+    parseCommandName "cat <{arg | fields 1,3,5}"
+      `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] False []])
+
+  it "parses arg field, pipe fields and pipe multiple" $ do
+    parseCommandName "cat <{arg | fields 1,3,5 | multi}"
       `shouldBe` Right ("cat", [Placeholder Stdin "arg" [1, 3, 5] True []])
 
   it "parses text and placeholder part" $ do
