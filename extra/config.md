@@ -5,12 +5,23 @@
 The following source code block defines a `nixon` configuration using `YAML`:
 
 ``` yaml config
+# Enable "exact" matching algorithm.
 exact_match: true
+
+# Ignore case by default.
 ignore_case: true
+
+# Evaluate direnv environments.
 use_direnv: true
+
+# Evaluate nix shell environments.
 use_nix: true
+
+# Location of project directories.
 project_dirs:
   - ~/src
+
+# Project types, with marker file detection.
 project_types:
   - name: cabal
     test: ["cabal.project"]
