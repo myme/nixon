@@ -26,7 +26,7 @@ import Nixon.Command (Command (..), show_command_with_description)
 import qualified Nixon.Command as Cmd
 import Nixon.Command.Find (findAndHandleCmd, findProject, findProjectCommands, getBackend, withLocalConfig)
 import qualified Nixon.Command.Run as Cmd
-import Nixon.Config.Options (CompletionType, EvalOpts (..), EvalSource (..), GCOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
+import Nixon.Config.Options (CompletionType, EditOpts (..), EvalOpts (..), EvalSource (..), GCOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
 import qualified Nixon.Config.Types as Config
 import Nixon.Evaluator (garbageCollect)
@@ -147,6 +147,21 @@ editSelection selection = runInputT defaultSettings $ do
     Just "" -> Nothing
     line' -> T.pack <$> line'
 
+-- | Jump to command expression in $EDITOR.
+editAction :: EditOpts -> Nixon ()
+editAction opts = do
+  log_info "Running <edit> command"
+  ptypes <- project_types . config <$> ask
+  project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
+  findCommand <- Backend.commandSelector <$> getBackend
+  cmds <- findProjectCommands project
+  cmd <- findCommand project opts.editCommand cmds
+  case cmd of
+    EmptySelection -> die ("No command selected." :: String)
+    CanceledSelection -> die ("Command selection canceled." :: String)
+    Selection _ [cmd'] -> visitCmd cmd'
+    _ -> die ("Multiple commands selected." :: String)
+
 -- | Evaluate a command expression.
 evalAction :: [Project] -> EvalOpts -> Nixon ()
 evalAction projects (EvalOpts source placeholders lang projSelect) = do
@@ -244,6 +259,9 @@ nixonWithConfig userConfig = liftIO $ do
     $ do
       projects <- getSortedProjects
       case sub_cmd of
+        EditCommand editOpts -> do
+          log_info "Running <edit> command"
+          editAction editOpts
         EvalCommand evalOpts -> do
           log_info "Running <eval> command"
           evalAction projects evalOpts
@@ -271,6 +289,17 @@ nixonCompleter userConfig compType args = do
     $ do
       projects <- getSortedProjects
       case compType of
+        Opts.Edit -> do
+          project <- case args of
+            ("project" : p : _) -> do
+              current <- P.from_path <$> pwd
+              let p' = find ((==) p . T.unpack . format fp . P.project_name) projects
+              pure $ fromMaybe current p'
+            _ -> do
+              ptypes <- project_types . config <$> ask
+              liftIO $ P.find_in_project_or_default ptypes =<< pwd
+          commands <- withLocalConfig (project_path project) $ findProjectCommands project
+          pure $ map (T.unpack . cmdName) commands
         Opts.Eval -> pure []
         Opts.Project -> pure $ map (T.unpack . format fp . P.project_name) projects
         Opts.Run -> do

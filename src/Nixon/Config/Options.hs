@@ -7,6 +7,7 @@ module Nixon.Config.Options
     LogLevel (..),
     Options (..),
     SubCommand (..),
+    EditOpts (..),
     EvalOpts (..),
     EvalSource (..),
     GCOpts (..),
@@ -49,7 +50,7 @@ import Turtle
 
 type Completer = [String] -> IO [String]
 
-data CompletionType = Eval | Project | Run
+data CompletionType = Edit | Eval | Project | Run
 
 -- | Command line options.
 data Options = Options
@@ -60,10 +61,14 @@ data Options = Options
   deriving (Show)
 
 data SubCommand
-  = EvalCommand EvalOpts
+  = EditCommand EditOpts
+  | EvalCommand EvalOpts
   | GCCommand GCOpts
   | ProjectCommand ProjectOpts
   | RunCommand RunOpts
+  deriving (Show)
+
+newtype EditOpts = EditOpts { editCommand :: Maybe Text }
   deriving (Show)
 
 data EvalSource = EvalInline Text | EvalFile FilePath
@@ -122,7 +127,8 @@ parser default_config mkcompleter =
   Options
     <$> optional (optPath "config" 'C' (configHelp default_config))
     <*> parseConfig
-    <*> ( EvalCommand <$> subcommand "eval" "Evaluate expression" evalParser
+    <*> ( EditCommand <$> subcommand "edit" "Edit a command in $EDITOR" (editParser $ mkcompleter Edit)
+            <|> EvalCommand <$> subcommand "eval" "Evaluate expression" evalParser
             <|> GCCommand <$> subcommand "gc" "Garbage collect cached items" gcParser
             <|> ProjectCommand <$> subcommand "project" "Project actions" (projectParser mkcompleter)
             <|> RunCommand <$> subcommand "run" "Run command" (runParser $ mkcompleter Run)
@@ -159,6 +165,11 @@ parser default_config mkcompleter =
         <*> maybeSwitch "nix" 'n' "Invoke nix-shell if *.nix files are found"
         <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")
         <*> optional (opt parseLoglevel "loglevel" 'L' "Loglevel: debug, info, warning, error")
+
+editParser :: Opts.Completer -> Parser EditOpts
+editParser completer =
+  EditOpts
+    <$> optional (Opts.strArgument $ Opts.metavar "command" <> Opts.help "Command to edit" <> Opts.completer completer)
 
 evalParser :: Parser EvalOpts
 evalParser =
