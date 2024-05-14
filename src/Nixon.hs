@@ -155,7 +155,7 @@ editAction opts = do
   project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
   findCommand <- Backend.commandSelector <$> getBackend
   cmds <- findProjectCommands project
-  cmd <- findCommand project opts.editCommand cmds
+  cmd <- findCommand project "Edit command" opts.editCommand cmds
   case cmd of
     EmptySelection -> die ("No command selected." :: String)
     CanceledSelection -> die ("Command selection canceled." :: String)

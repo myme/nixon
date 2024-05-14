@@ -178,9 +178,9 @@ rofiProjects opts query projects = do
   selection <- rofi opts' (Select.Identity <$> select candidates)
   pure $ Select.catMaybeSelection ((`Map.lookup` map') <$> selection)
 
-rofiProjectCommand :: (MonadIO m) => RofiOpts -> Maybe Text -> [Command] -> m (Selection Command)
-rofiProjectCommand opts query commands = do
+rofiProjectCommand :: (MonadIO m) => RofiOpts -> Text -> Maybe Text -> [Command] -> m (Selection Command)
+rofiProjectCommand opts prompt query commands = do
   let candidates = Select.build_map show_command_with_description commands
-      opts' = opts <> rofiPrompt "Select command" <> maybe mempty rofiQuery query
+      opts' = opts <> rofiPrompt prompt <> maybe mempty rofiQuery query
   selection <- rofi opts' (Select.Identity <$> select (Map.keys candidates))
   pure $ Select.catMaybeSelection ((`Map.lookup` candidates) <$> selection)

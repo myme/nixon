@@ -266,10 +266,10 @@ fzfProjects opts query projects = do
   pure $ Select.catMaybeSelection ((`Map.lookup` candidates) <$> selection)
 
 -- | Find commands applicable to a project
-fzfProjectCommand :: (HasProc m, MonadIO m) => FzfOpts -> Project -> Maybe Text -> [Command] -> m (Selection Command)
-fzfProjectCommand opts project query commands = do
+fzfProjectCommand :: (HasProc m, MonadIO m) => FzfOpts -> Project -> Text -> Maybe Text -> [Command] -> m (Selection Command)
+fzfProjectCommand opts project prompt query commands = do
   let candidates = map (show_command_with_description &&& id) commands
-      header = format ("Select command [" % fp % "] (" % fp % ")") project.projectName project.projectDir
+      header = format (s % " [" % fp % "] (" % fp % ")") prompt project.projectName project.projectDir
       opts' =
         opts
           <> fzfHeader header

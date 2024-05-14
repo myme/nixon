@@ -7,7 +7,8 @@ import Nixon.Select (Selection (), Selector, SelectorOpts)
 
 type ProjectSelector m = SelectorOpts -> Maybe Text -> [Project] -> m (Selection Project)
 
-type CommandSelector m = Project -> Maybe Text -> [Command] -> m (Selection Command)
+-- | Find a command in a project, given a prompt and a query
+type CommandSelector m = Project -> Text -> Maybe Text -> [Command] -> m (Selection Command)
 
 data Backend m = Backend
   { projectSelector :: ProjectSelector m,

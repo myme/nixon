@@ -73,7 +73,7 @@ findAndHandleCmd :: CommandHandler -> Project -> RunOpts -> Nixon ()
 findAndHandleCmd handleCmd project opts = withLocalConfig (project_path project) $ do
   find_command <- Backend.commandSelector <$> getBackend
   cmds <- filter (not . Cmd.cmdIsHidden) <$> findProjectCommands project
-  cmd <- liftIO $ find_command project (Opts.runCommand opts) cmds
+  cmd <- liftIO $ find_command project "Select command" (Opts.runCommand opts) cmds
   handleCmd project cmd opts
 
 findProject :: [Project] -> Select.SelectorOpts -> Maybe Text -> Nixon (Selection Project)
