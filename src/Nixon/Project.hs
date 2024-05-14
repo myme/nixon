@@ -112,30 +112,31 @@ parents path'
   | otherwise = path' : parents (parent path')
 
 -- | Find/filter out a project in which path is a subdirectory.
-find_in_project :: MonadIO m => [ProjectType] -> FilePath -> m (Maybe Project)
+find_in_project :: (MonadIO m) => [ProjectType] -> FilePath -> m (Maybe Project)
 find_in_project ptypes path' =
-  liftIO $
-    find_project ptypes path' >>= \case
+  liftIO
+    $ find_project ptypes path'
+    >>= \case
       Nothing ->
         if parent path' == root path'
           then pure Nothing
           else find_in_project ptypes (parent path')
       project -> pure project
 
-find_in_project_or_default :: MonadIO m => [ProjectType] -> FilePath -> m Project
+find_in_project_or_default :: (MonadIO m) => [ProjectType] -> FilePath -> m Project
 find_in_project_or_default ptypes path' = do
   types <- liftIO $ find_project_types path' ptypes
   let current = (from_path path') {projectTypes = types}
   fromMaybe current <$> find_in_project ptypes path'
 
-find_projects_by_name :: MonadIO m => FilePath -> [ProjectType] -> [FilePath] -> m [Project]
+find_projects_by_name :: (MonadIO m) => FilePath -> [ProjectType] -> [FilePath] -> m [Project]
 find_projects_by_name project ptypes = liftIO . fmap find_matching . find_projects 1 ptypes
   where
     find_matching = filter ((project `isInfix`) . toText . projectName)
     isInfix p = T.isInfixOf (toText p)
     toText = format fp
 
-find_project :: MonadIO m => [ProjectType] -> FilePath -> m (Maybe Project)
+find_project :: (MonadIO m) => [ProjectType] -> FilePath -> m (Maybe Project)
 find_project ptypes source_dir = do
   isdir <- testdir source_dir
   if not isdir
@@ -145,8 +146,8 @@ find_project ptypes source_dir = do
       if all (null . project_markers) types
         then pure Nothing
         else
-          pure $
-            Just
+          pure
+            $ Just
               Project
                 { projectName = filename source_dir,
                   projectDir = parent source_dir,
@@ -157,20 +158,20 @@ find_project ptypes source_dir = do
 --
 -- Filepath expansion is done on each source directory. For each source
 -- directory not a project, look for subdirs being projects.
-find_projects :: MonadIO m => Integer -> [ProjectType] -> [FilePath] -> m [Project]
+find_projects :: (MonadIO m) => Integer -> [ProjectType] -> [FilePath] -> m [Project]
 find_projects max_depth ptypes source_dirs
   | max_depth < 0 = pure []
   | otherwise = reduce Fold.mconcat $ do
-    expanded <- liftIO $ concat <$> traverse expand_path source_dirs
-    candidate <- select expanded
-    guard =<< testdir candidate
-    let project = maybe empty pure <$> liftIO (find_project ptypes candidate)
-        subprojects = do
-          children <- ls candidate
-          liftIO $ find_projects (max_depth - 1) ptypes [children]
-    project <|> subprojects
+      expanded <- liftIO $ concat <$> traverse expand_path source_dirs
+      candidate <- select expanded
+      guard =<< testdir candidate
+      let project = maybe empty pure <$> liftIO (find_project ptypes candidate)
+          subprojects = do
+            children <- ls candidate
+            liftIO $ find_projects (max_depth - 1) ptypes [children]
+      project <|> subprojects
 
-expand_path :: MonadIO m => FilePath -> m [FilePath]
+expand_path :: (MonadIO m) => FilePath -> m [FilePath]
 expand_path path' = do
   expanded <- liftIO $ wordexp nosubst (fromPath path')
   pure $ either (const []) (map fromString) expanded
@@ -179,10 +180,11 @@ sort_projects :: [Project] -> [Project]
 sort_projects = sortBy (compare `on` project_path)
 
 -- | Given a path, find matching markers/project type.
-find_project_types :: MonadIO m => FilePath -> [ProjectType] -> m [ProjectType]
+find_project_types :: (MonadIO m) => FilePath -> [ProjectType] -> m [ProjectType]
 find_project_types path' ptypes =
-  liftIO $
-    testdir path' >>= \case
+  liftIO
+    $ testdir path'
+    >>= \case
       False -> pure []
       True -> filterM has_markers ptypes
   where
@@ -191,7 +193,7 @@ find_project_types path' ptypes =
       xs -> fmap and . traverse (test_marker path') $ xs
 
 -- | Test that a marker is valid for a path
-test_marker :: MonadIO m => FilePath -> ProjectMarker -> m Bool
+test_marker :: (MonadIO m) => FilePath -> ProjectMarker -> m Bool
 test_marker p (ProjectPath marker) = testpath (p </> marker)
 test_marker p (ProjectFile marker) = testfile (p </> marker)
 test_marker p (ProjectDir marker) = testdir (p </> marker)
