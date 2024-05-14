@@ -65,8 +65,8 @@ import Turtle
 fzfBackend :: (HasProc m, MonadIO m) => Config -> Backend m
 fzfBackend cfg =
   let fzf_opts opts =
-        mconcat $
-          catMaybes
+        mconcat
+          $ catMaybes
             [ fzfExact <$> Config.exact_match cfg,
               fzfIgnoreCase <$> Config.ignore_case cfg,
               fzfQuery <$> Select.selector_search opts,
@@ -205,14 +205,14 @@ fzfBuildArgs opts =
           flag "--multi" (_multi opts)
         ]
 
-fzfRaw :: HasProc m => FzfOpts -> Shell Line -> m (Selection Text)
+fzfRaw :: (HasProc m) => FzfOpts -> Shell Line -> m (Selection Text)
 fzfRaw opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
         Nothing ->
-          "-1" :
-          "--ansi" :
-          fzfBuildArgs opts
+          "-1"
+            : "--ansi"
+            : fzfBuildArgs opts
   (code, out) <- second T.lines <$> proc' "fzf" args candidates
   pure $ case code of
     ExitFailure 1 -> EmptySelection
@@ -246,7 +246,7 @@ fzf opts candidates = do
         CanceledSelection -> CanceledSelection
         EmptySelection -> EmptySelection
 
-fzfFormatProjectName :: MonadIO m => Project -> m (Text, Project)
+fzfFormatProjectName :: (MonadIO m) => Project -> m (Text, Project)
 fzfFormatProjectName project = do
   path <- implode_home (project_path project)
   pure (format fp path, project)

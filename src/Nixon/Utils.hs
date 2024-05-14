@@ -51,7 +51,7 @@ quote :: Text -> Text
 quote input = "\"" <> escape input <> "\""
 
 -- | Locate a file going up the filesystem hierarchy
-find_dominating_file :: MonadIO m => FilePath -> FilePath -> m (Maybe FilePath)
+find_dominating_file :: (MonadIO m) => FilePath -> FilePath -> m (Maybe FilePath)
 find_dominating_file path' name = do
   let candidate = path' </> name
       is_root = parent path' == root path'
@@ -69,7 +69,7 @@ printErr :: (MonadIO m) => Text -> m ()
 printErr = liftIO . T.hPutStrLn IO.stderr
 
 -- | Convert a Shell of as to [a]
-shell_to_list :: MonadIO m => Shell a -> m [a]
+shell_to_list :: (MonadIO m) => Shell a -> m [a]
 shell_to_list shell' = Turtle.fold shell' (Fold (flip (:)) [] reverse)
 
 toLines :: Shell Text -> Shell Line
@@ -78,7 +78,7 @@ toLines = ((select . toList . textToLines) =<<)
 takeToSpace :: Text -> Text
 takeToSpace = T.takeWhile (not . isSpace)
 
-filter_elems :: Eq a => [a] -> [(a, [b])] -> [b]
+filter_elems :: (Eq a) => [a] -> [(a, [b])] -> [b]
 filter_elems x xs = concatMap (fromMaybe [] . flip lookup xs) x
 
 fromPath :: FilePath -> IO.FilePath
@@ -98,7 +98,7 @@ fromText =
 #endif
 
 -- | Replace the value of $HOME in a path with "~"
-implode_home :: MonadIO m => FilePath -> m FilePath
+implode_home :: (MonadIO m) => FilePath -> m FilePath
 implode_home path' = do
   home' <- Turtle.home
   pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')

@@ -68,7 +68,7 @@ data SubCommand
   | RunCommand RunOpts
   deriving (Show)
 
-newtype EditOpts = EditOpts { editCommand :: Maybe Text }
+newtype EditOpts = EditOpts {editCommand :: Maybe Text}
   deriving (Show)
 
 data EvalSource = EvalInline Text | EvalFile FilePath
@@ -127,12 +127,18 @@ parser default_config mkcompleter =
   Options
     <$> optional (optPath "config" 'C' (configHelp default_config))
     <*> parseConfig
-    <*> ( EditCommand <$> subcommand "edit" "Edit a command in $EDITOR" (editParser $ mkcompleter Edit)
-            <|> EvalCommand <$> subcommand "eval" "Evaluate expression" evalParser
-            <|> GCCommand <$> subcommand "gc" "Garbage collect cached items" gcParser
-            <|> ProjectCommand <$> subcommand "project" "Project actions" (projectParser mkcompleter)
-            <|> RunCommand <$> subcommand "run" "Run command" (runParser $ mkcompleter Run)
-            <|> RunCommand <$> runParser (mkcompleter Run)
+    <*> ( EditCommand
+            <$> subcommand "edit" "Edit a command in $EDITOR" (editParser $ mkcompleter Edit)
+            <|> EvalCommand
+            <$> subcommand "eval" "Evaluate expression" evalParser
+            <|> GCCommand
+            <$> subcommand "gc" "Garbage collect cached items" gcParser
+            <|> ProjectCommand
+            <$> subcommand "project" "Project actions" (projectParser mkcompleter)
+            <|> RunCommand
+            <$> subcommand "run" "Run command" (runParser $ mkcompleter Run)
+            <|> RunCommand
+            <$> runParser (mkcompleter Run)
         )
   where
     parseBackend =
@@ -174,10 +180,11 @@ editParser completer =
 evalParser :: Parser EvalOpts
 evalParser =
   EvalOpts
-    <$> ( EvalFile <$> optPath "file" 'f' "File to evaluate"
+    <$> ( EvalFile
+            <$> optPath "file" 'f' "File to evaluate"
             <|> EvalInline
-              <$> Opts.strArgument
-                (Opts.metavar "command" <> Opts.help "Command expression")
+            <$> Opts.strArgument
+              (Opts.metavar "command" <> Opts.help "Command expression")
         )
     <*> many
       ( Opts.argument
@@ -197,16 +204,16 @@ projectParser :: (CompletionType -> Opts.Completer) -> Parser ProjectOpts
 projectParser mkcompleter =
   ProjectOpts
     <$> optional
-      ( Opts.strArgument $
-          Opts.metavar "project"
-            <> Opts.help "Project to jump into"
-            <> Opts.completer (mkcompleter Project)
+      ( Opts.strArgument
+          $ Opts.metavar "project"
+          <> Opts.help "Project to jump into"
+          <> Opts.completer (mkcompleter Project)
       )
     <*> optional
-      ( Opts.strArgument $
-          Opts.metavar "command"
-            <> Opts.help "Command to run"
-            <> Opts.completer (mkcompleter Run)
+      ( Opts.strArgument
+          $ Opts.metavar "command"
+          <> Opts.help "Command to run"
+          <> Opts.completer (mkcompleter Run)
       )
     <*> many (Opts.strArgument $ Opts.metavar "args..." <> Opts.help "Arguments to command")
     <*> switch "insert" 'i' "Select a project command and output its source"
@@ -223,7 +230,7 @@ runParser completer =
     <*> switch "select" 's' "Output command selection on stdout"
 
 -- | Read configuration from config file and command line arguments
-parseArgs :: MonadIO m => (CompletionType -> Completer) -> m (Either ConfigError (SubCommand, Config))
+parseArgs :: (MonadIO m) => (CompletionType -> Completer) -> m (Either ConfigError (SubCommand, Config))
 parseArgs mkcompleter = do
   defaultConfig <- implode_home =<< MD.defaultPath
   let completer = Opts.listIOCompleter . completionArgs . mkcompleter
