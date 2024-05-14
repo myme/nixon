@@ -58,7 +58,8 @@ import Turtle.Format (fp)
 
 data PosInfo = PosInfo
   { posName :: FilePath,
-    posLocation :: Maybe M.PosInfo
+    posLocation :: Maybe M.PosInfo,
+    posHeaderLevel :: Int
   }
 
 defaultPath :: (MonadIO m) => m FilePath
@@ -178,7 +179,7 @@ parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 []) (Not
           let pt = getKwargs "type" attrs <> stateProjectTypes st
               isBg = hasArgs "bg" attrs
               isJson = hasArgs "json" attrs
-           in case parseCommand (PosInfo fileName pos) name pt rest of
+           in case parseCommand (PosInfo fileName pos l) name pt rest of
                 (Left err, _) -> Left err
                 (Right p, rest') -> go st (cfg, p <! bg isBg <! json isJson : ps) rest'
       -- Pick up project type along the way
@@ -240,7 +241,8 @@ parseCommand pos name projectTypes (Source lang attrs src : rest) = (cmd, rest)
     loc =
       Cmd.CommandLocation
         { Cmd.cmdFilePath = posName pos,
-          Cmd.cmdLineNr = maybe (-1) M.startLine (posLocation pos)
+          Cmd.cmdLineNr = maybe (-1) M.startLine (posLocation pos),
+          Cmd.cmdLevel = pos.posHeaderLevel
         }
     cmd = do
       (name', args) <- parseCommandName name
