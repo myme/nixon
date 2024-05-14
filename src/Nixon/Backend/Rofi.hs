@@ -25,7 +25,7 @@ import Nixon.Config.Types (Config)
 import qualified Nixon.Config.Types as Config
 import Nixon.Prelude
 import Nixon.Process (arg, arg_fmt, build_args, flag)
-import Nixon.Project (Project (project_dir, project_name))
+import Nixon.Project (Project (projectDir, projectName))
 import Nixon.Select (Candidate, Selection (..), SelectionType (..), withProcessSelection)
 import qualified Nixon.Select as Select
 import Nixon.Utils (implode_home, shell_to_list, toLines, (<<?))
@@ -41,11 +41,11 @@ import Turtle
   )
 import qualified Turtle as Tu
 
-rofiBackend :: MonadIO m => Config -> Backend m
+rofiBackend :: (MonadIO m) => Config -> Backend m
 rofiBackend cfg =
   let rofi_opts opts =
-        mconcat $
-          catMaybes
+        mconcat
+          $ catMaybes
             [ rofiExact <$> Config.exact_match cfg,
               rofiIgnoreCase <$> Config.ignore_case cfg,
               rofiQuery <$> Select.selector_search opts,
@@ -125,19 +125,19 @@ data RofiResult
   deriving (Eq, Show)
 
 -- | Launch rofi with the given options and candidates
-rofi :: MonadIO m => RofiOpts -> Shell Candidate -> m (Selection Text)
+rofi :: (MonadIO m) => RofiOpts -> Shell Candidate -> m (Selection Text)
 rofi opts candidates = do
   let args =
-        "-dmenu" :
-        build_args
-          [ arg_fmt "-matching" (bool "fuzzy" "normal" . fromMaybe False) (_exact opts),
-            flag "-i" =<< _ignore_case opts,
-            flag "-markup-rows" (_markup opts),
-            flag "-multi-select" (_multi opts),
-            arg "-mesg" =<< _msg opts,
-            arg "-p" =<< _prompt opts,
-            arg "-filter" =<< _query opts
-          ]
+        "-dmenu"
+          : build_args
+            [ arg_fmt "-matching" (bool "fuzzy" "normal" . fromMaybe False) (_exact opts),
+              flag "-i" =<< _ignore_case opts,
+              flag "-markup-rows" (_markup opts),
+              flag "-multi-select" (_multi opts),
+              arg "-mesg" =<< _msg opts,
+              arg "-p" =<< _prompt opts,
+              arg "-filter" =<< _query opts
+            ]
 
   map' <- Map.fromList . fmap (Select.candidate_title &&& Select.candidate_value) <$> shell_to_list candidates
   (code, out) <- procStrict "rofi" args (toLines $ select $ Map.keys map')
@@ -155,18 +155,18 @@ rofi opts candidates = do
     mkselection type' sel = Selection type' (catMaybes sel)
 
 -- | Format project names suited to rofi selection list
-rofiFormatProjectName :: MonadIO m => Project -> m Text
+rofiFormatProjectName :: (MonadIO m) => Project -> m Text
 rofiFormatProjectName project = do
-  path <- implode_home (project_dir project)
+  path <- implode_home (projectDir project)
   let pad_width = 30
-      name = format fp (project_name project)
+      name = format fp (projectName project)
       name_padded = name <> T.replicate (pad_width - T.length name) " "
       dir = directory path
       fmt = format (Tu.s % " <i>" % fp % "</i>")
   pure $ fmt name_padded dir
 
 -- | Launch rofi with a list of projects as candidates
-rofiProjects :: MonadIO m => RofiOpts -> Maybe Text -> [Project] -> m (Selection Project)
+rofiProjects :: (MonadIO m) => RofiOpts -> Maybe Text -> [Project] -> m (Selection Project)
 rofiProjects opts query projects = do
   let opts' =
         opts
@@ -178,9 +178,9 @@ rofiProjects opts query projects = do
   selection <- rofi opts' (Select.Identity <$> select candidates)
   pure $ Select.catMaybeSelection ((`Map.lookup` map') <$> selection)
 
-rofiProjectCommand :: MonadIO m => RofiOpts -> Maybe Text -> [Command] -> m (Selection Command)
-rofiProjectCommand opts query commands = do
+rofiProjectCommand :: (MonadIO m) => RofiOpts -> Text -> Maybe Text -> [Command] -> m (Selection Command)
+rofiProjectCommand opts prompt query commands = do
   let candidates = Select.build_map show_command_with_description commands
-      opts' = opts <> rofiPrompt "Select command" <> maybe mempty rofiQuery query
+      opts' = opts <> rofiPrompt prompt <> maybe mempty rofiQuery query
   selection <- rofi opts' (Select.Identity <$> select (Map.keys candidates))
   pure $ Select.catMaybeSelection ((`Map.lookup` candidates) <$> selection)

@@ -14,22 +14,27 @@ module Nixon.Utils
     filter_elems,
     implode_home,
     (<<?),
+    openEditor,
+    confirm,
   )
 where
 
+import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.Bool (bool)
 import Data.Char (isSpace)
-import Data.List.NonEmpty (toList)
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.List.NonEmpty (NonEmpty ((:|)), toList)
+import Data.Maybe (fromMaybe, listToMaybe, maybeToList)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Nixon.Prelude
+import Nixon.Process (run)
+import System.IO (hFlush, stdout)
 import qualified System.IO as IO
-import qualified Turtle
 import Turtle
   ( Fold (Fold),
     Line,
     Shell,
+    empty,
     parent,
     root,
     select,
@@ -39,6 +44,9 @@ import Turtle
     textToLines,
     (</>),
   )
+import qualified Turtle
+import Turtle.Format (d, format, fp, (%))
+import Turtle.Prelude (need)
 
 escape :: Text -> Text
 escape = T.concatMap convert
@@ -51,7 +59,7 @@ quote :: Text -> Text
 quote input = "\"" <> escape input <> "\""
 
 -- | Locate a file going up the filesystem hierarchy
-find_dominating_file :: MonadIO m => FilePath -> FilePath -> m (Maybe FilePath)
+find_dominating_file :: (MonadIO m) => FilePath -> FilePath -> m (Maybe FilePath)
 find_dominating_file path' name = do
   let candidate = path' </> name
       is_root = parent path' == root path'
@@ -69,7 +77,7 @@ printErr :: (MonadIO m) => Text -> m ()
 printErr = liftIO . T.hPutStrLn IO.stderr
 
 -- | Convert a Shell of as to [a]
-shell_to_list :: MonadIO m => Shell a -> m [a]
+shell_to_list :: (MonadIO m) => Shell a -> m [a]
 shell_to_list shell' = Turtle.fold shell' (Fold (flip (:)) [] reverse)
 
 toLines :: Shell Text -> Shell Line
@@ -78,7 +86,7 @@ toLines = ((select . toList . textToLines) =<<)
 takeToSpace :: Text -> Text
 takeToSpace = T.takeWhile (not . isSpace)
 
-filter_elems :: Eq a => [a] -> [(a, [b])] -> [b]
+filter_elems :: (Eq a) => [a] -> [(a, [b])] -> [b]
 filter_elems x xs = concatMap (fromMaybe [] . flip lookup xs) x
 
 fromPath :: FilePath -> IO.FilePath
@@ -98,7 +106,7 @@ fromText =
 #endif
 
 -- | Replace the value of $HOME in a path with "~"
-implode_home :: MonadIO m => FilePath -> m FilePath
+implode_home :: (MonadIO m) => FilePath -> m FilePath
 implode_home path' = do
   home' <- Turtle.home
   pure $ maybe path' ("~" </>) (stripPrefix (home' </> "") path')
@@ -108,3 +116,22 @@ implode_home path' = do
 (<<?) x f = bool Nothing (Just x) =<< f
 
 infixr 1 <<?
+
+-- | Confirm a prompt on stdin
+confirm :: (MonadIO m) => Text -> m Bool
+confirm prompt = liftIO $ do
+  T.putStr prompt
+  hFlush stdout
+  line <- T.getLine
+  pure $ T.strip line `elem` ["y", "Y"]
+
+-- | Open a file in an editor at the given line
+openEditor :: (MonadIO m) => FilePath -> Maybe Int -> m ()
+openEditor path lineNr = do
+  let args = [format ("+" % d) l | l <- maybeToList lineNr] <> [format fp path]
+  editor <-
+    fromMaybe "nano"
+      <$> runMaybeT
+        ( MaybeT (need "VISUAL") <|> MaybeT (need "EDITOR")
+        )
+  run (editor :| args) Nothing [] empty

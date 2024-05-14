@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Nixon.Backend.Fzf
   ( FzfOpts,
     FieldIndex (..),
@@ -36,7 +38,7 @@ import qualified Nixon.Config.Types as Config
 import Nixon.Prelude hiding (filter)
 import Nixon.Process (HasProc (..), arg, build_args, flag)
 import Nixon.Project
-  ( Project (project_dir, project_name),
+  ( Project (projectDir, projectName),
     project_path,
   )
 import Nixon.Select (Candidate, Selection (..), SelectionType (..), withProcessSelection)
@@ -63,8 +65,8 @@ import Turtle
 fzfBackend :: (HasProc m, MonadIO m) => Config -> Backend m
 fzfBackend cfg =
   let fzf_opts opts =
-        mconcat $
-          catMaybes
+        mconcat
+          $ catMaybes
             [ fzfExact <$> Config.exact_match cfg,
               fzfIgnoreCase <$> Config.ignore_case cfg,
               fzfQuery <$> Select.selector_search opts,
@@ -203,14 +205,14 @@ fzfBuildArgs opts =
           flag "--multi" (_multi opts)
         ]
 
-fzfRaw :: HasProc m => FzfOpts -> Shell Line -> m (Selection Text)
+fzfRaw :: (HasProc m) => FzfOpts -> Shell Line -> m (Selection Text)
 fzfRaw opts candidates = do
   let args = case _filter opts of
         Just filter -> ["--filter", filter]
         Nothing ->
-          "-1" :
-          "--ansi" :
-          fzfBuildArgs opts
+          "-1"
+            : "--ansi"
+            : fzfBuildArgs opts
   (code, out) <- second T.lines <$> proc' "fzf" args candidates
   pure $ case code of
     ExitFailure 1 -> EmptySelection
@@ -244,7 +246,7 @@ fzf opts candidates = do
         CanceledSelection -> CanceledSelection
         EmptySelection -> EmptySelection
 
-fzfFormatProjectName :: MonadIO m => Project -> m (Text, Project)
+fzfFormatProjectName :: (MonadIO m) => Project -> m (Text, Project)
 fzfFormatProjectName project = do
   path <- implode_home (project_path project)
   pure (format fp path, project)
@@ -264,10 +266,10 @@ fzfProjects opts query projects = do
   pure $ Select.catMaybeSelection ((`Map.lookup` candidates) <$> selection)
 
 -- | Find commands applicable to a project
-fzfProjectCommand :: (HasProc m, MonadIO m) => FzfOpts -> Project -> Maybe Text -> [Command] -> m (Selection Command)
-fzfProjectCommand opts project query commands = do
+fzfProjectCommand :: (HasProc m, MonadIO m) => FzfOpts -> Project -> Text -> Maybe Text -> [Command] -> m (Selection Command)
+fzfProjectCommand opts project prompt query commands = do
   let candidates = map (show_command_with_description &&& id) commands
-      header = format ("Select command [" % fp % "] (" % fp % ")") (project_name project) (project_dir project)
+      header = format (s % " [" % fp % "] (" % fp % ")") prompt project.projectName project.projectDir
       opts' =
         opts
           <> fzfHeader header

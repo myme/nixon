@@ -24,6 +24,7 @@ ghcid --target=nixon --run=":! ghcid --target=nixon-test --run"
 Start a local Hoogle server
 
 ```bash
+echo "Starting server on http://localhost:8080"
 hoogle server --local
 ```
 

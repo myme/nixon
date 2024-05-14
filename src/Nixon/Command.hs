@@ -40,7 +40,9 @@ data Command = Command
 
 data CommandLocation = CommandLocation
   { cmdFilePath :: FilePath,
-    cmdLineNr :: Int
+    cmdStartLine :: Int,
+    cmdEndLine :: Int,
+    cmdLevel :: Int
   }
   deriving (Eq, Show)
 

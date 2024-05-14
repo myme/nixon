@@ -7,15 +7,18 @@ module Nixon.Config.Options
     LogLevel (..),
     Options (..),
     SubCommand (..),
+    EditOpts (..),
     EvalOpts (..),
     EvalSource (..),
     GCOpts (..),
+    NewOpts (..),
     ProjectOpts (..),
     RunOpts (..),
     parseArgs,
   )
 where
 
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
 import Nixon.Command.Placeholder (Placeholder)
 import Nixon.Config (readConfig)
@@ -49,7 +52,7 @@ import Turtle
 
 type Completer = [String] -> IO [String]
 
-data CompletionType = Eval | Project | Run
+data CompletionType = Edit | Eval | Project | Run
 
 -- | Command line options.
 data Options = Options
@@ -60,10 +63,15 @@ data Options = Options
   deriving (Show)
 
 data SubCommand
-  = EvalCommand EvalOpts
+  = EditCommand EditOpts
+  | EvalCommand EvalOpts
   | GCCommand GCOpts
+  | NewCommand NewOpts
   | ProjectCommand ProjectOpts
   | RunCommand RunOpts
+  deriving (Show)
+
+newtype EditOpts = EditOpts {editCommand :: Maybe Text}
   deriving (Show)
 
 data EvalSource = EvalInline Text | EvalFile FilePath
@@ -79,6 +87,14 @@ data EvalOpts = EvalOpts
 
 newtype GCOpts = GCOpts
   { gcDryRun :: Bool
+  }
+  deriving (Show)
+
+data NewOpts = NewOpts
+  { name :: Text,
+    description :: Text,
+    language :: Lang.Language,
+    source :: Text
   }
   deriving (Show)
 
@@ -122,11 +138,20 @@ parser default_config mkcompleter =
   Options
     <$> optional (optPath "config" 'C' (configHelp default_config))
     <*> parseConfig
-    <*> ( EvalCommand <$> subcommand "eval" "Evaluate expression" evalParser
-            <|> GCCommand <$> subcommand "gc" "Garbage collect cached items" gcParser
-            <|> ProjectCommand <$> subcommand "project" "Project actions" (projectParser mkcompleter)
-            <|> RunCommand <$> subcommand "run" "Run command" (runParser $ mkcompleter Run)
-            <|> RunCommand <$> runParser (mkcompleter Run)
+    <*> ( EditCommand
+            <$> subcommand "edit" "Edit a command in $EDITOR" (editParser $ mkcompleter Edit)
+            <|> EvalCommand
+            <$> subcommand "eval" "Evaluate expression" evalParser
+            <|> GCCommand
+            <$> subcommand "gc" "Garbage collect cached items" gcParser
+            <|> NewCommand
+            <$> subcommand "new" "Create a new command" newParser
+            <|> ProjectCommand
+            <$> subcommand "project" "Project actions" (projectParser mkcompleter)
+            <|> RunCommand
+            <$> subcommand "run" "Run command" (runParser $ mkcompleter Run)
+            <|> RunCommand
+            <$> runParser (mkcompleter Run)
         )
   where
     parseBackend =
@@ -160,13 +185,19 @@ parser default_config mkcompleter =
         <*> optional (optText "terminal" 't' "Terminal emultor for non-GUI commands")
         <*> optional (opt parseLoglevel "loglevel" 'L' "Loglevel: debug, info, warning, error")
 
+editParser :: Opts.Completer -> Parser EditOpts
+editParser completer =
+  EditOpts
+    <$> optional (Opts.strArgument $ Opts.metavar "command" <> Opts.help "Command to edit" <> Opts.completer completer)
+
 evalParser :: Parser EvalOpts
 evalParser =
   EvalOpts
-    <$> ( EvalFile <$> optPath "file" 'f' "File to evaluate"
+    <$> ( EvalFile
+            <$> optPath "file" 'f' "File to evaluate"
             <|> EvalInline
-              <$> Opts.strArgument
-                (Opts.metavar "command" <> Opts.help "Command expression")
+            <$> Opts.strArgument
+              (Opts.metavar "command" <> Opts.help "Command expression")
         )
     <*> many
       ( Opts.argument
@@ -175,27 +206,36 @@ evalParser =
       )
     <*> optional (opt parseLang "language" 'l' "Language: bash, JavaScript, Haskell, ...")
     <*> switch "project" 'p' "Select project"
-  where
-    parseLang = Just . Lang.parseLang
 
 gcParser :: Parser GCOpts
 gcParser =
   GCOpts <$> switch "dry-run" 'd' "Dry-run, print file paths without deleting"
 
+newParser :: Parser NewOpts
+newParser =
+  NewOpts
+    <$> (fromMaybe "<name>" <$> optional (optText "name" 'n' "Command name"))
+    <*> (fromMaybe "Description…" <$> optional (optText "desc" 'd' "Command description"))
+    <*> (fromMaybe Lang.Bash <$> optional (opt parseLang "lang" 'l' "Language: bash, JavaScript, Haskell, ..."))
+    <*> (fromMaybe "" <$> optional (optText "src" 's' "Command source code"))
+
+parseLang :: Text -> Maybe Lang.Language
+parseLang = Just . Lang.parseLang
+
 projectParser :: (CompletionType -> Opts.Completer) -> Parser ProjectOpts
 projectParser mkcompleter =
   ProjectOpts
     <$> optional
-      ( Opts.strArgument $
-          Opts.metavar "project"
-            <> Opts.help "Project to jump into"
-            <> Opts.completer (mkcompleter Project)
+      ( Opts.strArgument
+          $ Opts.metavar "project"
+          <> Opts.help "Project to jump into"
+          <> Opts.completer (mkcompleter Project)
       )
     <*> optional
-      ( Opts.strArgument $
-          Opts.metavar "command"
-            <> Opts.help "Command to run"
-            <> Opts.completer (mkcompleter Run)
+      ( Opts.strArgument
+          $ Opts.metavar "command"
+          <> Opts.help "Command to run"
+          <> Opts.completer (mkcompleter Run)
       )
     <*> many (Opts.strArgument $ Opts.metavar "args..." <> Opts.help "Arguments to command")
     <*> switch "insert" 'i' "Select a project command and output its source"
@@ -212,7 +252,7 @@ runParser completer =
     <*> switch "select" 's' "Output command selection on stdout"
 
 -- | Read configuration from config file and command line arguments
-parseArgs :: MonadIO m => (CompletionType -> Completer) -> m (Either ConfigError (SubCommand, Config))
+parseArgs :: (MonadIO m) => (CompletionType -> Completer) -> m (Either ConfigError (SubCommand, Config))
 parseArgs mkcompleter = do
   defaultConfig <- implode_home =<< MD.defaultPath
   let completer = Opts.listIOCompleter . completionArgs . mkcompleter

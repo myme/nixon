@@ -39,17 +39,18 @@ fzfTests = do
           configA <> (configB <> configC) `shouldBe` (configA <> configB) <> configC
 
         describe "fzfBorder" $ do
-          it "respects identity" $
-            monoid_law $
-              const Fzf.fzfBorder
+          it "respects identity"
+            $ monoid_law
+            $ const Fzf.fzfBorder
 
-          it "includes --border" $
-            Fzf.fzfBuildArgs Fzf.fzfBorder `shouldBe` ["--border"]
+          it "includes --border"
+            $ Fzf.fzfBuildArgs Fzf.fzfBorder
+            `shouldBe` ["--border"]
 
         describe "fzf_exact" $ do
-          it "respects identity" $
-            property $
-              monoid_law Fzf.fzfExact
+          it "respects identity"
+            $ property
+            $ monoid_law Fzf.fzfExact
 
           it "`False` excludes --exact" $ do
             Fzf.fzfBuildArgs (Fzf.fzfExact False) `shouldBe` []
@@ -58,9 +59,9 @@ fzfTests = do
             Fzf.fzfBuildArgs (Fzf.fzfExact True) `shouldBe` ["--exact"]
 
         describe "fzf_ignore_case" $ do
-          it "respects identity" $
-            property $
-              monoid_law Fzf.fzfIgnoreCase
+          it "respects identity"
+            $ property
+            $ monoid_law Fzf.fzfIgnoreCase
 
           it "`False` excludes -i" $ do
             Fzf.fzfBuildArgs (Fzf.fzfIgnoreCase False) `shouldBe` []
@@ -69,9 +70,9 @@ fzfTests = do
             Fzf.fzfBuildArgs (Fzf.fzfIgnoreCase True) `shouldBe` ["-i"]
 
         describe "fzfHeader" $ do
-          it "respects identity" $
-            property $
-              monoid_law (Fzf.fzfHeader . T.pack)
+          it "respects identity"
+            $ property
+            $ monoid_law (Fzf.fzfHeader . T.pack)
 
           it "sets --header" $ do
             Fzf.fzfBuildArgs (Fzf.fzfHeader "<header>") `shouldBe` ["--header", "<header>"]
@@ -80,58 +81,62 @@ fzfTests = do
             Fzf.fzfBuildArgs (Fzf.fzfHeight 100) `shouldBe` ["--height", "100%"]
 
         describe "fzf_query" $ do
-          it "respects identity" $
-            property $
-              monoid_law (Fzf.fzfQuery . T.pack)
+          it "respects identity"
+            $ property
+            $ monoid_law (Fzf.fzfQuery . T.pack)
 
           it "sets --query" $ do
             Fzf.fzfBuildArgs (Fzf.fzfQuery "<query>") `shouldBe` ["--query", "<query>"]
 
         describe "fzf_filter" $ do
-          it "respects identity" $
-            property $
-              monoid_law (Fzf.fzfFilter . T.pack)
+          it "respects identity"
+            $ property
+            $ monoid_law (Fzf.fzfFilter . T.pack)
 
           it "sets --filter" $ do
             Fzf.fzfBuildArgs (Fzf.fzfFilter "<filter>") `shouldBe` ["--filter", "<filter>"]
 
         describe "fzf_preview" $ do
-          it "respects identity" $
-            property $
-              monoid_law (Fzf.fzfPreview . T.pack)
+          it "respects identity"
+            $ property
+            $ monoid_law (Fzf.fzfPreview . T.pack)
 
           it "sets --preview" $ do
             Fzf.fzfBuildArgs (Fzf.fzfPreview "<preview>") `shouldBe` ["--preview", "<preview>"]
 
         describe "fzf_with_nth" $ do
-          it "respects identity" $
-            let gen =
-                  oneof
-                    [ chooseAny <&> Fzf.FieldIndex,
-                      chooseAny <&> Fzf.FieldTo,
-                      chooseAny <&> Fzf.FieldFrom,
-                      chooseAny <&> uncurry Fzf.FieldRange,
-                      pure Fzf.AllFields
-                    ]
-             in property $ forAll gen $ monoid_law Fzf.fzfWithNth
+          it "respects identity"
+            $ let gen =
+                    oneof
+                      [ chooseAny <&> Fzf.FieldIndex,
+                        chooseAny <&> Fzf.FieldTo,
+                        chooseAny <&> Fzf.FieldFrom,
+                        chooseAny <&> uncurry Fzf.FieldRange,
+                        pure Fzf.AllFields
+                      ]
+               in property $ forAll gen $ monoid_law Fzf.fzfWithNth
 
-          it "FieldIndex builds field" $
-            property $ \x ->
+          it "FieldIndex builds field"
+            $ property
+            $ \x ->
               Fzf.fzfBuildArgs (Fzf.fzfWithNth $ Fzf.FieldIndex x)
                 `shouldBe` ["--with-nth", format d x]
 
-          it "FieldTo builds field" $
-            property $ \x ->
+          it "FieldTo builds field"
+            $ property
+            $ \x ->
               Fzf.fzfBuildArgs (Fzf.fzfWithNth $ Fzf.FieldTo x)
                 `shouldBe` ["--with-nth", format (".." % d) x]
 
-          it "FieldFrom builds field" $
-            property $ \x ->
+          it "FieldFrom builds field"
+            $ property
+            $ \x ->
               Fzf.fzfBuildArgs (Fzf.fzfWithNth $ Fzf.FieldFrom x)
                 `shouldBe` ["--with-nth", format (d % "..") x]
 
-          it "FieldRange builds ranges" $
-            property $ \(x, y) ->
+          it "FieldRange builds ranges"
+            $ property
+            $ \(x, y) ->
               Fzf.fzfBuildArgs (Fzf.fzfWithNth $ Fzf.FieldRange x y)
                 `shouldBe` ["--with-nth", format (d % ".." % d) x y]
 
@@ -147,9 +152,9 @@ fzfTests = do
           selectOpts = Select.defaults
 
       result <-
-        runProc (ExitSuccess, "1\n3") $
-          Select.runSelect selector $
-            Select.select selectOpts (select candidates)
+        runProc (ExitSuccess, "1\n3")
+          $ Select.runSelect selector
+          $ Select.select selectOpts (select candidates)
 
       result `shouldBe` Selection Default ["one two three", "seven eight nine"]
 
@@ -159,9 +164,9 @@ fzfTests = do
           selectOpts = Select.defaults {Select.selector_fields = [1, 3]}
 
       result <-
-        runProc (ExitSuccess, "1") $
-          Select.runSelect selector $
-            Select.select selectOpts (select candidates)
+        runProc (ExitSuccess, "1")
+          $ Select.runSelect selector
+          $ Select.select selectOpts (select candidates)
 
       result `shouldBe` Selection Default ["one three"]
 
@@ -239,10 +244,10 @@ fzfTests = do
 
         describe "fzfPojectCommand" $ do
           it "finds project command with default selection" $ do
-            result <- runProc (ExitSuccess, "\n1") $ Fzf.fzfProjectCommand mempty project1 mempty commands
+            result <- runProc (ExitSuccess, "\n1") $ Fzf.fzfProjectCommand mempty project1 "prompt" mempty commands
             result `shouldBe` Selection Default [command1]
 
           it "finds project command with edit selection" $ do
-            result <- runProc (ExitSuccess, "alt-enter\n1") $ Fzf.fzfProjectCommand mempty project1 mempty commands
+            result <- runProc (ExitSuccess, "alt-enter\n1") $ Fzf.fzfProjectCommand mempty project1 "prompt" mempty commands
             result `shouldBe` Selection Edit [command1]
     )
