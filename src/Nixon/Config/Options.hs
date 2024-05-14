@@ -213,8 +213,10 @@ gcParser =
 
 newParser :: Parser NewOpts
 newParser =
-  NewOpts
-    <$> (fromMaybe "<name>" <$> optional (optText "name" 'n' "Command name"))
+  ( NewOpts
+      . fromMaybe "<name>"
+      <$> optional (optText "name" 'n' "Command name")
+  )
     <*> (fromMaybe "Description…" <$> optional (optText "desc" 'd' "Command description"))
     <*> (fromMaybe Lang.Bash <$> optional (opt parseLang "lang" 'l' "Language: bash, JavaScript, Haskell, ..."))
     <*> (fromMaybe "" <$> optional (optText "src" 's' "Command source code"))
