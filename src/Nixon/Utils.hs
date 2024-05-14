@@ -14,22 +14,27 @@ module Nixon.Utils
     filter_elems,
     implode_home,
     (<<?),
+    openEditor,
+    confirm,
   )
 where
 
+import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.Bool (bool)
 import Data.Char (isSpace)
-import Data.List.NonEmpty (toList)
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.List.NonEmpty (NonEmpty ((:|)), toList)
+import Data.Maybe (fromMaybe, listToMaybe, maybeToList)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Nixon.Prelude
+import Nixon.Process (run)
+import System.IO (hFlush, stdout)
 import qualified System.IO as IO
-import qualified Turtle
 import Turtle
   ( Fold (Fold),
     Line,
     Shell,
+    empty,
     parent,
     root,
     select,
@@ -39,6 +44,9 @@ import Turtle
     textToLines,
     (</>),
   )
+import qualified Turtle
+import Turtle.Format (d, format, fp, (%))
+import Turtle.Prelude (need)
 
 escape :: Text -> Text
 escape = T.concatMap convert
@@ -108,3 +116,22 @@ implode_home path' = do
 (<<?) x f = bool Nothing (Just x) =<< f
 
 infixr 1 <<?
+
+-- | Confirm a prompt on stdin
+confirm :: (MonadIO m) => Text -> m Bool
+confirm prompt = liftIO $ do
+  T.putStr prompt
+  hFlush stdout
+  line <- T.getLine
+  pure $ T.strip line `elem` ["y", "Y"]
+
+-- | Open a file in an editor at the given line
+openEditor :: (MonadIO m) => FilePath -> Maybe Int -> m ()
+openEditor path lineNr = do
+  let args = [format ("+" % d) l | l <- maybeToList lineNr] <> [format fp path]
+  editor <-
+    fromMaybe "nano"
+      <$> runMaybeT
+        ( MaybeT (need "VISUAL") <|> MaybeT (need "EDITOR")
+        )
+  run (editor :| args) Nothing [] empty

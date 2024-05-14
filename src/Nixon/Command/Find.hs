@@ -1,5 +1,14 @@
 -- | Functions for command discovery
-module Nixon.Command.Find where
+module Nixon.Command.Find
+  ( findCmd,
+    findAndHandleCmd,
+    findProject,
+    findBinCommands,
+    findProjectCommands,
+    getBackend,
+    withLocalConfig,
+  )
+where
 
 import Control.Monad.Trans.Reader (ask, local)
 import Data.Function (on)
@@ -68,12 +77,22 @@ findBinCommands project = do
 
 type CommandHandler = Project -> Selection Command -> RunOpts -> Nixon ()
 
+-- | Find a command using select
+findCmd :: Text -> Maybe Text -> Nixon (Selection Command)
+findCmd prompt query = do
+  ptypes <- project_types . config <$> ask
+  project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
+  withLocalConfig (project_path project) $ do
+    findCommand <- Backend.commandSelector <$> getBackend
+    cmds <- findProjectCommands project
+    findCommand project prompt query cmds
+
 -- | Find and handle a command in a project.
 findAndHandleCmd :: CommandHandler -> Project -> RunOpts -> Nixon ()
 findAndHandleCmd handleCmd project opts = withLocalConfig (project_path project) $ do
-  find_command <- Backend.commandSelector <$> getBackend
+  findCommand <- Backend.commandSelector <$> getBackend
   cmds <- filter (not . Cmd.cmdIsHidden) <$> findProjectCommands project
-  cmd <- liftIO $ find_command project "Select command" (Opts.runCommand opts) cmds
+  cmd <- liftIO $ findCommand project "Select command" (Opts.runCommand opts) cmds
   handleCmd project cmd opts
 
 findProject :: [Project] -> Select.SelectorOpts -> Maybe Text -> Nixon (Selection Project)
@@ -98,7 +117,7 @@ getBackend = do
 
 -- | Attempt to parse a local JSON
 withLocalConfig :: FilePath -> Nixon a -> Nixon a
-withLocalConfig filepath action = do
+withLocalConfig filepath action =
   liftIO (Config.findLocalConfig filepath) >>= \case
     Nothing -> action
     Just cfg -> local (\env -> env {config = config env <> cfg}) action

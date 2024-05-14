@@ -8,7 +8,6 @@ where
 
 import Control.Exception (throwIO, try)
 import Control.Monad.Catch (MonadMask)
-import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Reader (ask)
 import Data.Foldable (find)
 import Data.Functor (void)
@@ -24,9 +23,9 @@ import Nixon.Backend.Fzf
   )
 import Nixon.Command (Command (..), show_command_with_description)
 import qualified Nixon.Command as Cmd
-import Nixon.Command.Find (findAndHandleCmd, findProject, findProjectCommands, getBackend, withLocalConfig)
+import Nixon.Command.Find (findAndHandleCmd, findProject, findProjectCommands, getBackend, withLocalConfig, findCmd)
 import qualified Nixon.Command.Run as Cmd
-import Nixon.Config.Options (CompletionType, EditOpts (..), EvalOpts (..), EvalSource (..), GCOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
+import Nixon.Config.Options (CompletionType, EditOpts (..), EvalOpts (..), EvalSource (..), GCOpts (..), NewOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
 import qualified Nixon.Config.Types as Config
 import Nixon.Evaluator (garbageCollect)
@@ -45,24 +44,10 @@ import Nixon.Types
     NixonError (EmptyError, NixonError),
     runNixon,
   )
-import Nixon.Utils (fromPath, implode_home)
+import Nixon.Utils (confirm, fromPath, implode_home, openEditor)
 import System.Console.Haskeline (defaultSettings, getInputLineWithInitial, runInputT)
 import System.Environment (withArgs)
-import Turtle
-  ( Alternative (empty),
-    ExitCode (ExitFailure),
-    d,
-    exit,
-    format,
-    fp,
-    need,
-    printf,
-    pwd,
-    s,
-    select,
-    w,
-    (%),
-  )
+import Turtle (Alternative (empty), ExitCode (ExitFailure), exit, format, fp, mktempfile, printf, pwd, s, select, sh, w, (%))
 
 -- | List projects, filtering if a query is specified.
 listProjects :: [Project] -> Maybe Text -> Nixon ()
@@ -127,17 +112,7 @@ visitCmd :: Command -> Nixon ()
 visitCmd cmd =
   case Cmd.cmdLocation cmd of
     Nothing -> fail $ NixonError "Unable to find command location."
-    Just loc -> do
-      let args =
-            [ format ("+" % d) $ Cmd.cmdStartLine loc,
-              format fp $ Cmd.cmdFilePath loc
-            ]
-      editor <-
-        fromMaybe "nano"
-          <$> runMaybeT
-            ( MaybeT (need "VISUAL") <|> MaybeT (need "EDITOR")
-            )
-      run (editor :| args) Nothing [] empty
+    Just loc -> openEditor loc.cmdFilePath (Just loc.cmdStartLine)
 
 -- | Use readline to manipulate/change a fzf selection
 editSelection :: (MonadIO m, MonadMask m) => Text -> m (Maybe Text)
@@ -151,11 +126,7 @@ editSelection selection = runInputT defaultSettings $ do
 editAction :: EditOpts -> Nixon ()
 editAction opts = do
   log_info "Running <edit> command"
-  ptypes <- project_types . config <$> ask
-  project <- liftIO (P.find_in_project_or_default ptypes =<< pwd)
-  findCommand <- Backend.commandSelector <$> getBackend
-  cmds <- findProjectCommands project
-  cmd <- findCommand project "Edit command" opts.editCommand cmds
+  cmd <- findCmd "Edit command" opts.editCommand
   case cmd of
     EmptySelection -> die ("No command selected." :: String)
     CanceledSelection -> die ("Command selection canceled." :: String)
@@ -202,6 +173,46 @@ gcAction :: GCOpts -> Nixon ()
 gcAction gcOpts = do
   files <- garbageCollect (gcDryRun gcOpts)
   void . liftIO . for files $ T.putStrLn
+
+-- | Create a new command and insert into project file
+newAction :: NewOpts -> Nixon ()
+newAction opts =
+  findCmd "Insert after" Nothing >>= \case
+    EmptySelection -> die ("No command selected." :: String)
+    CanceledSelection -> die ("Command selection canceled." :: String)
+    Selection _ [cmd'] -> do
+      case cmd'.cmdLocation of
+        Nothing -> die ("Unable to find command location." :: String)
+        Just loc -> sh $ do
+          tmpPath <- mktempfile "/tmp" "nixon.md"
+          liftIO $ do
+            contents <- T.readFile loc.cmdFilePath
+            let (before, after) = splitAt loc.cmdEndLine (T.lines contents)
+                template =
+                  T.unlines
+                    [ format (s % " `" % s % "`") (T.replicate loc.cmdLevel "#") opts.name,
+                      "",
+                      opts.description,
+                      "",
+                      format ("```" % w) opts.language,
+                      opts.source,
+                      "```"
+                    ]
+            T.writeFile tmpPath $ T.unlines $ before <> [template] <> after
+          -- Edit the command
+          openEditor tmpPath (Just $ loc.cmdEndLine + 1)
+          -- Diff the end result
+          run ("diff" :| (T.pack <$> ["-u", "--color=always", loc.cmdFilePath, tmpPath])) Nothing [] empty
+          -- Prompt to confirm updating the nixon.md file
+          answer <- confirm $ format ("Update " % fp % "? [y/N] ") loc.cmdFilePath
+          -- Update the nixon.md file
+          liftIO
+            $ if answer
+              then do
+                log_info $ format ("Updating " % fp % "…") loc.cmdFilePath
+                T.writeFile loc.cmdFilePath =<< T.readFile tmpPath
+              else log_info "Update canceled."
+    _ -> die ("Multiple commands selected." :: String)
 
 -- | Find/filter out a project and perform an action.
 projectAction :: [Project] -> ProjectOpts -> Nixon ()
@@ -268,6 +279,9 @@ nixonWithConfig userConfig = liftIO $ do
         GCCommand gcOpts -> do
           log_info "Running <gc> command"
           gcAction gcOpts
+        NewCommand newOpts -> do
+          log_info "Running <new> command"
+          newAction newOpts
         ProjectCommand projectOpts -> do
           log_info "Running <project> command"
           projectAction projects projectOpts

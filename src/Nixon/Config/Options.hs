@@ -11,12 +11,14 @@ module Nixon.Config.Options
     EvalOpts (..),
     EvalSource (..),
     GCOpts (..),
+    NewOpts (..),
     ProjectOpts (..),
     RunOpts (..),
     parseArgs,
   )
 where
 
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
 import Nixon.Command.Placeholder (Placeholder)
 import Nixon.Config (readConfig)
@@ -64,6 +66,7 @@ data SubCommand
   = EditCommand EditOpts
   | EvalCommand EvalOpts
   | GCCommand GCOpts
+  | NewCommand NewOpts
   | ProjectCommand ProjectOpts
   | RunCommand RunOpts
   deriving (Show)
@@ -84,6 +87,14 @@ data EvalOpts = EvalOpts
 
 newtype GCOpts = GCOpts
   { gcDryRun :: Bool
+  }
+  deriving (Show)
+
+data NewOpts = NewOpts
+  { name :: Text,
+    description :: Text,
+    language :: Lang.Language,
+    source :: Text
   }
   deriving (Show)
 
@@ -133,6 +144,8 @@ parser default_config mkcompleter =
             <$> subcommand "eval" "Evaluate expression" evalParser
             <|> GCCommand
             <$> subcommand "gc" "Garbage collect cached items" gcParser
+            <|> NewCommand
+            <$> subcommand "new" "Create a new command" newParser
             <|> ProjectCommand
             <$> subcommand "project" "Project actions" (projectParser mkcompleter)
             <|> RunCommand
@@ -193,12 +206,21 @@ evalParser =
       )
     <*> optional (opt parseLang "language" 'l' "Language: bash, JavaScript, Haskell, ...")
     <*> switch "project" 'p' "Select project"
-  where
-    parseLang = Just . Lang.parseLang
 
 gcParser :: Parser GCOpts
 gcParser =
   GCOpts <$> switch "dry-run" 'd' "Dry-run, print file paths without deleting"
+
+newParser :: Parser NewOpts
+newParser =
+  NewOpts
+    <$> (fromMaybe "<name>" <$> optional (optText "name" 'n' "Command name"))
+    <*> (fromMaybe "Description…" <$> optional (optText "desc" 'd' "Command description"))
+    <*> (fromMaybe Lang.Bash <$> optional (opt parseLang "lang" 'l' "Language: bash, JavaScript, Haskell, ..."))
+    <*> (fromMaybe "" <$> optional (optText "src" 's' "Command source code"))
+
+parseLang :: Text -> Maybe Lang.Language
+parseLang = Just . Lang.parseLang
 
 projectParser :: (CompletionType -> Opts.Completer) -> Parser ProjectOpts
 projectParser mkcompleter =
