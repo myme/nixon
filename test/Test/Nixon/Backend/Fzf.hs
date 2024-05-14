@@ -234,7 +234,7 @@ fzfTests = do
           it "finds projects" $ do
             let project1 = Project "test-project" "/some/path" []
                 projects = [project1]
-            result <- runProc (ExitSuccess, "1") $ fzfProjects mempty Nothing projects
+            result <- runProc (ExitSuccess, "\n1") $ fzfProjects mempty Nothing projects
             result `shouldBe` Selection Default [project1]
 
         let project1 = Project "test-project" "/some/path" []

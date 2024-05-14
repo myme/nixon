@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Nixon.Project
   ( Project (..),
     ProjectType (..),
@@ -13,6 +15,7 @@ module Nixon.Project
     proj,
     project_path,
     sort_projects,
+    inspectProjects,
   )
 where
 
@@ -23,6 +26,7 @@ import Data.Function (on)
 import Data.List (intercalate, sortBy)
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Nixon.Command (Command (..))
 import Nixon.Prelude
 import Nixon.Utils (fromPath, fromText)
@@ -199,3 +203,12 @@ test_marker p (ProjectFile marker) = testfile (p </> marker)
 test_marker p (ProjectDir marker) = testdir (p </> marker)
 test_marker p (ProjectOr ms) = or <$> mapM (test_marker p) ms
 test_marker p (ProjectFunc marker) = liftIO $ marker p
+
+-- | Inspect a project
+inspectProjects :: (MonadIO m) => [Project] -> m ()
+inspectProjects [] = pure ()
+inspectProjects [project] = liftIO $ do
+  putStrLn $ "Name: " <> project.projectName
+  putStrLn $ "Path: " <> project_path project
+  T.putStrLn $ "Types: " <> T.intercalate ", " (map project_id project.projectTypes)
+inspectProjects (p : ps) = inspectProjects [p] >> liftIO (putStrLn "") >> inspectProjects ps

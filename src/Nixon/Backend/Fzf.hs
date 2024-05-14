@@ -261,6 +261,7 @@ fzfProjects opts query projects = do
           <> fzfBorder
           -- <> fzfHeight 40
           <> maybe mempty fzfQuery query
+          <> fzfExpect "f1" Show
   -- <> fzfPreview "ls $(eval echo {})"
   selection <- fzf opts' (Select.Identity <$> (select . sort $ Map.keys candidates))
   pure $ Select.catMaybeSelection ((`Map.lookup` candidates) <$> selection)

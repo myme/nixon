@@ -103,6 +103,7 @@ data ProjectOpts = ProjectOpts
     projCommand :: Maybe Text,
     projArgs :: [Text],
     projInsert :: Bool,
+    projInspect :: Bool,
     projList :: Bool,
     projSelect :: Bool
   }
@@ -241,6 +242,7 @@ projectParser mkcompleter =
       )
     <*> many (Opts.strArgument $ Opts.metavar "args..." <> Opts.help "Arguments to command")
     <*> switch "insert" 'i' "Select a project command and output its source"
+    <*> switch "inspect" 'I' "Select a project and list some info about it"
     <*> switch "list" 'l' "List projects"
     <*> switch "select" 's' "Select a project and output on stdout"
 

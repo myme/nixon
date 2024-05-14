@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 
 module Nixon
@@ -23,7 +24,7 @@ import Nixon.Backend.Fzf
   )
 import Nixon.Command (Command (..), show_command_with_description)
 import qualified Nixon.Command as Cmd
-import Nixon.Command.Find (findAndHandleCmd, findProject, findProjectCommands, getBackend, withLocalConfig, findCmd)
+import Nixon.Command.Find (findAndHandleCmd, findCmd, findProject, findProjectCommands, getBackend, withLocalConfig)
 import qualified Nixon.Command.Run as Cmd
 import Nixon.Config.Options (CompletionType, EditOpts (..), EvalOpts (..), EvalSource (..), GCOpts (..), NewOpts (..), ProjectOpts (..), RunOpts (..), SubCommand (..))
 import qualified Nixon.Config.Options as Opts
@@ -33,7 +34,7 @@ import Nixon.Language (Language (..), fromFilePath)
 import Nixon.Logging (log_error, log_info)
 import Nixon.Prelude
 import Nixon.Process (run)
-import Nixon.Project (Project, project_path)
+import Nixon.Project (Project, project_path, inspectProjects)
 import qualified Nixon.Project as P
 import Nixon.Select (Candidate (..), Selection (..), SelectionType (..))
 import qualified Nixon.Select as Select
@@ -217,28 +218,30 @@ newAction opts =
 -- | Find/filter out a project and perform an action.
 projectAction :: [Project] -> ProjectOpts -> Nixon ()
 projectAction projects opts
-  | Opts.projList opts = listProjects projects (Opts.projProject opts)
+  | opts.projList = listProjects projects (Opts.projProject opts)
   | otherwise = do
-      let selectOpts = Select.defaults {Select.selector_multiple = Just $ Opts.projSelect opts}
+      let multiple = opts.projSelect || opts.projInspect
+          selectOpts = Select.defaults {Select.selector_multiple = Just multiple}
 
       selection <- findProject projects selectOpts (Opts.projProject opts)
       case selection of
         EmptySelection -> liftIO (throwIO $ EmptyError "No project selected.")
         CanceledSelection -> liftIO (throwIO $ EmptyError "Project selection canceled.")
-        Selection _selectionType ps ->
-          if Opts.projSelect opts
-            then void . liftIO . for ps $ printf (fp % "\n") . project_path
-            else case ps of
-              [project] ->
-                let opts' =
-                      RunOpts
-                        opts.projCommand
-                        opts.projArgs
-                        opts.projInsert
-                        opts.projList
-                        opts.projSelect
-                 in findAndHandleCmd handleCmd project opts'
-              _ -> liftIO (throwIO $ NixonError "Multiple projects selected.")
+        Selection selectionType ps ->
+          if
+            | opts.projSelect -> void . liftIO . for ps $ printf (fp % "\n") . project_path
+            | opts.projInspect || selectionType == Select.Show -> inspectProjects ps
+            | otherwise -> case ps of
+                [project] ->
+                  let opts' =
+                        RunOpts
+                          opts.projCommand
+                          opts.projArgs
+                          opts.projInsert
+                          opts.projList
+                          opts.projSelect
+                   in findAndHandleCmd handleCmd project opts'
+                _ -> liftIO (throwIO $ NixonError "Multiple projects selected.")
 
 -- | Run a command from current directory
 runAction :: RunOpts -> Nixon ()
