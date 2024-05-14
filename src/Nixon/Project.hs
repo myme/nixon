@@ -45,23 +45,23 @@ import Turtle
   )
 
 data Project = Project
-  { project_name :: FilePath,
-    project_dir :: FilePath,
-    project_types :: [ProjectType]
+  { projectName :: FilePath,
+    projectDir :: FilePath,
+    projectTypes :: [ProjectType]
   }
   deriving (Eq, Show)
 
 from_path :: FilePath -> Project
 from_path path' =
   Project
-    { project_name = filename path',
-      project_dir = parent path',
-      project_types = []
+    { projectName = filename path',
+      projectDir = parent path',
+      projectTypes = []
     }
 
 -- | Full path to a project
 project_path :: Project -> FilePath
-project_path project = project_dir project </> project_name project
+project_path project = projectDir project </> projectName project
 
 data ProjectType = ProjectType
   { project_id :: Text,
@@ -125,13 +125,13 @@ find_in_project ptypes path' =
 find_in_project_or_default :: MonadIO m => [ProjectType] -> FilePath -> m Project
 find_in_project_or_default ptypes path' = do
   types <- liftIO $ find_project_types path' ptypes
-  let current = (from_path path') {project_types = types}
+  let current = (from_path path') {projectTypes = types}
   fromMaybe current <$> find_in_project ptypes path'
 
 find_projects_by_name :: MonadIO m => FilePath -> [ProjectType] -> [FilePath] -> m [Project]
 find_projects_by_name project ptypes = liftIO . fmap find_matching . find_projects 1 ptypes
   where
-    find_matching = filter ((project `isInfix`) . toText . project_name)
+    find_matching = filter ((project `isInfix`) . toText . projectName)
     isInfix p = T.isInfixOf (toText p)
     toText = format fp
 
@@ -148,9 +148,9 @@ find_project ptypes source_dir = do
           pure $
             Just
               Project
-                { project_name = filename source_dir,
-                  project_dir = parent source_dir,
-                  project_types = types
+                { projectName = filename source_dir,
+                  projectDir = parent source_dir,
+                  projectTypes = types
                 }
 
 -- | Find projects from a list of source directories.

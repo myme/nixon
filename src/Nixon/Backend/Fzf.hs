@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Nixon.Backend.Fzf
   ( FzfOpts,
     FieldIndex (..),
@@ -36,7 +38,7 @@ import qualified Nixon.Config.Types as Config
 import Nixon.Prelude hiding (filter)
 import Nixon.Process (HasProc (..), arg, build_args, flag)
 import Nixon.Project
-  ( Project (project_dir, project_name),
+  ( Project (projectDir, projectName),
     project_path,
   )
 import Nixon.Select (Candidate, Selection (..), SelectionType (..), withProcessSelection)
@@ -267,7 +269,7 @@ fzfProjects opts query projects = do
 fzfProjectCommand :: (HasProc m, MonadIO m) => FzfOpts -> Project -> Maybe Text -> [Command] -> m (Selection Command)
 fzfProjectCommand opts project query commands = do
   let candidates = map (show_command_with_description &&& id) commands
-      header = format ("Select command [" % fp % "] (" % fp % ")") (project_name project) (project_dir project)
+      header = format ("Select command [" % fp % "] (" % fp % ")") project.projectName project.projectDir
       opts' =
         opts
           <> fzfHeader header

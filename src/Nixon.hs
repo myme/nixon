@@ -293,7 +293,7 @@ nixonCompleter userConfig compType args = do
           project <- case args of
             ("project" : p : _) -> do
               current <- P.from_path <$> pwd
-              let p' = find ((==) p . T.unpack . format fp . P.project_name) projects
+              let p' = find ((==) p . T.unpack . format fp . P.projectName) projects
               pure $ fromMaybe current p'
             _ -> do
               ptypes <- project_types . config <$> ask
@@ -301,12 +301,12 @@ nixonCompleter userConfig compType args = do
           commands <- withLocalConfig (project_path project) $ findProjectCommands project
           pure $ map (T.unpack . cmdName) commands
         Opts.Eval -> pure []
-        Opts.Project -> pure $ map (T.unpack . format fp . P.project_name) projects
+        Opts.Project -> pure $ map (T.unpack . format fp . P.projectName) projects
         Opts.Run -> do
           project <- case args of
             ("project" : p : _) -> do
               current <- P.from_path <$> pwd
-              let p' = find ((==) p . T.unpack . format fp . P.project_name) projects
+              let p' = find ((==) p . T.unpack . format fp . P.projectName) projects
               pure $ fromMaybe current p'
             _ -> do
               ptypes <- project_types . config <$> ask

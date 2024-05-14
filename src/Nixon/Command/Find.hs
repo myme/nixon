@@ -45,7 +45,7 @@ findProjectCommands project = do
       sortedCmds = List.sortBy (compare `on` cmdName) commands
   pure sortedCmds
   where
-    ptypes = map project_id $ P.project_types project
+    ptypes = map project_id $ P.projectTypes project
     filter_cmd cmd =
       let ctypes = Cmd.cmdProjectTypes cmd
        in null ctypes || not (null $ List.intersect ptypes ctypes)

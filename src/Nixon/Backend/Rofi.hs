@@ -25,7 +25,7 @@ import Nixon.Config.Types (Config)
 import qualified Nixon.Config.Types as Config
 import Nixon.Prelude
 import Nixon.Process (arg, arg_fmt, build_args, flag)
-import Nixon.Project (Project (project_dir, project_name))
+import Nixon.Project (Project (projectDir, projectName))
 import Nixon.Select (Candidate, Selection (..), SelectionType (..), withProcessSelection)
 import qualified Nixon.Select as Select
 import Nixon.Utils (implode_home, shell_to_list, toLines, (<<?))
@@ -157,9 +157,9 @@ rofi opts candidates = do
 -- | Format project names suited to rofi selection list
 rofiFormatProjectName :: MonadIO m => Project -> m Text
 rofiFormatProjectName project = do
-  path <- implode_home (project_dir project)
+  path <- implode_home (projectDir project)
   let pad_width = 30
-      name = format fp (project_name project)
+      name = format fp (projectName project)
       name_padded = name <> T.replicate (pad_width - T.length name) " "
       dir = directory path
       fmt = format (Tu.s % " <i>" % fp % "</i>")
