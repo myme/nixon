@@ -30,11 +30,14 @@ project_types:
     test: ["package.json"]
     desc: NPM project,
   - name: nix
-    test: ["default.nix", "shell.nix"]
-    desc: Nix project,
+    test: ["flake.nix"]
+    desc: Nix flake project,
   - name: git
     test: [".git"]
     desc: Git repository,
+  - name: rust
+    test: ["Cargo.toml"]
+    desc: Rust project,
   - name: project
     desc: Generic project
 ```
@@ -65,11 +68,15 @@ emacs
 
 ### `hello-world`
 
-```bash <{json-greetings:m}
+Select from one or more greetings in a JSON format.
+
+```bash <{json-greetings | multi}
 cat
 ```
 
 ### `networks`
+
+Use `nmcli` to list available networks.
 
 ```bash
 nmcli -t connection | cut -d':' -f1
@@ -77,16 +84,19 @@ nmcli -t connection | cut -d':' -f1
 
 ### `network-connect`
 
+Use the `networks` placeholder to select a network to connect to.
+
 ```bash ${networks}
 nmcli connection up "$1"
 ```
 
 ### `pd`
 
+The current project directory is available through the `$nixon_project_path`
+environment variable.
+
 ```bash
-cd "$nixon_project_path/../.."
-echo -n "Current dir: "
-pwd
+echo "Project dir: $nixon_project_path"
 ```
 
 ## nix stuff
@@ -180,7 +190,7 @@ git ls-files
 Invoke `git show` on commits selected from `git log`. It uses multiple selection
 and a field selector of `1` to pick the commit `SHA1` from the log.
 
-```bash ${git-log:m1}
+```bash ${git-log | multi | fields 1}
 git show "$@"
 ```
 
@@ -204,7 +214,7 @@ rg --files
 
 Open files in `vim` passing files to open in through `stdin` and `xargs`.
 
-```bash <{rg-files:m}
+```bash <{rg-files | multi}
 xargs vim -p
 ```
 
@@ -213,7 +223,7 @@ xargs vim -p
 Open files in `vim` passing files to open in through `stdin` and `xargs`
 concatenating every `stdin` input.
 
-```bash <{git-files:m} <{rg-files:m}
+```bash <{git-files | multi} <{rg-files:m}
 xargs vim -p
 ```
 
@@ -245,6 +255,6 @@ vim -p $rg_files
 
 Open files in `vim` passing files in an environment variable.
 
-```bash FILES={rg-files:m}
+```bash FILES={rg-files | multi}
 vim -p $FILES
 ```

@@ -134,6 +134,14 @@ It's possible to specify a multi-selection modifier to let the user select
 multiple files to pass to `vim`. In the `fzf` interface marking files for
 selection is done using `<tab>`.
 
+```bash ${git-files | multi}
+vim -p "$@"
+```
+
+### `vim-files-m`
+
+There's a shorthand `:m` if typing ` | multi` is too long.
+
 ```bash ${git-files:m}
 vim -p "$@"
 ```
@@ -144,7 +152,7 @@ The `stdin` placeholder may be used to select candidates that will be passed to
 the command's `stdin`. Here we're using the `xargs` command to relay that as
 positional arguments to `vim`.
 
-```bash <{git-files:m}
+```bash <{git-files | multi m}
 xargs vim -p
 ```
 
@@ -155,7 +163,7 @@ into an environmental variable. The `environment variable` is named after the
 placeholder action with `-` *(dashes)* replaced by `_` *(underscore)*,
 `git_files` in this case.
 
-```bash ={git-files:m}
+```bash ={git-files | multi}
 vim -p $git_files
 ```
 
@@ -164,7 +172,7 @@ vim -p $git_files
 It is possible to give the environment variable an explicit name by placing and
 alias before the `=`, in this case `FILES`.
 
-```bash FILES={git-files:m}
+```bash FILES={git-files | multi}
 vim -p $FILES
 ```
 
