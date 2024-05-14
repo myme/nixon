@@ -17,7 +17,7 @@ import Nixon.Backend (Backend)
 import qualified Nixon.Backend as Backend
 import qualified Nixon.Backend.Fzf as Fzf
 import qualified Nixon.Backend.Rofi as Rofi
-import Nixon.Command (Command (cmdName, cmdSource))
+import Nixon.Command (Command (cmdName, cmdSource, cmdLocation))
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Config as Config
 import Nixon.Config.Options (RunOpts)
@@ -70,7 +70,8 @@ findBinCommands project = do
     pure
       Cmd.empty
         { cmdName = format fp (basename path),
-          cmdSource = format (fp % " \"$@\"") path
+          cmdSource = format (fp % " \"$@\"") path,
+          cmdLocation = Just $ Cmd.CommandLocation path 0 0 0
         }
   where
     isExecutable = fmap _executable . getmod
