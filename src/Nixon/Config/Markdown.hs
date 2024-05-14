@@ -100,7 +100,10 @@ extract (M.Node pos nodeType children) = case nodeType of
     let (lang, attrs) = parseInfo info
      in [Source lang attrs text]
   M.PARAGRAPH -> [Paragraph $ getText children]
-  _ -> concatMap extract children
+  _ ->
+    -- Go one beyond because we're subtracting 1
+    let pos' = (\p -> p {M.startLine = M.endLine p + 1}) <$> pos
+     in concatMap extract children <> [End pos']
   where
     isCode (M.Node _ (M.CODE _) _) = True
     isCode _ = False
@@ -154,21 +157,27 @@ data Node
   | -- | info src
     Source Lang.Language [Text] Text
   | Paragraph Text
+  | End Pos
   deriving (Show)
 
 data ParseState = S
   { stateHeaderLevel :: Int,
-    stateProjectTypes :: [Text]
+    stateProjectTypes :: [Text],
+    stateLastPos :: PosInfo
   }
 
 -- | Parse Command blocks from a list of nodes
 parse :: FilePath -> [Node] -> Either Text (JSON.Config, [Cmd.Command])
-parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 []) (Nothing, []) nodes
+parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 [] initPos) (Nothing, []) nodes
   where
+    initPos = PosInfo fileName Nothing 0
     go _ ps [] = Right ps
-    go st ps nodes'@(Head _ l _ _ : _)
+    go st (cfg, ps) (End pos : rest) =
+      let posInfo = PosInfo fileName pos st.stateHeaderLevel
+       in go st (cfg, addLocation st.stateLastPos posInfo ps) rest
+    go st (cfg, ps) nodes'@(Head _ l _ _ : _)
       -- Going back up or next sibling
-      | l < st.stateHeaderLevel = go (S l []) ps nodes'
+      | l < st.stateHeaderLevel = go (S l [] st.stateLastPos) (cfg, ps) nodes'
     go st (cfg, ps) (Head pos l name attrs : rest)
       -- We found a config
       | hasArgs "config" attrs = case parseConfig rest of
@@ -176,24 +185,30 @@ parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 []) (Not
           (Right cfg', rest') -> goWithSingleConfig st (cfg, ps) rest' cfg'
       -- We found a command
       | hasArgs "command" attrs =
-          let pt = getKwargs "type" attrs <> stateProjectTypes st
+          let pt = getKwargs "type" attrs <> st.stateProjectTypes
               isBg = hasArgs "bg" attrs
               isJson = hasArgs "json" attrs
-           in case parseCommand (PosInfo fileName pos l) name pt rest of
+              posInfo = PosInfo fileName pos l
+           in case parseCommand posInfo name pt rest of
                 (Left err, _) -> Left err
-                (Right p, rest') -> go st (cfg, p <! bg isBg <! json isJson : ps) rest'
+                (Right p, rest') ->
+                  let cmd = p <! bg isBg <! json isJson
+                      cmds = addLocation st.stateLastPos posInfo ps
+                      st' =
+                        st
+                          { stateHeaderLevel = l,
+                            stateProjectTypes = getKwargs "type" attrs <> parentTypes,
+                            stateLastPos = posInfo
+                          }
+                      parentTypes
+                        | l == stateHeaderLevel st = []
+                        | otherwise = stateProjectTypes st
+                   in go st' (cfg, cmd : cmds) rest'
       -- Pick up project type along the way
-      | otherwise = go st' (cfg, ps) rest
-      where
-        st' =
-          st
-            { stateHeaderLevel = l,
-              stateProjectTypes = getKwargs "type" attrs <> parentTypes
-            }
-        parentTypes
-          | l == stateHeaderLevel st = []
-          | otherwise = stateProjectTypes st
-
+      | otherwise =
+          let posInfo = PosInfo fileName pos l
+              cmds = addLocation st.stateLastPos posInfo ps
+           in go st (cfg, cmds) rest
     -- We found a config block
     go st (cfg, ps) (Source lang attrs src : rest)
       | "config" `elem` attrs = case parseConfig (Source lang attrs src : rest) of
@@ -205,6 +220,20 @@ parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 []) (Not
     goWithSingleConfig st (cfg, ps) rest cfg' = case cfg of
       Just _ -> Left "Found multiple configuration blocks"
       Nothing -> go st (Just cfg', ps) rest
+
+addLocation :: PosInfo -> PosInfo -> [Cmd.Command] -> [Cmd.Command]
+addLocation _ _ [] = []
+addLocation start next (cmd : rest) = case cmd.cmdLocation of
+  Nothing -> cmd {Cmd.cmdLocation = Just loc} : rest
+  Just _ -> cmd : rest
+  where
+    loc =
+      Cmd.CommandLocation
+        { Cmd.cmdFilePath = start.posName,
+          Cmd.cmdStartLine = maybe (-1) M.startLine start.posLocation,
+          Cmd.cmdEndLine = maybe 0 M.startLine next.posLocation - 1,
+          Cmd.cmdLevel = start.posHeaderLevel
+        }
 
 hasArgs :: Text -> Attrs -> Bool
 hasArgs key (_, args, _) = key `elem` args
@@ -238,12 +267,6 @@ parseCommand pos name projectTypes (Paragraph desc : rest) =
    in (Cmd.description (strip desc) <$> cmd, rest')
 parseCommand pos name projectTypes (Source lang attrs src : rest) = (cmd, rest)
   where
-    loc =
-      Cmd.CommandLocation
-        { Cmd.cmdFilePath = posName pos,
-          Cmd.cmdLineNr = maybe (-1) M.startLine (posLocation pos),
-          Cmd.cmdLevel = pos.posHeaderLevel
-        }
     cmd = do
       (name', args) <- parseCommandName name
       parsedSourceArgs <- first (T.pack . show) $ P.parse parseCommandArgs "" (T.unwords attrs)
@@ -262,7 +285,7 @@ parseCommand pos name projectTypes (Source lang attrs src : rest) = (cmd, rest)
                 Cmd.cmdPlaceholders = args ++ parsedSourceArgs,
                 Cmd.cmdProjectTypes = projectTypes,
                 Cmd.cmdSource = src,
-                Cmd.cmdLocation = Just loc,
+                Cmd.cmdLocation = Nothing,
                 Cmd.cmdIsHidden = "_" `T.isPrefixOf` name'
               }
 parseCommand _ name _ rest = (Left $ format ("Expecting source block for " % s) name, rest)

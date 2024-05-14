@@ -457,6 +457,82 @@ command_tests = describe "commands section" $ do
       fmap selector . Cfg.commands <$> result
         `shouldBe` Left "some-file.md:1 hello uses placeholders in both command header and source code block"
 
+  describe "location" $ do
+    it "finds location (single)" $ do
+      let result =
+            parseMarkdown "some-file.md"
+              $ T.unlines
+                [ "# `foo`",
+                  "```bash",
+                  "echo Hello World",
+                  "```"
+                ]
+
+      fmap Cmd.cmdLocation . Cfg.commands <$> result
+        `shouldBe` Right
+          [ Just (Cmd.CommandLocation "some-file.md" 1 4 1)
+          ]
+
+    it "finds location (multiple)" $ do
+      let result =
+            parseMarkdown "some-file.md"
+              $ T.unlines
+                [ "# `foo`",
+                  "```bash",
+                  "echo Hello World",
+                  "```",
+                  "",
+                  "## `bar`",
+                  "```bash ${foo}",
+                  "echo Hello \"$foo\"",
+                  "```",
+                  "",
+                  "# `baz`",
+                  "```bash ${bar}",
+                  "echo Hello \"$bar\"",
+                  "```"
+                ]
+
+      fmap Cmd.cmdLocation . Cfg.commands <$> result
+        `shouldBe` Right
+          [ Just (Cmd.CommandLocation "some-file.md" 1 5 1),
+            Just (Cmd.CommandLocation "some-file.md" 6 10 2),
+            Just (Cmd.CommandLocation "some-file.md" 11 14 1)
+          ]
+
+    it "finds location (with config)" $ do
+      let result =
+            parseMarkdown "some-file.md"
+              $ T.unlines
+                [ "# `foo`",
+                  "```bash",
+                  "echo Hello World",
+                  "```",
+                  "",
+                  "## `bar`",
+                  "```bash ${foo}",
+                  "echo Hello \"$foo\"",
+                  "```",
+                  "",
+                  "# Config",
+                  "",
+                  "```yaml config",
+                  "{}",
+                  "```",
+                  "",
+                  "# `baz`",
+                  "```bash ${bar}",
+                  "echo Hello \"$bar\"",
+                  "```"
+                ]
+
+      fmap Cmd.cmdLocation . Cfg.commands <$> result
+        `shouldBe` Right
+          [ Just (Cmd.CommandLocation "some-file.md" 1 5 1),
+            Just (Cmd.CommandLocation "some-file.md" 6 10 2),
+            Just (Cmd.CommandLocation "some-file.md" 17 20 1)
+          ]
+
 parse_header_tests :: SpecWith ()
 parse_header_tests = describe "parseHeaderArgs" $ do
   it "extracts name"

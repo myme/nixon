@@ -129,7 +129,7 @@ visitCmd cmd =
     Nothing -> fail $ NixonError "Unable to find command location."
     Just loc -> do
       let args =
-            [ format ("+" % d) $ Cmd.cmdLineNr loc,
+            [ format ("+" % d) $ Cmd.cmdStartLine loc,
               format fp $ Cmd.cmdFilePath loc
             ]
       editor <-
