@@ -7,6 +7,7 @@ import Nixon.Select
 import Nixon.Utils
 import Test.Hspec
 import Test.Nixon.Backend.Fzf (fzfTests)
+import Test.Nixon.Command.Find (findTests)
 import Test.Nixon.Config.Markdown
 import Test.Nixon.Logging
 import Test.Nixon.Process (process)
@@ -36,6 +37,9 @@ instance Arbitrary NonWsText where
 main :: IO ()
 main = hspec $ do
   describe "Backend.Fzf" fzfTests
+
+  describe "Command" $
+    describe "Find" findTests
 
   describe "Config" $ do
     describe "Markdown" markdown_tests
