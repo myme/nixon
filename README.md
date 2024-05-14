@@ -195,13 +195,13 @@ Usage: nixon [-C|--config CONFIG] [-b|--backend BACKEND]
              [(-T|--force-tty) | --no-force-tty] [-p|--path PATH]
              [(-d|--direnv) | --no-direnv] [(-n|--nix) | --no-nix]
              [-t|--terminal TERMINAL] [-L|--loglevel LOGLEVEL]
-             [eval | gc | project | run | [command] [args...] [-l|--list]
-               [-s|--select]]
+             [edit | eval | gc | new | project | run | [command] [args...]
+               [-i|--insert] [-l|--list] [-s|--select]]
 
 Available options:
   -h,--help                Show this help text
   -C,--config CONFIG       Path to configuration file (default:
-                           ~/.config/nixon.md)
+                           /home/myme/.config/nixon.md)
   -b,--backend BACKEND     Backend to use: fzf, rofi
   -e,--exact               Enable exact match
   -i,--ignore-case         Case-insensitive match
@@ -213,12 +213,15 @@ Available options:
   -L,--loglevel LOGLEVEL   Loglevel: debug, info, warning, error
   command                  Command to run
   args...                  Arguments to command
+  -i,--insert              Select a command and output its source
   -l,--list                List commands
-  -s,--select              Select a command and output on stdout
+  -s,--select              Output command selection on stdout
 
 Available commands:
+  edit                     Edit a command in $EDITOR
   eval                     Evaluate expression
   gc                       Garbage collect cached items
+  new                      Create a new command
   project                  Project actions
   run                      Run command
 ```
