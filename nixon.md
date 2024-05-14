@@ -18,3 +18,12 @@ suite.
 ```bash
 ghcid --target=nixon --run=":! ghcid --target=nixon-test --run"
 ```
+
+### `hoogle`
+
+Start a local Hoogle server
+
+```bash
+hoogle server --local
+```
+
