@@ -350,13 +350,13 @@ command_tests = describe "commands section" $ do
     $ let result =
             parseMarkdown "some-file.md"
               $ T.unlines
-                [ "# `hello` {.json}",
-                  "```bash",
+                [ "# `hello`",
+                  "```bash ${placeholder | json}",
                   "echo Hello World",
                   "```"
                 ]
-          selector = fmap (Cmd.cmdName &&& Cmd.cmdOutput) . Cfg.commands
-       in selector <$> result `shouldBe` Right [("hello", Cmd.JSON)]
+          selector = fmap (Cmd.cmdName &&& Cmd.cmdPlaceholders) . Cfg.commands
+       in selector <$> result `shouldBe` Right [("hello", [Placeholder Arg "placeholder" [Json] False []])]
 
   it "detects project type"
     $ let result =

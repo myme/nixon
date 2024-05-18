@@ -23,7 +23,7 @@ import Data.Text (pack, strip)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Yaml as Yaml
-import Nixon.Command (bg, (<!), outFmt)
+import Nixon.Command (bg, (<!))
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Command.Placeholder as Cmd
 import qualified Nixon.Config.JSON as JSON
@@ -187,15 +187,11 @@ parse fileName nodes = bimap (fromMaybe JSON.empty) reverse <$> go (S 0 [] initP
       | hasArgs "command" attrs =
           let pt = getKwargs "type" attrs <> st.stateProjectTypes
               isBg = hasArgs "bg" attrs
-              fmt
-                | hasArgs "json" attrs = Cmd.JSON
-                | hasArgs "cols" attrs = Cmd.Columns
-                | otherwise = Cmd.Lines
               posInfo = PosInfo fileName pos l
            in case parseCommand posInfo name pt rest of
                 (Left err, _) -> Left err
                 (Right p, rest') ->
-                  let cmd = p <! bg isBg <! outFmt fmt
+                  let cmd = p <! bg isBg
                       cmds = addLocation st.stateLastPos posInfo ps
                       st' =
                         st
@@ -368,7 +364,8 @@ parsePlaceholderModifiers placeholder = do
 
     parsePipeFields p =
       (P.string "cols" *> P.many P.space *> parseFields Cmd.Col p) <|>
-      (P.string "fields" *> P.many P.space *> parseFields Cmd.Field p)
+      (P.string "fields" *> P.many P.space *> parseFields Cmd.Field p) <|>
+      (P.string "json" $> p {Cmd.fields = [Cmd.Json]})
 
     parsePipeMultiple p = (P.string "multi" :: Parser String) $> p {Cmd.multiple = True}
 

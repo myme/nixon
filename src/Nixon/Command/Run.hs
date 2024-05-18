@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedRecordDot #-}
+
 module Nixon.Command.Run
   ( resolveCmd,
     resolveEnv,
@@ -5,8 +7,9 @@ module Nixon.Command.Run
   )
 where
 
+import Control.Arrow ((&&&))
 import Control.Monad (foldM)
-import Data.Aeson (eitherDecodeStrict, encode)
+import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
 import qualified Data.Text as T
 import Nixon.Command (Command, CommandOutput (..))
@@ -14,6 +17,7 @@ import qualified Nixon.Command as Cmd
 import Nixon.Command.Find (findProjectCommands)
 import qualified Nixon.Command.Placeholder as Cmd
 import Nixon.Evaluator (evaluate, getEvaluator)
+import Nixon.Format (parseColumns, pickColumns, pickFields)
 import Nixon.Prelude
 import Nixon.Process (run_with_output)
 import qualified Nixon.Process
@@ -22,11 +26,10 @@ import qualified Nixon.Project as Project
 import Nixon.Select (Selection (..), Selector, selector_fields, selector_multiple)
 import qualified Nixon.Select as Select
 import Nixon.Types (Nixon)
-import Nixon.Utils (toLines, shell_to_list, parseColumns)
-import Turtle (Shell, cd, format, fp, select, stream, printf)
+import Nixon.Utils (shell_to_list, toLines)
+import Turtle (Shell, cd, format, fp, select, stream)
 import qualified Turtle.Bytes as BS
 import Turtle.Line (lineToText)
-import Turtle.Format (w)
 
 -- | Actually run a command
 runCmd :: Selector Nixon -> Project -> Command -> [Text] -> Nixon ()
@@ -50,10 +53,10 @@ resolveEnv project selector cmd args = do
 
 -- | Zip placeholders with arguments, filling in missing placeholders with overflow arguments.
 zipArgs :: [Cmd.Placeholder] -> [Text] -> [(Cmd.Placeholder, Select.SelectorOpts)]
-zipArgs [] args' = map ((, Select.defaults) . argOverflow) args'
+zipArgs [] args' = map ((,Select.defaults) . argOverflow) args'
   where
     argOverflow = Cmd.Placeholder Cmd.Arg "arg" [] False . pure
-zipArgs placeholders [] = map (, Select.defaults) placeholders
+zipArgs placeholders [] = map (,Select.defaults) placeholders
 zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 
 -- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
@@ -94,18 +97,22 @@ resolveCmd project selector cmd select_opts = do
   let projectPath = Just (Project.project_path project)
   linesEval <- getEvaluator (run_with_output stream) cmd args projectPath env' (toLines <$> stdin)
   jsonEval <- getEvaluator (run_with_output BS.stream) cmd args projectPath env' (BS.fromUTF8 <$> stdin)
-  selection <- selector select_opts $ do
-    case Cmd.cmdOutput cmd of
-      Columns -> do
-        cols <- parseColumns . map lineToText <$> shell_to_list linesEval
-        printf w (encode cols)
-        pure $ Select.Identity "asdf"
-      Lines -> Select.Identity . lineToText <$> linesEval
-      JSON -> do
-        output <- BS.strict jsonEval
-        case eitherDecodeStrict output :: Either String [Select.Candidate] of
-          Left err -> error err
-          Right candidates -> select candidates
+  let cmdOutput = Cmd.outputFromFields select_opts.selector_fields
+  selection <- selector select_opts $ case cmdOutput of
+    Columns cols -> do
+      let parseColumns' = map T.unwords . pickColumns cols . parseColumns
+      (title, value) <- (drop 1 &&& parseColumns') . map lineToText <$> shell_to_list linesEval
+      select $ zipWith Select.WithTitle title value
+    Fields fields -> do
+      let parseFields' = T.unwords . pickFields fields . T.words
+      (title, value) <- (id &&& map parseFields') . map lineToText <$> shell_to_list linesEval
+      select $ zipWith Select.WithTitle title value
+    Lines -> Select.Identity . lineToText <$> linesEval
+    JSON -> do
+      output <- BS.strict jsonEval
+      case eitherDecodeStrict output :: Either String [Select.Candidate] of
+        Left err -> error err
+        Right candidates -> select candidates
   case selection of
     Selection _ result -> pure result
     _ -> error "Argument expansion aborted"

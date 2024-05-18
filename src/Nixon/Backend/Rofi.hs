@@ -26,7 +26,7 @@ import qualified Nixon.Config.Types as Config
 import Nixon.Prelude
 import Nixon.Process (arg, arg_fmt, build_args, flag)
 import Nixon.Project (Project (projectDir, projectName))
-import Nixon.Select (Candidate, Selection (..), SelectionType (..), withProcessSelection)
+import Nixon.Select (Candidate, Selection (..), SelectionType (..))
 import qualified Nixon.Select as Select
 import Nixon.Utils (implode_home, shell_to_list, toLines, (<<?))
 import Turtle
@@ -56,7 +56,7 @@ rofiBackend cfg =
    in Backend
         { projectSelector = rofiProjects . rofi_opts,
           commandSelector = const $ rofiProjectCommand rofi_opts',
-          selector = withProcessSelection (rofi . rofi_opts)
+          selector = rofi . rofi_opts
         }
 
 -- | Data type for command line options to rofi

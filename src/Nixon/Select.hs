@@ -20,7 +20,6 @@ module Nixon.Select
     title,
     defaults,
     catMaybeSelection,
-    withProcessSelection,
   )
 where
 
@@ -35,7 +34,6 @@ import Data.Aeson
 import Data.Aeson.Types (unexpected)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, fromMaybe)
-import qualified Data.Text as T
 import GHC.Generics (Generic)
 import qualified Nixon.Command.Placeholder as Cmd
 import Nixon.Prelude
@@ -135,26 +133,6 @@ select :: (MonadIO m) => SelectorOpts -> Shell Candidate -> Select m (Selection 
 select opts input = do
   selector <- ask
   lift $ selector opts input
-
-processSelection :: (Monad m) => SelectorOpts -> Selection Text -> m (Selection Text)
-processSelection opts selection'
-  | null fields = pure selection'
-  -- NOTE: Unsure about this `T.stripEnd` here. It might remove too much trailing whitespace.
-  | otherwise = pure (T.stripEnd . T.unlines . map pickFields . T.lines <$> selection')
-  where
-    fields = selector_fields opts
-    pickFields line =
-      let pickItem (Cmd.Col i) = undefined !! (i - 1)
-          pickItem (Cmd.Field i) = T.words line !! (i - 1)
-      in T.unwords $ map pickItem fields
-
-withProcessSelection ::
-  (Monad m) =>
-  (SelectorOpts -> a -> m (Selection Text)) ->
-  SelectorOpts ->
-  a ->
-  m (Selection Text)
-withProcessSelection f opts = f opts >=> processSelection opts
 
 text_to_line :: Text -> Line
 text_to_line = fromMaybe "" . textToLine

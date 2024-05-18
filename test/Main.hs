@@ -1,7 +1,6 @@
 module Main where
 
 import Data.Char (isPrint, isSpace)
-import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import Nixon.Prelude
 import Nixon.Select
@@ -84,17 +83,3 @@ main = hspec $ do
       it "reads until first space"
         $ property
         $ \pre ws post -> takeToSpace (getNonWs pre <> getWs ws <> post) == getNonWs pre
-
-    describe "parseColumns" $ do
-      it "parses empty input" $ do
-        parseColumns [""] `shouldBe` []
-
-      it "parses headers" $ do
-        parseColumns ["foo bar baz"] `shouldBe` []
-
-      it "parses headers and values" $ do
-        let input = ["foo bar baz", "1 2 3", "4 5 6"]
-        parseColumns input
-          `shouldBe` [ Map.fromList [("foo", "1"), ("bar", "2"), ("baz", "3")],
-                       Map.fromList [("foo", "4"), ("bar", "5"), ("baz", "6")]
-                     ]

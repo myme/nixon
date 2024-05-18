@@ -56,7 +56,7 @@ x-terminal-emulator
 emacs
 ```
 
-### `json-greetings` {.json}
+### `json-greetings`
 
 ```json
 [
@@ -70,7 +70,7 @@ emacs
 
 Select from one or more greetings in a JSON format.
 
-```bash <{json-greetings | multi}
+```bash <{json-greetings | json | multi}
 cat
 ```
 
@@ -87,7 +87,8 @@ nmcli connection
 Use the `networks` placeholder to select a network to connect to.
 
 ```bash ${networks | cols 1}
-nmcli connection up "$1"
+# nmcli connection up "$1"
+echo "$@"
 ```
 
 ### `pd`
@@ -115,7 +116,7 @@ nix-shell
 
 ## npm stuff {type="npm"}
 
-### `npm-scripts` {.json}
+### `npm-scripts`
 
 List all `npm` scripts in a `package.json`.
 
@@ -127,7 +128,7 @@ jq '.scripts | to_entries | map({ title: (.key + " → " + .value), value: .key 
 
 Run a `npm` script from `package.json`.
 
-```bash ${npm-scripts}
+```bash ${npm-scripts | json}
 npm run "$1"
 ```
 
