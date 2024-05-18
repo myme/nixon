@@ -1,12 +1,15 @@
-module Nixon.Format where
+module Nixon.Format
+  ( parseColumns,
+  )
+where
 
 import Data.Char (isSpace)
 import qualified Data.Text as T
 import Nixon.Prelude
 
 -- | Parse ouput in column format into a list of rows of columns.
-parseColumns :: Text -> [[Text]]
-parseColumns input = case T.lines input of
+parseColumns :: [Text] -> [[Text]]
+parseColumns = \case
   [] -> []
   (header : rows) -> parseColumn (parseWidths header) <$> rows
   where
