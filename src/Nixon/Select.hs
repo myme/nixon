@@ -20,7 +20,6 @@ module Nixon.Select
     title,
     defaults,
     catMaybeSelection,
-    withProcessSelection,
   )
 where
 
@@ -33,11 +32,10 @@ import Data.Aeson
     (.:),
   )
 import Data.Aeson.Types (unexpected)
-import Data.Function ((&))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, fromMaybe)
-import qualified Data.Text as T
 import GHC.Generics (Generic)
+import qualified Nixon.Command.Placeholder as Cmd
 import Nixon.Prelude
 import Turtle (Line, Shell, textToLine)
 
@@ -86,7 +84,7 @@ instance Functor Selection where
 data SelectorOpts = SelectorOpts
   { selector_title :: Maybe Text,
     selector_search :: Maybe Text,
-    selector_fields :: [Integer],
+    selector_format :: Cmd.PlaceholderFormat,
     selector_multiple :: Maybe Bool
   }
 
@@ -95,21 +93,9 @@ defaults =
   SelectorOpts
     { selector_title = Nothing,
       selector_search = Nothing,
-      selector_fields = [],
+      selector_format = Cmd.Lines,
       selector_multiple = Nothing
     }
-
-instance Semigroup SelectorOpts where
-  (<>) lhs rhs =
-    SelectorOpts
-      { selector_title = selector_title rhs <|> selector_title lhs,
-        selector_search = selector_search rhs <|> selector_search lhs,
-        selector_fields = selector_fields rhs <> selector_fields lhs,
-        selector_multiple = selector_multiple rhs <|> selector_multiple lhs
-      }
-
-instance Monoid SelectorOpts where
-  mempty = defaults
 
 type Selector m = SelectorOpts -> Shell Candidate -> m (Selection Text)
 
@@ -119,8 +105,8 @@ default_selection :: [a] -> Selection a -> [a]
 default_selection _ (Selection _ value) = value
 default_selection def _ = def
 
-title :: Text -> SelectorOpts
-title t = defaults {selector_title = Just t}
+title :: SelectorOpts -> Text -> SelectorOpts
+title opts t = opts {selector_title = Just t}
 
 search :: Text -> SelectorOpts
 search s = defaults {selector_search = Just s}
@@ -131,33 +117,10 @@ build_map f = Map.fromList . map (f &&& id)
 runSelect :: Selector m -> Select m a -> m a
 runSelect = flip runReaderT
 
-select :: MonadIO m => SelectorOpts -> Shell Candidate -> Select m (Selection Text)
+select :: (MonadIO m) => SelectorOpts -> Shell Candidate -> Select m (Selection Text)
 select opts input = do
   selector <- ask
   lift $ selector opts input
-
-processSelection :: Monad m => SelectorOpts -> Selection Text -> m (Selection Text)
-processSelection opts selection'
-  | null fields = pure selection'
-  -- NOTE: Unsure about this `T.stripEnd` here. It might remove too much trailing whitespace.
-  | otherwise = pure (T.stripEnd . T.unlines . map pickFields . T.lines <$> selection')
-  where
-    fields = selector_fields opts
-    pickFields line =
-      T.words line
-        -- 1 indexed, to reserve 0 for the whole line
-        & zip [1 ..]
-        & filter ((`elem` fields) . fst)
-        & map snd
-        & T.unwords
-
-withProcessSelection ::
-  Monad m =>
-  (SelectorOpts -> a -> m (Selection Text)) ->
-  SelectorOpts ->
-  a ->
-  m (Selection Text)
-withProcessSelection f opts = f opts >=> processSelection opts
 
 text_to_line :: Text -> Line
 text_to_line = fromMaybe "" . textToLine

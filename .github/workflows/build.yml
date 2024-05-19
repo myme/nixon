@@ -54,7 +54,7 @@ jobs:
     - name: Install dependencies
       run: |
         cabal update
-        cabal install hlint
+        cabal install --overwrite-policy=always hlint
         cabal build --only-dependencies --enable-tests --enable-benchmarks
 
     - name: Hlint

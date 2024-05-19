@@ -47,6 +47,7 @@ tests:
     - test
     dependencies:
     - base
+    - containers
     - hspec
     - nixon
     - QuickCheck

@@ -13,8 +13,9 @@ import Test.Nixon.Logging
 import Test.Nixon.Process (process)
 import Test.QuickCheck
 import Test.QuickCheck.Instances.Text ()
+import Test.Nixon.Format.Columns (column_tests)
 
-empty :: Monad m => a -> m (Selection Text)
+empty :: (Monad m) => a -> m (Selection Text)
 empty = const (pure EmptySelection)
 
 arbitraryTextOf :: (Char -> Bool) -> Gen Text
@@ -44,33 +45,41 @@ main = hspec $ do
   describe "Config" $ do
     describe "Markdown" markdown_tests
 
+  describe "Format" $ do
+    describe "Columns" column_tests
+
   describe "Logging" logging
 
   describe "Process" process
 
   describe "Utils" $ do
     describe "escape" $ do
-      it "leaves simple string alone" $
-        escape "foo" `shouldBe` "foo"
+      it "leaves simple string alone"
+        $ escape "foo"
+        `shouldBe` "foo"
 
-      it "escapes quote character" $
-        escape "\"" `shouldBe` "\\\""
+      it "escapes quote character"
+        $ escape "\""
+        `shouldBe` "\\\""
 
-      it "escapes backslash character" $
-        escape "\\" `shouldBe` "\\\\"
+      it "escapes backslash character"
+        $ escape "\\"
+        `shouldBe` "\\\\"
 
     describe "quote" $ do
-      it "surrounds text in quotes" $
-        quote "foo" `shouldBe` "\"foo\""
+      it "surrounds text in quotes"
+        $ quote "foo"
+        `shouldBe` "\"foo\""
 
-      it "escapes inner text" $
-        quote "\"foo\"" `shouldBe` "\"\\\"foo\\\"\""
+      it "escapes inner text"
+        $ quote "\"foo\""
+        `shouldBe` "\"\\\"foo\\\"\""
 
     describe "takeToSpace" $ do
-      it "is empty with leading space" $
-        property $
-          \text -> takeToSpace (" " <> getWs text) == ""
+      it "is empty with leading space"
+        $ property
+        $ \text -> takeToSpace (" " <> getWs text) == ""
 
-      it "reads until first space" $
-        property $
-          \pre ws post -> takeToSpace (getNonWs pre <> getWs ws <> post) == getNonWs pre
+      it "reads until first space"
+        $ property
+        $ \pre ws post -> takeToSpace (getNonWs pre <> getWs ws <> post) == getNonWs pre

@@ -14,8 +14,8 @@ module Nixon.Utils
     filter_elems,
     implode_home,
     (<<?),
-    openEditor,
     confirm,
+    openEditor,
   )
 where
 

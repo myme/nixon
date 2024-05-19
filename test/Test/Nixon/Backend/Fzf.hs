@@ -158,18 +158,6 @@ fzfTests = do
 
       result `shouldBe` Selection Default ["one two three", "seven eight nine"]
 
-    it "filters fields based on selector options (words 1 & 3)" $ do
-      let candidates = map Identity ["one two three", "four five six", "seven eight nine"]
-          selector = Backend.selector $ fzfBackend defaultConfig
-          selectOpts = Select.defaults {Select.selector_fields = [1, 3]}
-
-      result <-
-        runProc (ExitSuccess, "1")
-          $ Select.runSelect selector
-          $ Select.select selectOpts (select candidates)
-
-      result `shouldBe` Selection Default ["one three"]
-
   describe
     "Fzf command"
     ( do
