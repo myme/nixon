@@ -84,7 +84,7 @@ instance Functor Selection where
 data SelectorOpts = SelectorOpts
   { selector_title :: Maybe Text,
     selector_search :: Maybe Text,
-    selector_fields :: [Cmd.PlaceholderField],
+    selector_fields :: Cmd.PlaceholderFields,
     selector_multiple :: Maybe Bool
   }
 
@@ -93,7 +93,7 @@ defaults =
   SelectorOpts
     { selector_title = Nothing,
       selector_search = Nothing,
-      selector_fields = [],
+      selector_fields = Cmd.Lines,
       selector_multiple = Nothing
     }
 
@@ -102,7 +102,8 @@ instance Semigroup SelectorOpts where
     SelectorOpts
       { selector_title = selector_title rhs <|> selector_title lhs,
         selector_search = selector_search rhs <|> selector_search lhs,
-        selector_fields = selector_fields rhs <> selector_fields lhs,
+        -- FIXME: Don't use Semigroup for this, this is not monodic.
+        selector_fields = selector_fields rhs,
         selector_multiple = selector_multiple rhs <|> selector_multiple lhs
       }
 

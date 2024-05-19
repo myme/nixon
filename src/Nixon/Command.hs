@@ -1,7 +1,6 @@
 module Nixon.Command
   ( Command (..),
     CommandLocation (..),
-    CommandOutput (..),
     Language (..),
     empty,
     is_bg_command,
@@ -10,7 +9,6 @@ module Nixon.Command
     bg,
     show_command,
     show_command_with_description,
-    outputFromFields,
   )
 where
 
@@ -60,32 +58,8 @@ empty =
       cmdLocation = Nothing
     }
 
--- | Command output format used for placeholder extraction
-data CommandOutput =
-  -- | Interpret output as columns and extract the specified columns
-  Columns [Int] |
-  -- | Interpret output as fields and extract the specified fields
-  Fields [Int] |
-  -- | Interpret output as plain lines
-  Lines |
-  -- | Parse output as JSON
-  JSON deriving (Eq, Show)
-
 show_command :: Command -> Text
 show_command cmd = T.unwords $ cmdName cmd : map (format ("${" % s % "}") . P.name) (cmdPlaceholders cmd)
-
-outputFromFields :: [P.PlaceholderField] -> CommandOutput
-outputFromFields fields = case fields of
-  [] -> Lines
-  (P.Col x : rest) -> case outputFromFields rest of
-    Lines -> Columns [x]
-    Columns xs -> Columns (x : xs)
-    _ -> error "Cannot mix columns and fields"
-  (P.Field x : rest) -> case outputFromFields rest of
-    Lines -> Fields [x]
-    Fields xs -> Fields (x : xs)
-    _ -> error "Cannot mix columns and fields"
-  (_ : rest) -> outputFromFields rest
 
 show_command_with_description :: Command -> Text
 show_command_with_description cmd = format (s % s) (cmdName cmd) desc

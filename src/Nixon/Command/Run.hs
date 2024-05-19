@@ -12,10 +12,10 @@ import Control.Monad (foldM)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
 import qualified Data.Text as T
-import Nixon.Command (Command, CommandOutput (..))
+import Nixon.Command (Command)
 import qualified Nixon.Command as Cmd
 import Nixon.Command.Find (findProjectCommands)
-import qualified Nixon.Command.Placeholder as Cmd
+import qualified Nixon.Command.Placeholder as P
 import Nixon.Evaluator (evaluate, getEvaluator)
 import Nixon.Format (parseColumns, pickColumns, pickFields)
 import Nixon.Prelude
@@ -52,18 +52,18 @@ resolveEnv project selector cmd args = do
     nixonEnvs = [("nixon_project_path", format fp (Project.project_path project))]
 
 -- | Zip placeholders with arguments, filling in missing placeholders with overflow arguments.
-zipArgs :: [Cmd.Placeholder] -> [Text] -> [(Cmd.Placeholder, Select.SelectorOpts)]
+zipArgs :: [P.Placeholder] -> [Text] -> [(P.Placeholder, Select.SelectorOpts)]
 zipArgs [] args' = map ((,Select.defaults) . argOverflow) args'
   where
-    argOverflow = Cmd.Placeholder Cmd.Arg "arg" [] False . pure
+    argOverflow = P.Placeholder P.Arg "arg" P.Lines False . pure
 zipArgs placeholders [] = map (,Select.defaults) placeholders
 zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 
 -- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
-resolveEnv' :: Project -> Selector Nixon -> [(Cmd.Placeholder, Select.SelectorOpts)] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
+resolveEnv' :: Project -> Selector Nixon -> [(P.Placeholder, Select.SelectorOpts)] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv' project selector = foldM resolveEach (Nothing, [], [])
   where
-    resolveEach (stdin, args', envs) (Cmd.Placeholder envType cmdName fields multiple value, select_opts) = do
+    resolveEach (stdin, args', envs) (P.Placeholder envType cmdName fields multiple value, select_opts) = do
       resolved <- case value of
         [] -> do
           cmd' <- assertCommand cmdName
@@ -76,15 +76,15 @@ resolveEnv' project selector = foldM resolveEach (Nothing, [], [])
         _ -> pure value
       case envType of
         -- Standard inputs are concatenated
-        Cmd.Stdin ->
+        P.Stdin ->
           let stdinCombined = Just $ case stdin of
                 Nothing -> select resolved
                 Just prev -> prev <|> select resolved
            in pure (stdinCombined, args', envs)
         -- Each line counts as one positional argument
-        Cmd.Arg -> pure (stdin, args' <> resolved, envs)
+        P.Arg -> pure (stdin, args' <> resolved, envs)
         -- Environment variables are concatenated into space-separated line
-        Cmd.EnvVar name -> pure (stdin, args', envs <> [(name, T.unwords resolved)])
+        P.EnvVar name -> pure (stdin, args', envs <> [(name, T.unwords resolved)])
 
     assertCommand cmd_name = do
       cmd' <- find ((==) cmd_name . Cmd.cmdName) <$> findProjectCommands project
@@ -97,18 +97,17 @@ resolveCmd project selector cmd select_opts = do
   let projectPath = Just (Project.project_path project)
   linesEval <- getEvaluator (run_with_output stream) cmd args projectPath env' (toLines <$> stdin)
   jsonEval <- getEvaluator (run_with_output BS.stream) cmd args projectPath env' (BS.fromUTF8 <$> stdin)
-  let cmdOutput = Cmd.outputFromFields select_opts.selector_fields
-  selection <- selector select_opts $ case cmdOutput of
-    Columns cols -> do
+  selection <- selector select_opts $ case select_opts.selector_fields of
+    P.Columns cols -> do
       let parseColumns' = map T.unwords . pickColumns cols . parseColumns
       (title, value) <- (drop 1 &&& parseColumns') . map lineToText <$> shell_to_list linesEval
       select $ zipWith Select.WithTitle title value
-    Fields fields -> do
+    P.Fields fields -> do
       let parseFields' = T.unwords . pickFields fields . T.words
       (title, value) <- (id &&& map parseFields') . map lineToText <$> shell_to_list linesEval
       select $ zipWith Select.WithTitle title value
-    Lines -> Select.Identity . lineToText <$> linesEval
-    JSON -> do
+    P.Lines -> Select.Identity . lineToText <$> linesEval
+    P.JSON -> do
       output <- BS.strict jsonEval
       case eitherDecodeStrict output :: Either String [Select.Candidate] of
         Left err -> error err

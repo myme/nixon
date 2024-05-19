@@ -12,6 +12,8 @@ where
 
 import CMark (commonmarkToNode)
 import qualified CMark as M
+import Control.Monad (when)
+import Control.Monad.Fail (fail)
 import qualified Data.Aeson as Aeson
 import Data.Bifunctor (Bifunctor (bimap, first))
 import Data.Char (isSpace)
@@ -25,7 +27,7 @@ import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Yaml as Yaml
 import Nixon.Command (bg, (<!))
 import qualified Nixon.Command as Cmd
-import qualified Nixon.Command.Placeholder as Cmd
+import qualified Nixon.Command.Placeholder as P
 import qualified Nixon.Config.JSON as JSON
 import Nixon.Config.Types
   ( Config
@@ -289,7 +291,7 @@ parseCommand pos name projectTypes (Source lang attrs src : rest) = (cmd, rest)
               }
 parseCommand _ name _ rest = (Left $ format ("Expecting source block for " % s) name, rest)
 
-parseCommandName :: Text -> Either Text (Text, [Cmd.Placeholder])
+parseCommandName :: Text -> Either Text (Text, [P.Placeholder])
 parseCommandName = first (T.pack . show) . P.parse parser ""
   where
     parser = do
@@ -299,7 +301,7 @@ parseCommandName = first (T.pack . show) . P.parse parser ""
         args <- parseCommandArgs
         pure (name, args)
 
-parseCommandArgs :: Parser [Cmd.Placeholder]
+parseCommandArgs :: Parser [P.Placeholder]
 parseCommandArgs =
   P.choice
     [ (:) <$> parseCommandPlaceholder <*> parseCommandArgs,
@@ -308,24 +310,24 @@ parseCommandArgs =
     ]
 
 -- | Convenience wrapper for running placeholder parser
-parseCommandArg :: String -> Either String Cmd.Placeholder
+parseCommandArg :: String -> Either String P.Placeholder
 parseCommandArg = first show . P.parse parseCommandPlaceholder "" . T.pack
 
-parseCommandPlaceholder :: Parser Cmd.Placeholder
+parseCommandPlaceholder :: Parser P.Placeholder
 parseCommandPlaceholder = do
   let startCmdArg =
-        (Cmd.Stdin <$ P.char '<')
-          <|> (Cmd.Arg <$ P.char '$')
-          <|> (Cmd.EnvVar . T.pack <$> P.many (P.alphaNum <|> P.char '_') <* P.char '=')
+        (P.Stdin <$ P.char '<')
+          <|> (P.Arg <$ P.char '$')
+          <|> (P.EnvVar . T.pack <$> P.many (P.alphaNum <|> P.char '_') <* P.char '=')
   placeholderType <- P.try $ startCmdArg <* P.char '{'
   placeholder <- do
     name <- T.pack <$> P.many1 (P.noneOf " :|}")
     let fixup = T.replace "-" "_"
         placeholderWithName = case placeholderType of
-          Cmd.EnvVar "" -> Cmd.EnvVar $ fixup name
-          Cmd.EnvVar alias -> Cmd.EnvVar $ fixup alias
+          P.EnvVar "" -> P.EnvVar $ fixup name
+          P.EnvVar alias -> P.EnvVar $ fixup alias
           same -> same
-    pure $ Cmd.Placeholder placeholderWithName name [] False []
+    pure $ P.Placeholder placeholderWithName name P.Lines False []
   parsePlaceholderModifiers placeholder <* P.char '}'
 
 -- | Parse the "modifiers" which affect how command placeholders are handled.
@@ -342,7 +344,7 @@ parseCommandPlaceholder = do
 --
 -- Pipeline: `some-command ${placeholder | multiple | fields 1,3}`
 -- Shorthand: `some-command ${placeholder:m1,3}`
-parsePlaceholderModifiers :: Cmd.Placeholder -> Parser Cmd.Placeholder
+parsePlaceholderModifiers :: P.Placeholder -> Parser P.Placeholder
 parsePlaceholderModifiers placeholder = do
   P.choice
     [ parsePipeModifiers placeholder,
@@ -351,7 +353,7 @@ parsePlaceholderModifiers placeholder = do
     ]
   where
     -- Parse `command-name | fields 1,2 | multiple`
-    parsePipeModifiers :: Cmd.Placeholder -> Parser Cmd.Placeholder
+    parsePipeModifiers :: P.Placeholder -> Parser P.Placeholder
     parsePipeModifiers p = do
       _ <- P.many P.space *> P.char '|' *> P.many P.space
       p' <-
@@ -363,28 +365,29 @@ parsePlaceholderModifiers placeholder = do
       P.option p' (parsePipeModifiers p')
 
     parsePipeFields p =
-      (P.string "cols" *> P.many P.space *> parseFields Cmd.Col p) <|>
-      (P.string "fields" *> P.many P.space *> parseFields Cmd.Field p) <|>
-      (P.string "json" $> p {Cmd.fields = [Cmd.Json]})
+      (P.string "cols" *> P.many P.space *> parseFields P.Columns p)
+        <|> (P.string "fields" *> P.many P.space *> parseFields P.Fields p)
+        <|> (P.string "json" $> p {P.fields = P.JSON})
 
-    parsePipeMultiple p = (P.string "multi" :: Parser String) $> p {Cmd.multiple = True}
+    parsePipeMultiple p = (P.string "multi" :: Parser String) $> p {P.multiple = True}
 
     -- Parse `command-name:1,2`
-    parseColonModifiers :: Cmd.Placeholder -> Parser Cmd.Placeholder
+    parseColonModifiers :: P.Placeholder -> Parser P.Placeholder
     parseColonModifiers p = do
       _ <- P.char ':'
       -- Accept fields and multiple in any order
-      (parseFields Cmd.Field p >>= perhaps parseMultiple) <|> (parseMultiple p >>= perhaps (parseFields Cmd.Field))
+      (parseFields P.Fields p >>= perhaps parseMultiple) <|> (parseMultiple p >>= perhaps (parseFields P.Fields))
 
-    parseFields :: (Int -> Cmd.PlaceholderField) -> Cmd.Placeholder -> Parser Cmd.Placeholder
+    parseFields :: ([Int] -> P.PlaceholderFields) -> P.Placeholder -> Parser P.Placeholder
     parseFields fieldType p' = do
-      fields <-  mapMaybe readMaybe <$> (P.many1 P.digit `P.sepBy1` P.char ',')
-      pure $ p' {Cmd.fields = p'.fields <> (fieldType <$> fields)}
+      fields <- mapMaybe readMaybe <$> (P.many1 P.digit `P.sepBy1` P.char ',')
+      when (p'.fields /= P.Lines) $ fail "Placeholder format already set"
+      pure $ p' {P.fields = fieldType fields}
 
-    parseMultiple :: Cmd.Placeholder -> Parser Cmd.Placeholder
+    parseMultiple :: P.Placeholder -> Parser P.Placeholder
     parseMultiple p' = do
       multiple <- P.option False (True <$ P.char 'm')
-      pure $ p' {Cmd.multiple = multiple}
+      pure $ p' {P.multiple = multiple}
 
     -- Try a parser or default to `value`
     perhaps parser value = P.option value (parser value)
