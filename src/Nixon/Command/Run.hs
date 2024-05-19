@@ -98,8 +98,8 @@ resolveCmd project selector cmd select_opts = do
   linesEval <- getEvaluator (run_with_output stream) cmd args projectPath env' (toLines <$> stdin)
   jsonEval <- getEvaluator (run_with_output BS.stream) cmd args projectPath env' (BS.fromUTF8 <$> stdin)
   selection <- selector select_opts $ case select_opts.selector_format of
-    P.Columns cols -> do
-      let parseColumns' = map T.unwords . pickColumns cols . parseColumns
+    P.Columns hasHeader cols -> do
+      let parseColumns' = map T.unwords . pickColumns cols . parseColumns hasHeader
       (title, value) <- (drop 1 &&& parseColumns') . map lineToText <$> shell_to_list linesEval
       select $ zipWith Select.WithTitle title value
     P.Fields fields -> do

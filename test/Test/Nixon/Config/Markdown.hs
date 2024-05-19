@@ -327,7 +327,20 @@ command_tests = describe "commands section" $ do
                   "```"
                 ]
           selector = fmap (Cmd.cmdName &&& Cmd.cmdPlaceholders) . Cfg.commands
-          placeholder = Placeholder Arg "placeholder" (Columns [1]) False []
+          placeholder = Placeholder Arg "placeholder" (Columns False [1]) False []
+       in selector <$> result `shouldBe` Right [("hello", [placeholder])]
+
+  it "detects columns with header output format"
+    $ let result =
+            parseMarkdown "some-file.md"
+              $ T.unlines
+                [ "# `hello`",
+                  "```bash ${placeholder | cols+h 1}",
+                  "echo Hello World",
+                  "```"
+                ]
+          selector = fmap (Cmd.cmdName &&& Cmd.cmdPlaceholders) . Cfg.commands
+          placeholder = Placeholder Arg "placeholder" (Columns True [1]) False []
        in selector <$> result `shouldBe` Right [("hello", [placeholder])]
 
   it "errors on combined columns and fields output format"

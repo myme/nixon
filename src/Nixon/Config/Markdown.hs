@@ -365,7 +365,11 @@ parsePlaceholderModifiers placeholder = do
       P.option p' (parsePipeModifiers p')
 
     parsePipeFields p =
-      (P.string "cols" *> P.many P.space *> parseFields P.Columns p)
+      -- `cols+h` interprets the first line as a header, `cols` does not
+      ( P.string "cols" *> do
+          hasHeader <- P.option False (P.string "+h" $> True)
+          P.many P.space *> parseFields (P.Columns hasHeader) p
+      )
         <|> (P.string "fields" *> P.many P.space *> parseFields P.Fields p)
         <|> (P.string "json" $> p {P.format = P.JSON})
 

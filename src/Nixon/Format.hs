@@ -12,10 +12,10 @@ import Nixon.Prelude
 type Columns = [Text]
 
 -- | Parse ouput in column format into a list of rows of columns.
-parseColumns :: [Text] -> [Columns]
-parseColumns = \case
+parseColumns :: Bool -> [Text] -> [Columns]
+parseColumns hasHeader = \case
   [] -> []
-  (header : rows) -> parseColumn (parseWidths header) <$> rows
+  (header : rows) -> parseColumn (parseWidths header) <$> if hasHeader then rows else header : rows
   where
     parseWidths t
       | T.length t == 0 = []

@@ -86,7 +86,7 @@ nmcli connection
 
 Use the `networks` placeholder to select a network to connect to.
 
-```bash ${networks | cols 1}
+```bash ${networks | cols+h 1}
 # nmcli connection up "$1"
 echo "$@"
 ```

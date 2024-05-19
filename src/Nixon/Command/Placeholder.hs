@@ -12,7 +12,7 @@ data PlaceholderType = Arg | EnvVar {_envName :: Text} | Stdin
 
 data PlaceholderFormat
   = -- | Interpret output as columns and extract the specified columns
-    Columns [Int]
+    Columns Bool [Int]
   | -- | Interpret output as fields and extract the specified fields
     Fields [Int]
   | -- | Interpret output as plain lines
