@@ -97,19 +97,6 @@ defaults =
       selector_multiple = Nothing
     }
 
-instance Semigroup SelectorOpts where
-  (<>) lhs rhs =
-    SelectorOpts
-      { selector_title = selector_title rhs <|> selector_title lhs,
-        selector_search = selector_search rhs <|> selector_search lhs,
-        -- FIXME: Don't use Semigroup for this, this is not monodic.
-        selector_fields = selector_fields rhs,
-        selector_multiple = selector_multiple rhs <|> selector_multiple lhs
-      }
-
-instance Monoid SelectorOpts where
-  mempty = defaults
-
 type Selector m = SelectorOpts -> Shell Candidate -> m (Selection Text)
 
 type Select m a = ReaderT (Selector m) m a
@@ -118,8 +105,8 @@ default_selection :: [a] -> Selection a -> [a]
 default_selection _ (Selection _ value) = value
 default_selection def _ = def
 
-title :: Text -> SelectorOpts
-title t = defaults {selector_title = Just t}
+title :: SelectorOpts -> Text -> SelectorOpts
+title opts t = opts {selector_title = Just t}
 
 search :: Text -> SelectorOpts
 search s = defaults {selector_search = Just s}

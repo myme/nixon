@@ -37,7 +37,7 @@ runCmd selector project cmd args = do
   let projectPath = Project.project_path project
       project_selector select_opts shell' =
         cd projectPath
-          >> selector (select_opts <> Select.title (Cmd.show_command cmd)) shell'
+          >> selector (select_opts `Select.title` Cmd.show_command cmd) shell'
   (stdin, args', env') <- resolveEnv project project_selector cmd args
   let pwd = Cmd.cmdPwd cmd <|> Just projectPath
   evaluate cmd args' pwd env' (toLines <$> stdin)
@@ -45,7 +45,7 @@ runCmd selector project cmd args = do
 -- | Resolve all command placeholders to either stdin input, positional arguments or env vars.
 resolveEnv :: Project -> Selector Nixon -> Command -> [Text] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv project selector cmd args = do
-  let mappedArgs = zipArgs (Cmd.cmdPlaceholders cmd) args
+  let mappedArgs = zipArgs cmd.cmdPlaceholders args
   (stdin, args', envs) <- resolveEnv' project selector mappedArgs
   pure (stdin, args', nixonEnvs ++ envs)
   where
