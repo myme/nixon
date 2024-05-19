@@ -23,7 +23,7 @@ import Nixon.Process (run_with_output)
 import qualified Nixon.Process
 import Nixon.Project (Project)
 import qualified Nixon.Project as Project
-import Nixon.Select (Selection (..), Selector, selector_fields, selector_multiple)
+import Nixon.Select (Selection (..), Selector, selector_format, selector_multiple)
 import qualified Nixon.Select as Select
 import Nixon.Types (Nixon)
 import Nixon.Utils (shell_to_list, toLines)
@@ -63,13 +63,13 @@ zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 resolveEnv' :: Project -> Selector Nixon -> [(P.Placeholder, Select.SelectorOpts)] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv' project selector = foldM resolveEach (Nothing, [], [])
   where
-    resolveEach (stdin, args', envs) (P.Placeholder envType cmdName fields multiple value, select_opts) = do
+    resolveEach (stdin, args', envs) (P.Placeholder envType cmdName format' multiple value, select_opts) = do
       resolved <- case value of
         [] -> do
           cmd' <- assertCommand cmdName
           let select_opts' =
                 select_opts
-                  { selector_fields = fields,
+                  { selector_format = format',
                     selector_multiple = Just multiple
                   }
           resolveCmd project selector cmd' select_opts'
@@ -97,7 +97,7 @@ resolveCmd project selector cmd select_opts = do
   let projectPath = Just (Project.project_path project)
   linesEval <- getEvaluator (run_with_output stream) cmd args projectPath env' (toLines <$> stdin)
   jsonEval <- getEvaluator (run_with_output BS.stream) cmd args projectPath env' (BS.fromUTF8 <$> stdin)
-  selection <- selector select_opts $ case select_opts.selector_fields of
+  selection <- selector select_opts $ case select_opts.selector_format of
     P.Columns cols -> do
       let parseColumns' = map T.unwords . pickColumns cols . parseColumns
       (title, value) <- (drop 1 &&& parseColumns') . map lineToText <$> shell_to_list linesEval

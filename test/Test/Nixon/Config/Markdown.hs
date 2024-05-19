@@ -4,7 +4,7 @@ import Control.Arrow ((&&&))
 import Data.Either (isLeft)
 import qualified Data.Text as T
 import qualified Nixon.Command as Cmd
-import Nixon.Command.Placeholder (Placeholder (..), PlaceholderFields (..), PlaceholderType (..))
+import Nixon.Command.Placeholder (Placeholder (..), PlaceholderFormat (..), PlaceholderType (..))
 import Nixon.Config.Markdown (parseCommandName, parseHeaderArgs, parseMarkdown)
 import Nixon.Config.Types (defaultConfig)
 import qualified Nixon.Config.Types as Cfg

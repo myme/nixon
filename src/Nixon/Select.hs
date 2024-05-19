@@ -84,7 +84,7 @@ instance Functor Selection where
 data SelectorOpts = SelectorOpts
   { selector_title :: Maybe Text,
     selector_search :: Maybe Text,
-    selector_fields :: Cmd.PlaceholderFields,
+    selector_format :: Cmd.PlaceholderFormat,
     selector_multiple :: Maybe Bool
   }
 
@@ -93,7 +93,7 @@ defaults =
   SelectorOpts
     { selector_title = Nothing,
       selector_search = Nothing,
-      selector_fields = Cmd.Lines,
+      selector_format = Cmd.Lines,
       selector_multiple = Nothing
     }
 

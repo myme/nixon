@@ -367,7 +367,7 @@ parsePlaceholderModifiers placeholder = do
     parsePipeFields p =
       (P.string "cols" *> P.many P.space *> parseFields P.Columns p)
         <|> (P.string "fields" *> P.many P.space *> parseFields P.Fields p)
-        <|> (P.string "json" $> p {P.fields = P.JSON})
+        <|> (P.string "json" $> p {P.format = P.JSON})
 
     parsePipeMultiple p = (P.string "multi" :: Parser String) $> p {P.multiple = True}
 
@@ -378,11 +378,11 @@ parsePlaceholderModifiers placeholder = do
       -- Accept fields and multiple in any order
       (parseFields P.Fields p >>= perhaps parseMultiple) <|> (parseMultiple p >>= perhaps (parseFields P.Fields))
 
-    parseFields :: ([Int] -> P.PlaceholderFields) -> P.Placeholder -> Parser P.Placeholder
+    parseFields :: ([Int] -> P.PlaceholderFormat) -> P.Placeholder -> Parser P.Placeholder
     parseFields fieldType p' = do
       fields <- mapMaybe readMaybe <$> (P.many1 P.digit `P.sepBy1` P.char ',')
-      when (p'.fields /= P.Lines) $ fail "Placeholder format already set"
-      pure $ p' {P.fields = fieldType fields}
+      when (p'.format /= P.Lines) $ fail "Placeholder format already set"
+      pure $ p' {P.format = fieldType fields}
 
     parseMultiple :: P.Placeholder -> Parser P.Placeholder
     parseMultiple p' = do

@@ -34,7 +34,7 @@ import Nixon.Language (Language (..), fromFilePath)
 import Nixon.Logging (log_error, log_info)
 import Nixon.Prelude
 import Nixon.Process (run)
-import Nixon.Project (Project, project_path, inspectProjects)
+import Nixon.Project (Project, inspectProjects, project_path)
 import qualified Nixon.Project as P
 import Nixon.Select (Candidate (..), Selection (..), SelectionType (..))
 import qualified Nixon.Select as Select
