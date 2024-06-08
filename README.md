@@ -152,7 +152,7 @@ The `stdin` placeholder may be used to select candidates that will be passed to
 the command's `stdin`. Here we're using the `xargs` command to relay that as
 positional arguments to `vim`.
 
-```bash <{git-files | multi m}
+```bash <{git-files | multi}
 xargs vim -p
 ```
 
