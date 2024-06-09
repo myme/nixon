@@ -29,6 +29,7 @@ import Nixon.Project (Project (projectDir, projectName))
 import Nixon.Select (Candidate, Selection (..), SelectionType (..))
 import qualified Nixon.Select as Select
 import Nixon.Utils (implode_home, shell_to_list, toLines, (<<?))
+import System.Environment (getEnv)
 import Turtle
   ( ExitCode (ExitFailure, ExitSuccess),
     Shell,
@@ -127,6 +128,9 @@ data RofiResult
 -- | Launch rofi with the given options and candidates
 rofi :: (MonadIO m) => RofiOpts -> Shell Candidate -> m (Selection Text)
 rofi opts candidates = do
+  -- Add -normal-window flag when running on wayland
+  -- See: https://github.com/davatorium/rofi/issues/446
+  isWayland <- (== "wayland") <$> liftIO (getEnv "XDG_SESSION_TYPE")
   let args =
         "-dmenu"
           : build_args
@@ -134,6 +138,7 @@ rofi opts candidates = do
               flag "-i" =<< _ignore_case opts,
               flag "-markup-rows" (_markup opts),
               flag "-multi-select" (_multi opts),
+              flag "-normal-window" isWayland,
               arg "-mesg" =<< _msg opts,
               arg "-p" =<< _prompt opts,
               arg "-filter" =<< _query opts
