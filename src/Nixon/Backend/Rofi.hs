@@ -146,7 +146,7 @@ rofi opts candidates = do
 
   map' <- Map.fromList . fmap (Select.candidate_title &&& Select.candidate_value) <$> shell_to_list candidates
   (code, out) <- procStrict "rofi" args (toLines $ select $ Map.keys map')
-  let out' = (fmap (flip Map.lookup map' . T.strip) . T.lines) out
+  let out' = (fmap (`Map.lookup` map') . T.lines) out
   pure $ case code of
     ExitSuccess -> mkselection Default out'
     ExitFailure 1 -> CanceledSelection
