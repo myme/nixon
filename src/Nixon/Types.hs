@@ -34,13 +34,13 @@ data NixonError
 
 instance Exception NixonError
 
-get_backend :: MonadIO m => Maybe BackendType -> m BackendType
+get_backend :: (MonadIO m) => Maybe BackendType -> m BackendType
 get_backend backend = do
   def_backend <- liftIO $ bool Rofi Fzf <$> IO.hIsTerminalDevice IO.stdin
   pure $ fromMaybe def_backend backend
 
 -- | Merge the mess of CLI args, config file + user overrides (custom build)
-build_env :: MonadIO m => Config -> m Env
+build_env :: (MonadIO m) => Config -> m Env
 build_env config = do
   backend <- get_backend (Config.backend config)
   pure Env {backend, config = config}
@@ -51,7 +51,7 @@ instance HasLogging Nixon where
   loglevel = fromMaybe Logging.LogWarning . Config.loglevel . config <$> ask
   logout = printErr
 
-runNixon :: MonadIO m => Config -> ReaderT Env m a -> m a
+runNixon :: (MonadIO m) => Config -> ReaderT Env m a -> m a
 runNixon config action = do
   env <- liftIO (build_env config)
   runReaderT action env

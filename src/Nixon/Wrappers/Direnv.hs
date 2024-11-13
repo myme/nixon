@@ -23,8 +23,9 @@ direnv_cmd :: NonEmpty Text -> FilePath -> Nixon (Maybe (NonEmpty Text))
 direnv_cmd cmd path' = ask >>= wrapCmd . use_direnv . config
   where
     wrapCmd = \case
-      Just True -> liftIO $
-        runMaybeT $ do
+      Just True -> liftIO
+        $ runMaybeT
+        $ do
           direnv_active <- maybe False find_path <$> need "DIRENV_DIR"
           if direnv_active
             then pure cmd

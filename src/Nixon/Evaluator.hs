@@ -48,19 +48,19 @@ import Turtle
     (</>),
   )
 
-getCacheDir :: MonadIO m => m FilePath
+getCacheDir :: (MonadIO m) => m FilePath
 getCacheDir = liftIO $ fromText . T.pack <$> getXdgDirectory XdgCache "nixon"
 
-writeCommand :: MonadIO m => Command -> m FilePath
+writeCommand :: (MonadIO m) => Command -> m FilePath
 writeCommand cmd = do
   let content = cmdSource cmd
       sha1 = digestToHexByteString (hash (encodeUtf8 content) :: Digest SHA1)
       basename =
-        fromText $
-          decodeUtf8 sha1
-            <> "-"
-            <> cmdName cmd
-            <> extension (cmdLang cmd)
+        fromText
+          $ decodeUtf8 sha1
+          <> "-"
+          <> cmdName cmd
+          <> extension (cmdLang cmd)
 
   path <- liftIO $ do
     cacheDir <- getCacheDir
@@ -71,7 +71,7 @@ writeCommand cmd = do
   pure path
 
 -- | Clean up all cache files in $XDG_CACHE_DIR/nixon
-garbageCollect :: MonadIO m => Bool -> m [Text]
+garbageCollect :: (MonadIO m) => Bool -> m [Text]
 garbageCollect dryRun = shell_to_list $ do
   files <- ls =<< getCacheDir
   if dryRun
@@ -84,10 +84,10 @@ garbageCollect dryRun = shell_to_list $ do
 maybeWrapCmd :: Cwd -> NonEmpty Text -> Nixon (NonEmpty Text)
 maybeWrapCmd Nothing cmd = pure cmd
 maybeWrapCmd (Just path) cmd =
-  fmap (fromMaybe cmd) $
-    runMaybeT $
-      MaybeT (direnv_cmd cmd path)
-        <|> MaybeT (nix_cmd cmd path)
+  fmap (fromMaybe cmd)
+    $ runMaybeT
+    $ MaybeT (direnv_cmd cmd path)
+    <|> MaybeT (nix_cmd cmd path)
 
 -- | Provide an evaluator for a command, possibly in a direnv/nix environment
 getEvaluator :: RunArgs input m a -> Command -> [Text] -> Cwd -> Env -> Maybe (Shell input) -> Nixon (m a)
@@ -139,8 +139,8 @@ evaluate cmd args path env' stdin = do
                   ]
               cmd' = cmd {cmdSource = cmdSource cmd <> end}
           term <-
-            fmap (fromMaybe "x-terminal-emulator") $
-              runMaybeT $
-                MaybeT (Config.terminal . T.config <$> ask)
-                  <|> MaybeT (need "TERMINAL")
+            fmap (fromMaybe "x-terminal-emulator")
+              $ runMaybeT
+              $ MaybeT (Config.terminal . T.config <$> ask)
+              <|> MaybeT (need "TERMINAL")
           withEvaluator (Proc.spawn . ((term :| ["-e"]) <>)) cmd' args path env' stdin

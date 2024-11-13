@@ -24,10 +24,10 @@ logging = do
 
       test log_fn min_lvl = forAll genInput $ \(lvl, txt) ->
         let expected = [txt | lvl <= min_lvl]
-        in runLogger lvl (log_fn txt) == expected
+         in runLogger lvl (log_fn txt) == expected
 
   describe "filters log messages" $ do
     it "log_debug" $ test log_debug LogDebug
-    it "log_info"  $ test log_info  LogInfo
-    it "log_warn"  $ test log_warn  LogWarning
+    it "log_info" $ test log_info LogInfo
+    it "log_warn" $ test log_warn LogWarning
     it "log_error" $ test log_error LogError

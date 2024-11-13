@@ -17,7 +17,7 @@ import Nixon.Backend (Backend)
 import qualified Nixon.Backend as Backend
 import qualified Nixon.Backend.Fzf as Fzf
 import qualified Nixon.Backend.Rofi as Rofi
-import Nixon.Command (Command (cmdName, cmdSource, cmdLocation))
+import Nixon.Command (Command (cmdLocation, cmdName, cmdSource))
 import qualified Nixon.Command as Cmd
 import qualified Nixon.Config as Config
 import Nixon.Config.Options (RunOpts)

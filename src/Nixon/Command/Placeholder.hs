@@ -1,7 +1,7 @@
 module Nixon.Command.Placeholder
   ( Placeholder (..),
     PlaceholderFormat (..),
-    PlaceholderType (..)
+    PlaceholderType (..),
   )
 where
 

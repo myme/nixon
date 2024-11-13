@@ -52,16 +52,16 @@ instance HasStdin BS.ByteString where
 flag :: a -> Bool -> Maybe [a]
 flag key value = if value then Just [key] else Nothing
 
-arg :: Applicative f => a -> a -> f [a]
+arg :: (Applicative f) => a -> a -> f [a]
 arg key = pure . ([key] <>) . pure
 
-arg_fmt :: Applicative f => b -> (a -> b) -> a -> f [b]
+arg_fmt :: (Applicative f) => b -> (a -> b) -> a -> f [b]
 arg_fmt key f' = pure . ([key] <>) . pure . f'
 
 build_args :: [Maybe [a]] -> [a]
 build_args = concat . catMaybes
 
-build_cmd :: MonadIO m => NonEmpty Text -> Cwd -> Env -> m CreateProcess
+build_cmd :: (MonadIO m) => NonEmpty Text -> Cwd -> Env -> m CreateProcess
 build_cmd cmd cwd' env' = do
   currentEnv <- liftIO getEnvironment
   let (cmd' :| args) = fmap T.unpack cmd
@@ -84,7 +84,7 @@ type RunArgs b m a =
   m a
 
 -- | Run a command and wait for it to finish
-run :: MonadIO m => RunArgs Line m ()
+run :: (MonadIO m) => RunArgs Line m ()
 run cmd cwd' env' stdin = sh $ do
   cmd' <- build_cmd cmd cwd' env'
   case stdin of
@@ -94,7 +94,7 @@ run cmd cwd' env' stdin = sh $ do
 type Runner m a = CreateProcess -> Shell a -> m a
 
 -- | Run a process and return the output
-run_with_output :: HasStdin a => (MonadIO m, Alternative m) => Runner m a -> RunArgs a m a
+run_with_output :: (HasStdin a) => (MonadIO m, Alternative m) => Runner m a -> RunArgs a m a
 run_with_output stream' cmd cwd' env' stdin = do
   cmd' <- build_cmd cmd cwd' env'
   case stdin of
@@ -102,18 +102,19 @@ run_with_output stream' cmd cwd' env' stdin = do
     Just stdin' -> stream' cmd' {std_in = CreatePipe} stdin'
 
 -- | Spawn/fork off a command in the background
-spawn :: MonadIO m => RunArgs Line m ()
-spawn cmd cwd' env' stdin = liftIO $
-  void $
-    forkProcess $ do
-      _ <- createSession
-      run cmd cwd' env' stdin
+spawn :: (MonadIO m) => RunArgs Line m ()
+spawn cmd cwd' env' stdin = liftIO
+  $ void
+  $ forkProcess
+  $ do
+    _ <- createSession
+    run cmd cwd' env' stdin
 
-class Monad m => HasProc m where
+class (Monad m) => HasProc m where
   proc' :: Text -> [Text] -> Shell Line -> m (ExitCode, Text)
 
 instance HasProc IO where
   proc' = procStrict
 
-instance MonadIO m => HasProc (ReaderT a m) where
+instance (MonadIO m) => HasProc (ReaderT a m) where
   proc' cmd args input = liftIO $ proc' cmd args input

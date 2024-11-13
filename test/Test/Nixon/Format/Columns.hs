@@ -12,7 +12,7 @@ column_tests = do
 
   it "parses columns (titles only)" $ do
     let input = ["NAME               UUID                                  TYPE      DEVICE"]
-    parseColumns False input `shouldBe` [["NAME","UUID","TYPE","DEVICE"]]
+    parseColumns False input `shouldBe` [["NAME", "UUID", "TYPE", "DEVICE"]]
     parseColumns True input `shouldBe` []
 
   it "parses columns" $ do

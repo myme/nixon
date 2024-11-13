@@ -9,11 +9,11 @@ import Test.Hspec
 import Test.Nixon.Backend.Fzf (fzfTests)
 import Test.Nixon.Command.Find (findTests)
 import Test.Nixon.Config.Markdown
+import Test.Nixon.Format.Columns (column_tests)
 import Test.Nixon.Logging
 import Test.Nixon.Process (process)
 import Test.QuickCheck
 import Test.QuickCheck.Instances.Text ()
-import Test.Nixon.Format.Columns (column_tests)
 
 empty :: (Monad m) => a -> m (Selection Text)
 empty = const (pure EmptySelection)
@@ -39,8 +39,8 @@ main :: IO ()
 main = hspec $ do
   describe "Backend.Fzf" fzfTests
 
-  describe "Command" $
-    describe "Find" findTests
+  describe "Command"
+    $ describe "Find" findTests
 
   describe "Config" $ do
     describe "Markdown" markdown_tests
