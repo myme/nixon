@@ -11,7 +11,9 @@ import Control.Arrow ((&&&))
 import Control.Monad (foldM)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Foldable (find)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
+import qualified Nixon.Backend.Fzf as Fzf
 import Nixon.Command (Command)
 import qualified Nixon.Command as Cmd
 import Nixon.Command.Find (findProjectCommands)
@@ -23,7 +25,7 @@ import Nixon.Process (run_with_output)
 import qualified Nixon.Process
 import Nixon.Project (Project)
 import qualified Nixon.Project as Project
-import Nixon.Select (Selection (..), Selector, selector_format, selector_multiple)
+import Nixon.Select (Selection (..), Selector, selector_format, selector_multiple, selector_search)
 import qualified Nixon.Select as Select
 import Nixon.Types (Nixon)
 import Nixon.Utils (shell_to_list, toLines)
@@ -55,7 +57,7 @@ resolveEnv project selector cmd args = do
 zipArgs :: [P.Placeholder] -> [Text] -> [(P.Placeholder, Select.SelectorOpts)]
 zipArgs [] args' = map ((,Select.defaults) . argOverflow) args'
   where
-    argOverflow = P.Placeholder P.Arg "arg" P.Lines False . pure
+    argOverflow = P.Placeholder P.Arg "arg" P.Lines Nothing False False . pure
 zipArgs placeholders [] = map (,Select.defaults) placeholders
 zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 
@@ -63,16 +65,18 @@ zipArgs (p : ps) (a : as) = (p, Select.search a) : zipArgs ps as
 resolveEnv' :: Project -> Selector Nixon -> [(P.Placeholder, Select.SelectorOpts)] -> Nixon (Maybe (Shell Text), [Text], Nixon.Process.Env)
 resolveEnv' project selector = foldM resolveEach (Nothing, [], [])
   where
-    resolveEach (stdin, args', envs) (P.Placeholder envType cmdName format' multiple value, select_opts) = do
+    resolveEach (stdin, args', envs) (P.Placeholder envType cmdName format' search list multiple value, select_opts) = do
       resolved <- case value of
         [] -> do
+          let selector' = if list then const (Fzf.fzf $ Fzf.fzfFilter $ fromMaybe "" search) else selector
           cmd' <- assertCommand cmdName
           let select_opts' =
                 select_opts
                   { selector_format = format',
-                    selector_multiple = Just multiple
+                    selector_multiple = Just multiple,
+                    selector_search = search
                   }
-          resolveCmd project selector cmd' select_opts'
+          resolveCmd project selector' cmd' select_opts'
         _ -> pure value
       case envType of
         -- Standard inputs are concatenated

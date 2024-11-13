@@ -327,7 +327,7 @@ parseCommandPlaceholder = do
           P.EnvVar "" -> P.EnvVar $ fixup name
           P.EnvVar alias -> P.EnvVar $ fixup alias
           same -> same
-    pure $ P.Placeholder placeholderWithName name P.Lines False []
+    pure $ P.Placeholder placeholderWithName name P.Lines Nothing False False []
   parsePlaceholderModifiers placeholder <* P.char '}'
 
 -- | Parse the "modifiers" which affect how command placeholders are handled.
@@ -358,8 +358,10 @@ parsePlaceholderModifiers placeholder = do
       _ <- P.many P.space *> P.char '|' *> P.many P.space
       p' <-
         P.choice
-          [ parsePipeFields p,
-            parsePipeMultiple p
+          [ P.try $ parsePipeFields p,
+            P.try $ parsePipeFilter p,
+            P.try $ parsePipeList p,
+            P.try $ parsePipeMultiple p
           ]
       _ <- P.many P.space
       P.option p' (parsePipeModifiers p')
@@ -372,6 +374,14 @@ parsePlaceholderModifiers placeholder = do
       )
         <|> (P.string "fields" *> P.many P.space *> parseFields P.Fields p)
         <|> (P.string "json" $> p {P.format = P.JSON})
+
+    -- Parse `filter "some-filter"`
+    parsePipeFilter p = do
+      _ <- (P.string "filter" :: Parser String) *> P.many P.space
+      f <- P.between (P.char '"') (P.char '"') (P.many P.alphaNum)
+      pure p {P.filter = Just $ pack f}
+
+    parsePipeList p = (P.string "list" :: Parser String) $> p {P.list = True}
 
     parsePipeMultiple p = (P.string "multi" :: Parser String) $> p {P.multiple = True}
 

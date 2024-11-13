@@ -29,6 +29,10 @@ data Placeholder = Placeholder
     name :: Text,
     -- | The field numbers to extract
     format :: PlaceholderFormat,
+    -- | The filter to apply
+    filter :: Maybe Text,
+    -- | If the placeholder just lists the available options
+    list :: Bool,
     -- | If the placeholder can select multiple
     multiple :: Bool,
     -- | Pre-expanded value of the placeholder
