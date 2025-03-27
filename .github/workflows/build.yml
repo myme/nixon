@@ -16,10 +16,8 @@ jobs:
     strategy:
       matrix:
         ghc:
-          - "9.2"
-          - "9.4"
           - "9.6"
-          # - "9.8"
+          - "9.8"
       fail-fast: false
 
     steps:
@@ -54,7 +52,7 @@ jobs:
     - name: Install dependencies
       run: |
         cabal update
-        cabal install --overwrite-policy=always hlint
+        cabal install --overwrite-policy=always hlint-3.8
         cabal build --only-dependencies --enable-tests --enable-benchmarks
 
     - name: Hlint

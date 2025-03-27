@@ -15,6 +15,9 @@ import Test.Hspec
 match_error :: Text -> Either Text b -> Bool
 match_error match = either (T.isInfixOf match) (const False)
 
+match_errors :: [Text] -> Either Text b -> Bool
+match_errors matches result = any (`match_error` result) matches
+
 config_tests :: SpecWith ()
 config_tests = describe "config section" $ do
   it "allows empty JSON object"
@@ -143,7 +146,7 @@ config_tests = describe "config section" $ do
                     "```json",
                     "```"
                   ]
-         in result `shouldSatisfy` match_error "not enough input"
+         in result `shouldSatisfy` match_errors ["Unexpected end-of-input", "not enough input"]
 
     it "with unexpected bash config block"
       $ let result =
@@ -164,7 +167,7 @@ config_tests = describe "config section" $ do
                     "{,}",
                     "```"
                   ]
-         in result `shouldSatisfy` match_error "object key"
+         in result `shouldSatisfy` match_errors ["Unexpected \",}\\n\"", "object key"]
 
     it "fail on multiple config sections"
       $ let result =
