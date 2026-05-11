@@ -12,10 +12,14 @@ in
   attrs:
   attrs
   // {
-    executableSystemDepends = with pkgs; [
-      fzf
-      rofi
-    ];
+    executableSystemDepends =
+      with pkgs;
+      [
+        fzf
+      ]
+      ++ lib.optionals stdenv.hostPlatform.isLinux [
+        rofi
+      ];
     postInstall = ''
       # Install widgets into share/nixon
       mkdir -p $out/share/nixon
