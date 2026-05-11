@@ -11,17 +11,17 @@ permissions:
 
 jobs:
   build-cabal:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     strategy:
       matrix:
         ghc:
-          - "9.6"
-          - "9.8"
+          - "9.10"
+          - "9.12"
       fail-fast: false
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Install packages
       run: |
@@ -37,7 +37,7 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
 
     - name: Cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       env:
         cache-name: cache-cabal
       with:
@@ -52,7 +52,7 @@ jobs:
     - name: Install dependencies
       run: |
         cabal update
-        cabal install --overwrite-policy=always hlint-3.8
+        cabal install --overwrite-policy=always hlint-3.10
         cabal build --only-dependencies --enable-tests --enable-benchmarks
 
     - name: Hlint
@@ -67,13 +67,13 @@ jobs:
   build-nix:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - uses: cachix/install-nix-action@v20
+    - uses: cachix/install-nix-action@v31
       with:
         nix_path: nixpkgs=channel:nixos-unstable
 
-    - uses: cachix/cachix-action@v14
+    - uses: cachix/cachix-action@v17
       with:
         name: myme
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
