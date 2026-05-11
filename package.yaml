@@ -13,6 +13,7 @@ executables:
       - -threaded
       - -rtsopts
       - -with-rtsopts=-N
+      - -optP-Wno-nonportable-include-path
 
 library:
   source-dirs:
