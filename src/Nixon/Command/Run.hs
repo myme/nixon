@@ -19,7 +19,7 @@ import qualified Nixon.Command as Cmd
 import Nixon.Command.Find (findProjectCommands)
 import qualified Nixon.Command.Placeholder as P
 import Nixon.Evaluator (evaluate, getEvaluator)
-import Nixon.Format (parseColumns, pickColumns, pickFields)
+import Nixon.Format (formatColumns, pickFields)
 import Nixon.Prelude
 import Nixon.Process (run_with_output)
 import qualified Nixon.Process
@@ -103,9 +103,8 @@ resolveCmd project selector cmd select_opts = do
   jsonEval <- getEvaluator (run_with_output BS.stream) cmd args projectPath env' (BS.fromUTF8 <$> stdin)
   selection <- selector select_opts $ case select_opts.selector_format of
     P.Columns hasHeader cols -> do
-      let parseColumns' = map T.unwords . pickColumns cols . parseColumns hasHeader
-      (title, value) <- (drop 1 &&& parseColumns') . map lineToText <$> shell_to_list linesEval
-      select $ zipWith Select.WithTitle title value
+      rows <- map lineToText <$> shell_to_list linesEval
+      select $ uncurry Select.WithTitle <$> formatColumns hasHeader cols rows
     P.Fields fields -> do
       let parseFields' = T.unwords . pickFields fields . T.words
       (title, value) <- (id &&& map parseFields') . map lineToText <$> shell_to_list linesEval
