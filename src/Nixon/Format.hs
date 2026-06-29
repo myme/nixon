@@ -2,6 +2,7 @@ module Nixon.Format
   ( parseColumns,
     pickColumns,
     pickFields,
+    formatColumns,
   )
 where
 
@@ -28,6 +29,16 @@ parseColumns hasHeader = \case
     parseColumn [_] row = [row]
     parseColumn (w : ws) row = case T.splitAt w row of
       (col, rest) -> T.strip col : parseColumn ws rest
+
+-- | Build (title, value) selection candidates from column-formatted output.
+-- The title is the full original row as printed by the command; the value is
+-- the extracted columns joined by spaces. When the output has a header row it
+-- is dropped from both the titles and the values so the two stay aligned.
+formatColumns :: Bool -> [Int] -> [Text] -> [(Text, Text)]
+formatColumns hasHeader cols rows = zip titles values
+  where
+    titles = if hasHeader then drop 1 rows else rows
+    values = map T.unwords . pickColumns cols $ parseColumns hasHeader rows
 
 pickColumns :: [Int] -> [Columns] -> [Columns]
 pickColumns cols = map (map snd . filter ((`elem` cols) . fst) . zip [1 ..])
