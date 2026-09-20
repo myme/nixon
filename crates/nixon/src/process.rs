@@ -101,8 +101,10 @@ impl ProcessRunner for RealRunner {
         command.stdin(stdin_for(invocation));
 
         let mut child = command.spawn()?;
-        write_stdin(&mut child, invocation.stdin.as_deref())?;
-        Ok(exit_code(child.wait()?))
+        let writer = write_stdin(&mut child, invocation.stdin.as_deref());
+        let status = child.wait()?;
+        join(writer);
+        Ok(exit_code(status))
     }
 
     fn run_capture(&mut self, invocation: &Invocation) -> io::Result<Captured> {
@@ -111,8 +113,9 @@ impl ProcessRunner for RealRunner {
         command.stdout(Stdio::piped());
 
         let mut child = command.spawn()?;
-        write_stdin(&mut child, invocation.stdin.as_deref())?;
+        let writer = write_stdin(&mut child, invocation.stdin.as_deref());
         let output = child.wait_with_output()?;
+        join(writer);
         Ok(Captured {
             code: exit_code(output.status),
             stdout: output.stdout,
@@ -157,7 +160,9 @@ impl ProcessRunner for RealRunner {
         }
 
         let mut child = command.spawn()?;
-        write_stdin(&mut child, invocation.stdin.as_deref())?;
+        // Not joined: the picker may cancel long before the child has read
+        // everything, and the thread ends by itself when the pipe closes.
+        drop(write_stdin(&mut child, invocation.stdin.as_deref()));
 
         let stdout = child.stdout.take();
         let reader = stdout.map(|stdout| {
@@ -236,17 +241,34 @@ fn stdin_for(invocation: &Invocation) -> Stdio {
     }
 }
 
-/// Feeds the supplied lines to the child and closes its stdin.
-fn write_stdin(child: &mut std::process::Child, lines: Option<&[String]>) -> io::Result<()> {
-    let Some(lines) = lines else {
-        return Ok(());
-    };
-    if let Some(mut pipe) = child.stdin.take() {
+/// Feeds the supplied lines to the child on a thread, closing stdin after.
+///
+/// A pipe holds a page or two. Writing more than that from the thread that
+/// afterwards reads the child's stdout deadlocks: the child blocks writing
+/// to a full stdout pipe while nixon blocks writing to a full stdin pipe.
+fn write_stdin(
+    child: &mut std::process::Child,
+    lines: Option<&[String]>,
+) -> Option<std::thread::JoinHandle<()>> {
+    let lines = lines?.to_vec();
+    let mut pipe = child.stdin.take()?;
+
+    Some(std::thread::spawn(move || {
         for line in lines {
-            writeln!(pipe, "{line}")?;
+            // A child that stops reading closes the pipe. That is its
+            // choice, not a failure to report.
+            if writeln!(pipe, "{line}").is_err() {
+                break;
+            }
         }
+    }))
+}
+
+/// Waits for the stdin writer, once the child can no longer be read from.
+fn join(writer: Option<std::thread::JoinHandle<()>>) {
+    if let Some(writer) = writer {
+        let _ = writer.join();
     }
-    Ok(())
 }
 
 /// The child's code, or `128 + signal` when it was killed. SPEC §7.3.
@@ -500,6 +522,70 @@ mod tests {
             runner.run_capture(&invocation).unwrap().lines(),
             ["one", "two"]
         );
+    }
+
+    /// Lines for a stdin larger than a pipe buffer: past that, the child
+    /// fills its own stdout pipe before nixon has finished writing.
+    fn big_stdin() -> Vec<String> {
+        (0..8000).map(|n| format!("{n:060}")).collect()
+    }
+
+    /// The regression is a hang, so this waits with a deadline rather than
+    /// asserting. On a regression the worker and its `cat` stay blocked
+    /// until the test binary exits; that is the failure, not a leak.
+    fn within<T: Send + 'static>(what: &str, work: impl FnOnce() -> T + Send + 'static) -> T {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || sender.send(work()));
+        receiver
+            .recv_timeout(std::time::Duration::from_secs(20))
+            .unwrap_or_else(|_| panic!("{what} deadlocked"))
+    }
+
+    #[test]
+    fn a_captured_run_does_not_deadlock_on_a_large_stdin() {
+        let lines = big_stdin();
+        let expected = lines.clone();
+
+        let captured = within("run_capture", move || {
+            RealRunner
+                .run_capture(&Invocation {
+                    argv: argv(&["cat"]),
+                    stdin: Some(lines),
+                    ..Invocation::default()
+                })
+                .unwrap()
+        });
+
+        assert_eq!(captured.code, 0);
+        assert_eq!(captured.lines(), expected);
+    }
+
+    #[test]
+    fn a_streamed_run_does_not_deadlock_on_a_large_stdin() {
+        use std::sync::{Arc, Mutex};
+
+        let lines = big_stdin();
+        let expected = lines.clone();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&seen);
+
+        // The picker is supposed to open at once, so this must return long
+        // before the child has read everything.
+        let mut running = within("run_streaming", move || {
+            RealRunner
+                .run_streaming(
+                    &Invocation {
+                        argv: argv(&["cat"]),
+                        stdin: Some(lines),
+                        ..Invocation::default()
+                    },
+                    Box::new(move |line| sink.lock().unwrap().push(line)),
+                )
+                .unwrap()
+        });
+
+        assert_eq!(running.wait().unwrap(), 0);
+        assert_eq!(*seen.lock().unwrap(), expected);
     }
 
     #[test]
