@@ -410,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unparseable_eval_placeholder_is_a_cli_error() {
+    fn an_unparsable_eval_placeholder_is_a_cli_error() {
         assert!(Cli::try_parse_from(["nixon", "eval", "x", "${unterminated"]).is_err());
     }
 

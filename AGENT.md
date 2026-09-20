@@ -136,8 +136,7 @@ Fixture rules, each learned from a failure:
 
 The planning documents — `SPEC.md` (a checklist of v1 behaviour),
 `ENGINEERING.md` (how v2 was built) and `PARITY.md` (the two reconciled) —
-were removed in PLANNING_REMOVAL_HASH. Read them with
-`git show PLANNING_REMOVAL_HASH^:SPEC.md`.
+were removed in `a1c1978`; read them with `git show a1c1978^:SPEC.md`.
 
 The v1 Haskell implementation was removed in `2a84de2`; read it with
 `git show 2a84de2^:src/Nixon/<Module>.hs`.

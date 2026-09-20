@@ -1,8 +1,5 @@
 [files]
-extend-exclude = [
-  "Cargo.lock",
-  "flake.lock",
-]
+extend-exclude = ["Cargo.lock", "flake.lock"]
 
 [default]
 # v1's help-text typo, quoted deliberately.
