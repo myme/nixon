@@ -8,8 +8,9 @@ Project environment and command launcher, in Rust. Three crates:
 
 Dependencies point one way: `nixon-cli` → `nixon` → `nixon-picker`.
 
-- `nixon-picker` knows nothing about commands, projects or markdown. Only
-  `nixon::select` names it; no other module in `nixon` may.
+- `nixon-picker` knows nothing about commands, projects or markdown, and
+  `select.rs` is the only module that builds candidates and picker options
+  from nixon's types. Other modules may name the picker's types.
 - `Picker` is the only seam to the terminal, `ProcessRunner` the only seam to
   subprocesses. `App<P: Picker, R: ProcessRunner>` is generic over both, which
   is what lets the whole subcommand layer run in tests with fakes.
