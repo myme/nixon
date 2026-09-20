@@ -687,3 +687,14 @@ fn a_command_with_options_runs_on_its_defaults_without_a_terminal() {
 
     cmd.write_stdin("").assert().success().stdout("args: -v\n");
 }
+
+/// The path is absolute and runnable, so a command can exec it.
+#[test]
+fn a_command_can_run_the_nixon_binary_it_was_started_by() {
+    Fixture::with_config("# `again`\n\n```bash\n\"$nixon_bin\" --version\n```\n")
+        .nixon()
+        .arg("again")
+        .assert()
+        .success()
+        .stdout(contains("nixon "));
+}

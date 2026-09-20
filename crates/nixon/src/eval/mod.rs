@@ -13,6 +13,12 @@ use crate::process::{Captured, ExitCode, Invocation, ProcessRunner};
 /// The variable every command can read to find its project.
 pub const PROJECT_PATH_VAR: &str = "nixon_project_path";
 
+/// The variable every command can read to call nixon back.
+///
+/// An absolute path, so a command that runs nixon in another project works
+/// the same under `cargo run`, `nix run` and an installed binary.
+pub const BIN_VAR: &str = "nixon_bin";
+
 /// Everything evaluation needs that comes from outside the pure layers.
 pub struct Context<'a> {
     /// The effective configuration.
@@ -23,6 +29,8 @@ pub struct Context<'a> {
     pub shell: Option<&'a str>,
     /// `$DIRENV_DIR`, for the direnv wrapper.
     pub direnv_dir: Option<&'a str>,
+    /// The running executable, exported as [`BIN_VAR`].
+    pub exe: Option<&'a Path>,
 }
 
 /// One command, ready to run.
@@ -66,10 +74,16 @@ pub fn prepare(
         context.direnv_dir,
     );
 
+    // Every command can call nixon back, wherever nixon was run from.
+    let mut env = evaluation.env.clone();
+    if let Some(exe) = context.exe {
+        env.push((BIN_VAR.to_owned(), exe.to_string_lossy().into_owned()));
+    }
+
     Ok(Invocation {
         argv,
         cwd: evaluation.cwd.clone(),
-        env: evaluation.env.clone(),
+        env,
         stdin: evaluation.stdin.clone(),
     })
 }
@@ -178,6 +192,7 @@ mod tests {
             cache_dir: cache,
             shell: Some("/bin/zsh"),
             direnv_dir: None,
+            exe: None,
         }
     }
 

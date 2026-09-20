@@ -448,6 +448,7 @@ mod tests {
                 cache_dir: self.cache.path(),
                 shell: Some("/bin/bash"),
                 direnv_dir: None,
+                exe: None,
             };
             let project = project();
             let mut resolver = Resolver {
@@ -475,6 +476,7 @@ mod tests {
                 cache_dir: self.cache.path(),
                 shell: Some("/bin/bash"),
                 direnv_dir: None,
+                exe: None,
             };
             let project = project();
             let mut resolver = Resolver {

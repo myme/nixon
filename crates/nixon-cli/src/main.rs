@@ -80,6 +80,7 @@ fn run() -> Result<i32> {
         editor: std::env::var("VISUAL")
             .or_else(|_| std::env::var("EDITOR"))
             .ok(),
+        exe: std::env::current_exe().ok(),
     };
 
     let mut app = App::new(config, dirs, env, TuiPicker, RealRunner);

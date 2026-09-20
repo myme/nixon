@@ -64,6 +64,7 @@ impl Fixture {
             shell: Some("/bin/bash".to_owned()),
             direnv_dir: None,
             editor: Some("true".to_owned()),
+            exe: Some(PathBuf::from("/usr/bin/nixon")),
         }
     }
 
@@ -678,5 +679,21 @@ fn an_inner_command_is_not_given_the_outer_commands_toggles() {
             .any(|(name, _)| name.starts_with("nixon_opt_")),
         "the inner command saw {:?}",
         inner.env
+    );
+}
+
+/// Every command can call nixon back, wherever nixon itself came from.
+#[test]
+fn the_nixon_binary_is_in_the_environment() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[&["git-files"]]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    app.run(&RunOpts::default()).unwrap();
+
+    let env = &app.runner.last().unwrap().env;
+    assert!(
+        env.contains(&("nixon_bin".to_owned(), "/usr/bin/nixon".to_owned())),
+        "env was {env:?}"
     );
 }

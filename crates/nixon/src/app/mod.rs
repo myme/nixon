@@ -34,6 +34,8 @@ pub struct Environment {
     pub direnv_dir: Option<String>,
     /// `$VISUAL`, then `$EDITOR`; `nano` when neither is set.
     pub editor: Option<String>,
+    /// The running executable, exported so a command can call nixon back.
+    pub exe: Option<PathBuf>,
 }
 
 impl Environment {
@@ -68,6 +70,7 @@ pub fn context<'a>(env: &'a Environment, config: &'a Config, cache: &'a Path) ->
         cache_dir: cache,
         shell: env.shell.as_deref(),
         direnv_dir: env.direnv_dir.as_deref(),
+        exe: env.exe.as_deref(),
     }
 }
 
