@@ -237,7 +237,6 @@ mod tests {
         assert_eq!(sources, ["local", "global"]);
     }
 
-    #[cfg(unix)]
     /// A file name is not a shell word: a space splits the command and
     /// `$(…)` in it used to run.
     #[test]
@@ -266,6 +265,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     fn make_executable(path: &Path) {
         use std::os::unix::fs::PermissionsExt as _;
         let mut perms = std::fs::metadata(path).unwrap().permissions();
