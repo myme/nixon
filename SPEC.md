@@ -55,14 +55,14 @@ All global options come **before** the subcommand.
 | Flag | Type | Meaning |
 |---|---|---|
 | `-C, --config CONFIG` | path | Path to config file. Default: `$XDG_CONFIG_HOME/nixon.md` (shown in help with `~` collapsed via `implode_home`). |
-| `-b, --backend BACKEND` | `fzf` \| `rofi` | Selection backend. Any other value is a parse error. |
+| ~~`-b, --backend BACKEND`~~ | `fzf` \| `rofi` | v1 only. Selection backend. Any other value is a parse error. |
 | `-e, --exact` / `--no-exact` | tri-state | Exact matching in the selector. |
 | `-i, --ignore-case` / `--no-ignore-case` | tri-state | Case-insensitive matching. |
-| `-T, --force-tty` / `--no-force-tty` | tri-state | Never fork/spawn; run in the current TTY. |
+| ~~`-T, --force-tty` / `--no-force-tty`~~ | tri-state | v1 only. Never fork/spawn; run in the current TTY. |
 | `-p, --path PATH` | path, repeatable | Extra project directory (appended to `project_dirs`). |
 | `-d, --direnv` / `--no-direnv` | tri-state | Wrap in `direnv exec`. |
 | `-n, --nix` / `--no-nix` | tri-state | Wrap in `nix-shell`. |
-| `-t, --terminal TERMINAL` | text | Terminal emulator for non-GUI commands. |
+| ~~`-t, --terminal TERMINAL`~~ | text | v1 only. Terminal emulator for non-GUI commands. |
 | `-L, --loglevel LOGLEVEL` | `debug`\|`info`\|`warning`\|`warn`\|`error` | Log level. |
 | `-h, --help` | | Help. |
 
@@ -1296,8 +1296,10 @@ Installed by the Nix package to `share/nixon/` and `share/zsh/site-functions/_ni
 **zsh** (`nixon-widget.zsh`): `Alt-i` → `nixon -b fzf -T run -s` appended
 to `LBUFFER`, `zle reset-prompt`.
 
-- [ ] MUST: v2 must keep the exact CLI shapes these widgets use:
-      `-b fzf`, `-T`, `run -s`, `run -i`, `project -s`.
+- [ ] ~~MUST: v2 must keep the exact CLI shapes these widgets use:
+      `-b fzf`, `-T`, `run -s`, `run -i`, `project -s`.~~ Superseded by
+      ENGINEERING §7.2: `-b`/`-T` are removed and the widgets are
+      rewritten; `run -s`, `run -i`, `project -s` remain.
 - [ ] SHOULD: Ship equivalent widget files and completion scripts (clap
       has `clap_complete` for static completion; dynamic command/project
       completion needs a custom completer hook — see §2.4).

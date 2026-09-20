@@ -51,8 +51,7 @@ and a bare `cargo` on a rustup machine all use the same compiler.
 | `checks.toml-fmt` | `craneLib.taploFmt` |
 | `checks.doc` | `craneLib.cargoDoc` with `RUSTDOCFLAGS=-D warnings` |
 | `checks.test` | `craneLib.cargoNextest` (PTY tests included — the sandbox has `/dev/pts`) |
-| `checks.deny` | `craneLib.cargoDeny` (advisories, licenses, sources) |
-| `checks.audit` | `craneLib.cargoAudit` with the `advisory-db` flake input — optional, `deny` already covers it; keep only one |
+| `checks.deny` | `craneLib.cargoDeny` (advisories, licenses, sources). No separate `cargoAudit` check — same RustSec DB |
 | `checks.shear` | `runCommand` wrapping `cargo-shear` (crane has no helper) |
 | `checks.typos` | `runCommand` wrapping `typos` |
 | `checks.coverage` | `craneLib.cargoLlvmCov` producing an HTML report as a build output (not a gate) |
@@ -134,14 +133,14 @@ All of these run in CI; the first four also run locally via `bacon`/`nixon.md`.
 | `cargo doc --no-deps` with `RUSTDOCFLAGS="-D warnings"` | broken doc links, missing docs on pub items | `#![warn(missing_docs)]` on the lib |
 | `cargo nextest run` | tests | Faster, per-test process isolation (important: tests that `chdir` or set env vars can't poison each other), JUnit output, retries for flaky PTY tests |
 | `cargo llvm-cov nextest` | coverage report | Upload to Codecov/Coveralls or just publish the HTML artifact. Don't gate on a number initially; gate on "no decrease" once stable |
-| `cargo deny check` | advisories, licenses, duplicate versions, sources | `deny.toml`. Supersedes `cargo-audit` (same RustSec DB) — run one, not both |
+| `cargo deny check` | advisories, licenses, duplicate versions, sources | `deny.toml`. Replaces `cargo-audit` (same RustSec DB); we do not run both |
 | [`cargo shear`](https://crates.io/crates/cargo-shear) 1.13 | unused / misplaced deps | Successor to `cargo-machete`/`cargo-udeps`; works on stable |
 | `cargo msrv verify` | MSRV honesty | |
 | `typos` | spelling in code, docs, nixon.md | Would have caught "Terminal emultor" |
 | `taplo fmt --check` | `Cargo.toml` / `*.toml` formatting | |
 | [`cargo mutants`](https://crates.io/crates/cargo-mutants) 27.1 | mutation testing | Nightly/weekly job, not per-PR. Scope to `markdown/`, `placeholder/`, `format/`, `config/` — the pure modules where a mutant slipping through means the parser spec is under-tested |
 | `cargo hack --feature-powerset` | only if we grow optional features | Skip initially |
-| Miri | only for `unsafe` | Expect a single `unsafe` (`pre_exec`/`setsid`); `#![forbid(unsafe_code)]` everywhere else, `#![allow]` in `process.rs` only |
+| Miri | only for `unsafe` | Expect a single `unsafe` (`pre_exec`/`setsid`); workspace `unsafe_code = "deny"`, `#![allow(unsafe_code)]` in `process.rs` only |
 
 Not needed: `cargo-semver-checks` (we don't publish a library API), `cargo-vet` (overkill for a personal tool; `cargo-deny` sources/licence policy is enough).
 
@@ -149,7 +148,7 @@ Not needed: `cargo-semver-checks` (we don't publish a library API), `cargo-vet` 
 
 ```toml
 [workspace.lints.rust]
-unsafe_code = "forbid"          # overridden with allow(unsafe_code) in process.rs
+unsafe_code = "deny"            # process.rs opts out with #![allow(unsafe_code)]; forbid can't be overridden
 missing_docs = "warn"
 unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
@@ -214,8 +213,7 @@ nixon/
 │   ├── nixon-picker/          # generic fuzzy picker (ratatui + nucleo); no nixon concepts
 │   ├── nixon/                 # library: everything in SPEC.md
 │   └── nixon-cli/             # binary: clap, miette reporting, tracing setup, completion
-├── extra/                     # shell widgets, completion loaders
-└── tests/                     # cross-crate functional tests live in crates/nixon-cli/tests
+└── extra/                     # shell widgets, completion loaders
 ```
 
 ### 4.1 `nixon-picker` (library)
@@ -437,7 +435,7 @@ The `Nixon.hs` global-options row in SPEC §2.1 therefore shrinks to:
 | Background (`&`) commands | Detached via `Command` + new process group/session, stdio → `/dev/null`; no `fork()`. |
 | SIGINT while a foreground child runs | Ignored in nixon, delivered to the child (as v1). |
 | Child exit status | **Propagated** as nixon's exit code (v1 always exited 0). |
-| Cancel (Esc/^C) anywhere, including during placeholder expansion | Exit **130**, message `Selection canceled.` on stderr. No panic. |
+| Cancel (Esc/^C) anywhere, including during placeholder expansion | Exit **130**, message `Selection canceled.` on stderr. No panic. Deliberately collides with a child that itself exits 130 (SIGINT) — both mean "interrupted" to a shell script, and that is the conventional code. |
 | Keys in the picker | `Enter` run · `Alt-Enter` edit-before-run · `F1` show source · `F2` open in `$EDITOR` · `Tab` toggle mark (multi) · `Esc`/`Ctrl-C` cancel · `Ctrl-N/P`, `Up/Down` move. Same as v1's fzf bindings plus fzf's defaults people already use. |
 | `-1` auto-select | Kept: a query (from the CLI positional) that matches exactly one candidate selects it without opening the picker. |
 | ANSI in candidates | Kept (fzf `--ansi`): rendered in the picker, stripped from returned values. |
