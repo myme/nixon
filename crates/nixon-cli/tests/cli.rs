@@ -62,6 +62,12 @@ impl Fixture {
     /// The binary, with the host environment cleared. ENGINEERING §5.
     fn nixon(&self) -> Command {
         let mut cmd = Command::cargo_bin("nixon").unwrap();
+        self.apply(&mut cmd);
+        cmd
+    }
+
+    /// The same environment, for a command that wraps the binary.
+    fn apply(&self, cmd: &mut Command) {
         cmd.env_clear()
             .env("PATH", std::env::var("PATH").unwrap_or_default())
             .env("HOME", self.temp.path())
@@ -69,7 +75,6 @@ impl Fixture {
             .env("XDG_CACHE_HOME", self.temp.child("cache").path())
             .env("SHELL", "/bin/bash")
             .current_dir(self.temp.child("project").path());
-        cmd
     }
 }
 
@@ -457,4 +462,24 @@ fn internal_mangen_writes_a_man_page() {
         page.contains(".SH \"SEE ALSO\""),
         "man page should point at the docs/ pages"
     );
+}
+
+/// With no controlling terminal, a pick that needs one must say so rather
+/// than surface the raw `ENXIO` from `/dev/tty`.
+#[test]
+#[cfg(unix)]
+fn a_selection_without_a_terminal_is_a_named_error() {
+    let fixture = Fixture::new();
+    let nixon = assert_cmd::cargo::cargo_bin("nixon");
+
+    // setsid drops the controlling terminal; stderr may still be one.
+    let mut cmd = Command::new("setsid");
+    cmd.arg("--wait").arg(nixon);
+    fixture.apply(&mut cmd);
+
+    cmd.write_stdin("")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("interactive selection needs a terminal"));
 }

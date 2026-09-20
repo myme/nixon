@@ -66,7 +66,19 @@ pub enum NixonError {
 
     /// Anything the filesystem or a child process reported.
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(std::io::Error),
+}
+
+/// The picker reports "no terminal" as `NotConnected`, which is otherwise
+/// unreachable here: nixon opens files and pipes, never sockets.
+impl From<std::io::Error> for NixonError {
+    fn from(err: std::io::Error) -> Self {
+        if err.kind() == std::io::ErrorKind::NotConnected {
+            Self::NoTerminal
+        } else {
+            Self::Io(err)
+        }
+    }
 }
 
 impl NixonError {
@@ -93,6 +105,20 @@ mod tests {
             .exit_code(),
             1
         );
+    }
+
+    #[test]
+    fn a_picker_without_a_terminal_becomes_a_named_error() {
+        let err = NixonError::from(nixon_picker::terminal::no_terminal());
+        assert!(matches!(err, NixonError::NoTerminal));
+        assert_eq!(err.to_string(), "interactive selection needs a terminal");
+        assert_eq!(err.exit_code(), 1);
+    }
+
+    #[test]
+    fn other_io_errors_are_left_alone() {
+        let err = NixonError::from(std::io::Error::from(std::io::ErrorKind::NotFound));
+        assert!(matches!(err, NixonError::Io(_)));
     }
 
     #[test]

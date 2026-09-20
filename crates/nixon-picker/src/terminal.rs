@@ -20,6 +20,25 @@ use ratatui::backend::CrosstermBackend;
 /// and `--insert`, which the shell widgets read. ENGINEERING §2.1.
 pub struct TerminalGuard {
     terminal: Terminal<CrosstermBackend<Stderr>>,
+    /// Puts the terminal back, however construction or use ends.
+    _restore: Restore,
+}
+
+/// The error a picker reports when there is no terminal to draw on.
+///
+/// Raised where it is first noticed: with no controlling terminal, raw mode
+/// fails with a bare `ENXIO` that says nothing to a user.
+pub fn no_terminal() -> io::Error {
+    io::Error::new(io::ErrorKind::NotConnected, "no terminal")
+}
+
+/// Owns the restore, from the moment raw mode is on.
+struct Restore;
+
+impl Drop for Restore {
+    fn drop(&mut self) {
+        restore();
+    }
 }
 
 impl TerminalGuard {
@@ -32,7 +51,10 @@ impl TerminalGuard {
     /// legacy encoding, which the keymap also accepts. ENGINEERING §7.2.
     pub fn new() -> io::Result<Self> {
         install_panic_hook();
-        enable_raw_mode()?;
+        enable_raw_mode().map_err(|_| no_terminal())?;
+        // From here on every path, including an early return, restores.
+        let _restore = Restore;
+
         let mut stderr = io::stderr();
         execute!(stderr, EnterAlternateScreen)?;
         if supports_keyboard_enhancement().unwrap_or(false) {
@@ -43,18 +65,13 @@ impl TerminalGuard {
         }
         Ok(Self {
             terminal: Terminal::new(CrosstermBackend::new(stderr))?,
+            _restore,
         })
     }
 
     /// The terminal to draw on.
     pub const fn terminal(&mut self) -> &mut Terminal<CrosstermBackend<Stderr>> {
         &mut self.terminal
-    }
-}
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        restore();
     }
 }
 
