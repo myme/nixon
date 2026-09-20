@@ -20,6 +20,8 @@ serde_json = "1"
 thiserror = "2"
 winnow = "1"
 
+clap = { version = "4", features = ["derive"] }
+clap_complete = { version = "4", features = ["unstable-dynamic"] }
 comrak = { version = "0.55", default-features = false }
 ansi-to-tui = "8"
 crossterm = "0.29"
@@ -28,6 +30,7 @@ glob = "0.3"
 sha1 = "0.10"
 shell-words = "1"
 tracing = "0.1"
+tracing-subscriber = "0.3"
 signal-hook = "0.3"
 nucleo-matcher = "0.3"
 ratatui = "0.30"

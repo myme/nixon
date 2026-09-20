@@ -26,6 +26,10 @@ pub struct Cli {
 /// concept; passing one is an ordinary unexpected-argument error.
 /// ENGINEERING §7.2.
 #[derive(Debug, Args)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate command-line option"
+)]
 pub struct GlobalOpts {
     /// Path to config file.
     #[arg(short = 'C', long, value_name = "CONFIG")]
@@ -156,6 +160,10 @@ pub struct RunArgs {
 
 /// `nixon project`. SPEC §2.2.
 #[derive(Debug, Default, Args)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate command-line option"
+)]
 pub struct ProjectArgs {
     /// Project to select.
     pub project: Option<String>,
@@ -216,6 +224,10 @@ pub struct NewArgs {
 
 /// Any string is a language; unknown ones simply have no interpreter.
 /// SPEC §7.1.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "clap's value_parser requires a fallible signature"
+)]
 fn parse_language(value: &str) -> Result<Language, String> {
     Ok(Language::from(value))
 }

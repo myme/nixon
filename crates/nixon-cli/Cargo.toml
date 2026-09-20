@@ -13,7 +13,12 @@ name = "nixon"
 path = "src/main.rs"
 
 [dependencies]
+clap.workspace = true
+clap_complete.workspace = true
 nixon.workspace = true
+nixon-picker.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [lints]
 workspace = true
