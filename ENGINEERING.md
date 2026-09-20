@@ -367,6 +367,13 @@ Conventions:
   files) must not use real marker names like `.git` in fixtures: an ancestor
   of the temp dir may match (this host has a stray `/tmp/.git`). Derive the
   marker name from the temp directory itself.
+- PTY tests assert on **post-exit stdout, exit code and side effects** (a
+  fake `$EDITOR` that records argv), never on screen content: ratatui
+  interleaves cursor-positioning escapes between characters, so
+  `expect("text")` against the screen is a coin flip.
+- `-1`/`select_one` fires on the **empty** query too: a fixture with exactly
+  one command runs it before any key arrives. Give interactive fixtures at
+  least two candidates.
 - PTY tests are tagged `#[ignore = "pty"]`-style via nextest filter
   (`.config/nextest.toml` profile) so they can be excluded on constrained
   runners but run in CI.

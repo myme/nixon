@@ -928,7 +928,9 @@ Some(true)` → multi.
       options). Output lines are returned as `Selection(Default, lines)`
       verbatim.
 - [ ] MUST: Interactive mode: argv = `["-1", "--ansi"] ++ build_args`.
-      `-1` auto-selects when only one candidate matches the query.
+      `-1` auto-selects when only one candidate matches the query —
+      **including the empty query**: a project with a single command runs it
+      without the picker ever appearing. v2 keeps this (`select_one`).
 - [ ] MUST: Exit code mapping: `0` → success; `1` → `Empty` (no match);
       `130` → `Canceled` (^C/Esc); other → **crash** with
       `nixon: Prelude.undefined` (verified: running interactive fzf without a
