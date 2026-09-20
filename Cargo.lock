@@ -1237,6 +1237,7 @@ version = "0.2.0"
 dependencies = [
  "assert_fs",
  "comrak",
+ "crossterm",
  "etcetera",
  "glob",
  "nixon-picker",

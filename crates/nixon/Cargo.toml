@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 comrak.workspace = true
+crossterm.workspace = true
 etcetera.workspace = true
 glob.workspace = true
 sha1.workspace = true

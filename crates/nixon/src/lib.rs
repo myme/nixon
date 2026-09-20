@@ -24,11 +24,23 @@ pub mod format;
 pub mod fs;
 pub mod language;
 pub mod markdown;
+pub mod output;
 pub mod placeholder;
 pub mod process;
 pub mod project;
 pub mod resolve;
 pub mod select;
+
+use nixon_picker::matcher::MatchOptions;
+
+/// Turns the config's matching flags into the picker's. SPEC §8.3.
+pub fn matcher_options(config: &config::Config) -> MatchOptions {
+    MatchOptions {
+        exact: config.exact_match.unwrap_or(false),
+        ignore_case: config.ignore_case.unwrap_or(false),
+        sort: true,
+    }
+}
 
 /// Runs nixon. Subcommand dispatch lands with SPEC §10.
 #[expect(
