@@ -60,6 +60,13 @@ pub enum NixonError {
         filter: Option<String>,
     },
 
+    /// A project was named by a path that is not a directory.
+    #[error("no such project: {path}")]
+    NoSuchProject {
+        /// The path as it was given, with `~` expanded.
+        path: String,
+    },
+
     /// Nothing was selected.
     #[error("{0}")]
     NothingSelected(String),

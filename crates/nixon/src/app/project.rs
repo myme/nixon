@@ -1,6 +1,6 @@
 //! `nixon project`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection, SelectionType};
 
@@ -9,7 +9,7 @@ use crate::error::{NixonError, Result};
 use crate::output;
 use crate::process::{ExitCode, ProcessRunner};
 use crate::project::Project;
-use crate::project::detect::{find_in_project, inspect};
+use crate::project::detect::{find_in_project, find_project_types, inspect};
 use crate::select;
 
 /// What `project` was asked to do.
@@ -100,6 +100,9 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         {
             return Ok((SelectionType::Default, vec![project]));
         }
+        if let Some(path) = query.filter(|query| *query != ".").and_then(as_path) {
+            return Ok((SelectionType::Default, vec![self.project_at(&path)?]));
+        }
         let query = if query == Some(".") { None } else { query };
 
         let projects = self.projects();
@@ -128,6 +131,23 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         }
     }
 
+    /// The project a path names, with its types detected on the spot.
+    ///
+    /// No discovery and no picker: a path is already an answer. It need not
+    /// be under `project_dirs` at all, which is the point — a command can
+    /// hand nixon a directory it worked out for itself.
+    fn project_at(&self, path: &Path) -> Result<Project> {
+        let path = expand_home(path, &self.dirs.home);
+        if !path.is_dir() {
+            return Err(NixonError::NoSuchProject {
+                path: path.to_string_lossy().into_owned(),
+            });
+        }
+        let path = path.canonicalize().unwrap_or(path);
+        let types = find_project_types(&path, &self.config.project_types);
+        Ok(Project::from_path(&path, types))
+    }
+
     /// Picks exactly one project, which is what `eval --project` wants.
     pub fn pick_one_project(&mut self, query: Option<&str>) -> Result<Project> {
         let (_, projects) = self.pick_projects(query, false)?;
@@ -145,5 +165,31 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             return Ok(project);
         }
         self.pick_one_project(query)
+    }
+}
+
+/// Whether a query names a directory rather than describing one.
+///
+/// A path is anything with a separator in it, or the three prefixes a shell
+/// user writes for "here" and "home".
+fn as_path(query: &str) -> Option<PathBuf> {
+    let looks_like_path = query.contains('/')
+        || query == "~"
+        || query == ".."
+        || query.starts_with("~/")
+        || query.starts_with("./")
+        || query.starts_with("../");
+    looks_like_path.then(|| PathBuf::from(query))
+}
+
+/// Expands a leading `~` against the user's home.
+fn expand_home(path: &Path, home: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    match text.strip_prefix('~') {
+        Some("") => home.to_path_buf(),
+        Some(rest) => rest
+            .strip_prefix('/')
+            .map_or_else(|| path.to_path_buf(), |rest| home.join(rest)),
+        None => path.to_path_buf(),
     }
 }

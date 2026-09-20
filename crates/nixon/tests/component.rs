@@ -653,8 +653,9 @@ fn a_complete_command_line_skips_the_confirm_prompt() {
     })
     .unwrap();
 
-    // Only the command pick; no confirm call was recorded.
-    assert_eq!(app.picker.calls.len(), 1);
+    // The name is exact, so not even the command picker ran; what matters
+    // is that no confirm call was recorded.
+    assert!(app.picker.calls.is_empty());
     assert_eq!(&app.runner.last().unwrap().argv[2..], ["--release"]);
 }
 
@@ -696,4 +697,207 @@ fn the_nixon_binary_is_in_the_environment() {
         env.contains(&("nixon_bin".to_owned(), "/usr/bin/nixon".to_owned())),
         "env was {env:?}"
     );
+}
+
+/// A path is already an answer: no discovery, no picker.
+#[test]
+fn a_project_given_as_a_path_is_resolved_directly() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[&["git-files"]]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    app.project(&ProjectOpts {
+        project: Some(fixture.project_path().to_string_lossy().into_owned()),
+        select: true,
+        ..ProjectOpts::default()
+    })
+    .unwrap();
+
+    // Only the command pick, if any: the project was never picked.
+    assert!(
+        app.picker.calls.is_empty(),
+        "the picker was asked: {:?}",
+        app.picker.calls
+    );
+}
+
+/// The types come from the directory named, so its own commands apply.
+#[test]
+fn a_project_given_as_a_path_carries_its_types() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[&["git-files"]]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    let project = app
+        .pick_one_project(Some(&fixture.project_path().to_string_lossy()))
+        .unwrap();
+
+    assert_eq!(
+        project.path(),
+        fixture.project_path().canonicalize().unwrap()
+    );
+    assert_eq!(
+        project
+            .types
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>(),
+        ["marked"]
+    );
+}
+
+/// `~` expands against the home nixon was told about.
+#[test]
+fn a_project_path_expands_a_leading_tilde() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    let project = app.pick_one_project(Some("~/project")).unwrap();
+    assert_eq!(
+        project.path(),
+        fixture.project_path().canonicalize().unwrap()
+    );
+}
+
+/// A path that is not there is an error naming it, not a fuzzy query.
+#[test]
+fn a_project_path_that_does_not_exist_is_an_error() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    let err = app.pick_one_project(Some("~/nowhere")).unwrap_err();
+    assert!(
+        matches!(&err, NixonError::NoSuchProject { path } if path.ends_with("/nowhere")),
+        "got {err:?}"
+    );
+}
+
+/// A name with no separator is still a query for the picker.
+#[test]
+fn a_bare_name_is_still_a_query() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[&["/somewhere/else"]]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    app.pick_one_project(Some("project")).unwrap();
+    assert_eq!(
+        app.picker.calls[0].0.initial_query.as_deref(),
+        Some("project")
+    );
+}
+
+/// A directory under `project_dirs` is the same project whichever way it is
+/// reached.
+#[test]
+fn a_path_and_discovery_agree_on_the_same_directory() {
+    let mut fixture = Fixture::new(VIM_FILE_MD);
+    fixture.config.project_dirs = vec![fixture.temp.path().to_path_buf()];
+
+    let picker = picks(&[]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    let discovered = app
+        .projects()
+        .into_iter()
+        .find(|project| project.name == Path::new("project"))
+        .expect("discovery should find the fixture project");
+    let by_path = app
+        .pick_one_project(Some(&fixture.project_path().to_string_lossy()))
+        .unwrap();
+
+    assert_eq!(by_path.path(), discovered.path().canonicalize().unwrap());
+    assert_eq!(
+        by_path
+            .types
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>(),
+        discovered
+            .types
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+const AMBIGUOUS_MD: &str = "\
+# `link`
+
+```bash
+echo ran-link
+```
+
+# `link-all`
+
+```bash
+echo ran-link-all
+```
+
+# `_packages`
+
+```bash
+echo ran-packages
+```
+";
+
+/// An exact name wins over the rows it also fuzzy-matches.
+#[test]
+fn an_exact_command_name_needs_no_picker() {
+    let fixture = Fixture::new(AMBIGUOUS_MD);
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+
+    app.run(&RunOpts {
+        command: Some("link".to_owned()),
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert!(app.picker.calls.is_empty(), "the picker was asked");
+    assert!(app.runner.last().unwrap().argv[1].ends_with("-link.sh"));
+}
+
+/// A hidden command is not in the picker, so naming it has to be enough.
+#[test]
+fn a_hidden_command_runs_when_named_in_full() {
+    let fixture = Fixture::new(AMBIGUOUS_MD);
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+
+    app.run(&RunOpts {
+        command: Some("_packages".to_owned()),
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert!(app.runner.last().unwrap().argv[1].ends_with("-_packages.sh"));
+}
+
+/// A partial name still goes to the picker.
+#[test]
+fn a_partial_command_name_still_opens_the_picker() {
+    let fixture = Fixture::new(AMBIGUOUS_MD);
+    let mut app = fixture.app(picks(&[&["link-all"]]), FakeRunner::new());
+
+    app.run(&RunOpts {
+        command: Some("lnk".to_owned()),
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert_eq!(app.picker.calls.len(), 1);
+    assert!(app.runner.last().unwrap().argv[1].ends_with("-link-all.sh"));
+}
+
+/// `edit` offers hidden commands, and an exact name goes straight there.
+#[test]
+fn edit_takes_an_exact_hidden_name() {
+    let fixture = Fixture::new(AMBIGUOUS_MD);
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+
+    app.edit(Some("_packages")).unwrap();
+
+    assert!(app.picker.calls.is_empty());
+    let argv = &app.runner.last().unwrap().argv;
+    assert!(argv.last().unwrap().ends_with("nixon.md"), "argv: {argv:?}");
 }
