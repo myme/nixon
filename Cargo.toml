@@ -2,6 +2,11 @@
 members = ["crates/nixon", "crates/nixon-cli", "crates/nixon-picker"]
 resolver = "3"
 
+# crane reads the package name from here; without it every build warns
+# about a placeholder name.
+[workspace.metadata.crane]
+name = "nixon"
+
 [workspace.package]
 version = "0.2.0"
 edition = "2024"
