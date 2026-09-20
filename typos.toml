@@ -1,2 +1,18 @@
 [files]
-extend-exclude = ["src/", "app/", "test/", "SPEC.md", "flake.lock"]
+extend-exclude = [
+  # Haskell v1; stays until parity, then deleted.
+  "src/",
+  "app/",
+  "test/",
+  # Documents v1 verbatim, its typos included.
+  "SPEC.md",
+  "Cargo.lock",
+  "flake.lock",
+]
+
+[default]
+# v1's help-text typo, quoted deliberately (SPEC §2.1).
+extend-ignore-re = ["Terminal emultor"]
+
+[default.extend-words]
+ratatui = "ratatui"

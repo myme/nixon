@@ -6,6 +6,10 @@ use std::process::ExitCode;
 pub mod select;
 
 /// Runs nixon. Subcommand dispatch lands with SPEC §10.
+#[expect(
+    clippy::missing_const_for_fn,
+    reason = "const only because the body is still empty; drop this with SPEC §10"
+)]
 pub fn run() -> ExitCode {
     ExitCode::SUCCESS
 }
