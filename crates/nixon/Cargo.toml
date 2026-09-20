@@ -20,6 +20,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 winnow.workspace = true
 
+[features]
+test-util = ["nixon-picker/test-util"]
+
 [dev-dependencies]
 assert_fs.workspace = true
 proptest.workspace = true

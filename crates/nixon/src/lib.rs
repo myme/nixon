@@ -23,6 +23,7 @@ pub mod fs;
 pub mod language;
 pub mod markdown;
 pub mod placeholder;
+pub mod process;
 pub mod project;
 pub mod select;
 
