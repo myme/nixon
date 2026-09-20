@@ -64,6 +64,10 @@ and a bare `cargo` on a rustup machine all use the same compiler.
 - `Cargo.lock` is committed; crane vendors from it. Builds run without
   network — no `build.rs` that fetches, no git dependencies without a
   `rev`.
+- crane's `cleanCargoSource` keeps only what cargo needs to build. Test
+  fixtures (`*.snap`, `tests/cmd/*.toml`, `tests/fixtures/**`) must be added
+  to the source filter in `nix/package.nix` or the nix checks see a
+  different tree than `cargo test` does.
 - `nix flake check` **is** CI. `.github/workflows/ci.yml` becomes: checkout →
   `cachix/install-nix-action` → `cachix-action` (`myme`) → `nix flake check
   -L` → `nix build -L`, on `ubuntu-latest` and `macos-latest`. The
@@ -90,8 +94,8 @@ and a bare `cargo` on a rustup machine all use the same compiler.
 | Shell completion | [`clap_complete`](https://crates.io/crates/clap_complete) with `unstable-dynamic` | 4.6.11 | `CompleteEnv` re-invokes the binary at Tab-time (`COMPLETE=bash nixon`), which is exactly what the Haskell `nixonCompleter` did. Dynamic values (command names, project names) via `ArgValueCompleter`. Must run before anything writes to stdout. The generated shell snippet should be `eval`'d at shell start, not written to a file (interface is unstable) |
 | TUI | [`ratatui`](https://crates.io/crates/ratatui) | 0.30.2 | With the default `crossterm` backend (`ratatui-crossterm`). **Render to stderr** (`CrosstermBackend::new(io::stderr())`) — stdout must stay clean for `--select`/`--list`/`--insert` output consumed by the shell widgets; this is what fzf does with `/dev/tty` |
 | Fuzzy matching | [`nucleo`](https://crates.io/crates/nucleo) / [`nucleo-matcher`](https://crates.io/crates/nucleo-matcher) | 0.5.0 / 0.3.x | Helix's matcher; fzf-compatible scoring, ~6× faster than skim, correct Unicode. `nucleo` (high-level) gives a background matcher + `Injector` so candidates from a slow placeholder command (`rg --files`) stream in while the user types. `nucleo-matcher` (sync) is used for the non-interactive `--filter` path and in tests. Reference implementation of ratatui+nucleo: [`television`](https://crates.io/crates/television) 0.15.9 |
-| Text input widget | [`tui-textarea`](https://crates.io/crates/tui-textarea) | 0.7.0 | For the query line and for **edit-before-run** (replaces haskeline; gains multi-line editing). Last release Oct 2024 — stable but slow-moving; `tui-input` is the single-line fallback |
-| ANSI in candidates | `ansi-to-tui` | — | fzf `--ansi` parity: `git log --color` output rendered with colours in the picker. Plus `strip-ansi-escapes` for the *values* returned |
+| Text input widget | (none — hand-written in `nixon-picker/src/editor.rs`) | — | `tui-textarea` 0.7.0 targets ratatui 0.29 and does not compile against 0.30; the forks on crates.io are unvetted. A line buffer + cursor + eight motions is ~140 lines as a pure state machine, tested like the picker `App`. Revisit if upstream releases for 0.30 |
+| ANSI in candidates | `ansi-to-tui` | 8.x | fzf `--ansi` parity: `git log --color` output rendered with colours in the picker (8 is the first release for ratatui 0.30). Plus `strip-ansi-escapes` for the *values* returned |
 | Markdown | [`comrak`](https://crates.io/crates/comrak) | 0.55.0 | Rust port of `cmark-gfm`, i.e. the same C parser the Haskell `cmark` binding wrapped — closest behavioural match. Full AST with `Sourcepos` (**1-based** line/column, start and end) on every node, which SPEC §4.6 needs. `pulldown-cmark` (iterator + byte offsets) is the lighter alternative if we ever want to drop the AST |
 | Placeholder grammar | [`winnow`](https://crates.io/crates/winnow) | 1.0.4 | Parser combinators for SPEC §5.3 (`${}`, `<{}`, `={}`, `\| cols+h 1,2`). Replaces parsec. Good error positions |
 | JSON | `serde` + `serde_json` | — | Config blocks and `\| json` candidates |
