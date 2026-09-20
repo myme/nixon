@@ -20,7 +20,7 @@ serde_json = "1"
 thiserror = "2"
 winnow = "1"
 
-comrak = "0.55"
+comrak = { version = "0.55", default-features = false }
 ansi-to-tui = "8"
 crossterm = "0.29"
 etcetera = "0.11"
