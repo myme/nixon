@@ -79,7 +79,18 @@ fn help_describes_the_v2_flags_only() {
     let output = fixture.nixon().arg("--help").assert().success();
     let help = String::from_utf8_lossy(&output.get_output().stdout).into_owned();
 
+    // Deterministic because the config default collapses $HOME to `~`.
     insta::assert_snapshot!(help);
+}
+
+#[test]
+fn help_shows_the_computed_default_config_path_with_home_collapsed() {
+    Fixture::new()
+        .nixon()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(contains("[default: ~/config/nixon.md]"));
 }
 
 #[test]
@@ -326,4 +337,54 @@ fn the_project_path_is_in_the_environment() {
         .assert()
         .success()
         .stdout(format!("{}\n", project.path().display()));
+}
+
+/// One command, so `-1` resolves "Insert after" without a terminal.
+const ONE_COMMAND_MD: &str = "# `hello`\n\nSay hello.\n\n```bash\necho \"Hello World\"\n```\n";
+
+#[test]
+fn new_splices_a_command_in_when_confirmed() {
+    let fixture = Fixture::with_config(ONE_COMMAND_MD);
+    fixture
+        .nixon()
+        .args(["new", "-n", "spliced", "-s", "echo spliced"])
+        .env("EDITOR", "true")
+        .write_stdin("y\n")
+        .assert()
+        .success();
+
+    let updated = std::fs::read_to_string(fixture.temp.child("project/nixon.md").path()).unwrap();
+    assert!(updated.contains("`spliced`"), "nixon.md was: {updated}");
+    assert!(updated.contains("echo spliced"), "nixon.md was: {updated}");
+    // The command it was inserted after is still there.
+    assert!(updated.contains("`hello`"), "nixon.md was: {updated}");
+}
+
+#[test]
+fn new_leaves_the_file_alone_when_declined() {
+    let fixture = Fixture::with_config(ONE_COMMAND_MD);
+    let before = std::fs::read_to_string(fixture.temp.child("project/nixon.md").path()).unwrap();
+
+    fixture
+        .nixon()
+        .args(["new", "-n", "spliced"])
+        .env("EDITOR", "true")
+        .write_stdin("n\n")
+        .assert()
+        .success();
+
+    let after = std::fs::read_to_string(fixture.temp.child("project/nixon.md").path()).unwrap();
+    assert_eq!(before, after);
+}
+
+#[test]
+fn new_asks_before_writing() {
+    Fixture::with_config(ONE_COMMAND_MD)
+        .nixon()
+        .args(["new", "-n", "spliced"])
+        .env("EDITOR", "true")
+        .write_stdin("n\n")
+        .assert()
+        .success()
+        .stdout(contains("Update ").and(contains("? [y/N]")));
 }

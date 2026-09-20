@@ -89,6 +89,8 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             ..Invocation::default()
         })?;
 
+        // The diff is for the user to read; a non-zero exit just means the
+        // files differ. SPEC §10.4.
         self.runner.run(&Invocation {
             argv: vec![
                 "diff".to_owned(),
@@ -100,8 +102,31 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             ..Invocation::default()
         })?;
 
+        let path = location.file_path.clone();
+        if confirm(&format!("Update {}? [y/N] ", path.display()))? {
+            std::fs::copy(temp.path(), &path)?;
+            tracing::info!("Updating {}…", path.display());
+        } else {
+            tracing::info!("Update canceled.");
+        }
+
         Ok(0)
     }
+}
+
+/// Asks on stdout and reads the answer from stdin. SPEC §10.4.
+///
+/// Only a bare `y` or `Y` accepts; anything else, including end of input,
+/// leaves the file alone.
+fn confirm(prompt: &str) -> Result<bool> {
+    use std::io::BufRead as _;
+
+    crate::output::raw(prompt)?;
+    std::io::Write::flush(&mut std::io::stdout())?;
+
+    let mut answer = String::new();
+    std::io::stdin().lock().read_line(&mut answer)?;
+    Ok(matches!(answer.trim(), "y" | "Y"))
 }
 
 /// Inserts the template after `end_line`. SPEC §10.4.

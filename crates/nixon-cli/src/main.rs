@@ -4,6 +4,8 @@
 // A binary has no external API, so `pub` on its private modules' items is
 // how they are shared between those modules, not an exported surface.
 #![allow(unreachable_pub)]
+// Tests assert on known-good values.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 mod cli;
 mod complete;

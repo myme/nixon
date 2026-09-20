@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use clap::{ArgAction, Args, Parser, Subcommand};
+use clap::{ArgAction, Args, CommandFactory as _, FromArgMatches as _, Parser, Subcommand};
 use nixon::config::{Config, LogLevel};
 use nixon::language::Language;
 use nixon::placeholder::{Placeholder, parse_one};
@@ -32,7 +32,7 @@ pub struct Cli {
 )]
 pub struct GlobalOpts {
     /// Path to config file.
-    #[arg(short = 'C', long, value_name = "CONFIG")]
+    #[arg(short = 'C', long, value_name = "CONFIG", help = config_help())]
     pub config: Option<PathBuf>,
 
     /// Exact match in the selector.
@@ -96,6 +96,18 @@ const fn tri_state(yes: bool, no: bool) -> Option<bool> {
     }
 }
 
+/// The help for `-C`, naming the default path. SPEC §2.1.
+///
+/// v1 computed it from XDG and `$HOME` at runtime and collapsed `$HOME` to
+/// `~`; so does this.
+fn config_help() -> String {
+    let default = nixon::fs::Dirs::from_env().map_or_else(
+        |_| PathBuf::from("$XDG_CONFIG_HOME/nixon.md"),
+        |dirs| nixon::fs::implode_home(&dirs.global_config(), &dirs.home),
+    );
+    format!("Path to config file [default: {}]", default.display())
+}
+
 /// `debug`, `info`, `warning`/`warn`, `error`. SPEC §2.1.
 fn parse_log_level(value: &str) -> Result<LogLevel, String> {
     match value {
@@ -113,6 +125,7 @@ pub enum Commands {
     /// Edit a command in `$EDITOR`.
     Edit {
         /// Command to edit.
+        #[arg(add = clap_complete::ArgValueCompleter::new(crate::complete::command_names))]
         command: Option<String>,
     },
 
@@ -144,6 +157,7 @@ pub enum Commands {
 #[derive(Debug, Default, Args)]
 pub struct RunArgs {
     /// Command to run.
+    #[arg(add = clap_complete::ArgValueCompleter::new(crate::complete::command_names))]
     pub command: Option<String>,
     /// Arguments to the command.
     pub args: Vec<String>,
@@ -166,8 +180,10 @@ pub struct RunArgs {
 )]
 pub struct ProjectArgs {
     /// Project to select.
+    #[arg(add = clap_complete::ArgValueCompleter::new(crate::complete::project_names))]
     pub project: Option<String>,
     /// Command to run in it.
+    #[arg(add = clap_complete::ArgValueCompleter::new(crate::complete::command_names))]
     pub command: Option<String>,
     /// Arguments to the command.
     pub args: Vec<String>,
@@ -235,4 +251,181 @@ fn parse_language(value: &str) -> Result<Language, String> {
 /// A placeholder argument, e.g. `'${git-files:m}'`. SPEC §2.2.
 fn parse_placeholder(value: &str) -> Result<Placeholder, String> {
     parse_one(value).map_err(|err| err.to_string())
+}
+
+impl Cli {
+    /// Parses words that may be an incomplete command line, for completion.
+    pub fn try_parse_from_words(words: &[std::path::PathBuf]) -> Option<Self> {
+        Self::command()
+            .try_get_matches_from_mut(words)
+            .ok()
+            .and_then(|matches| Self::from_arg_matches(&matches).ok())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use clap::Parser as _;
+    use nixon::config::LogLevel;
+
+    use super::{Cli, Commands};
+
+    fn parse(args: &[&str]) -> Cli {
+        Cli::try_parse_from(args).unwrap()
+    }
+
+    #[test]
+    fn tri_state_flags_are_unset_by_default() {
+        let config = parse(&["nixon"]).global.to_config();
+        assert_eq!(config.exact_match, None);
+        assert_eq!(config.ignore_case, None);
+        assert_eq!(config.use_direnv, None);
+        assert_eq!(config.use_nix, None);
+    }
+
+    #[test]
+    fn tri_state_flags_can_be_turned_on_and_off() {
+        let on = parse(&["nixon", "-e", "-i", "-d", "-n"]).global.to_config();
+        assert_eq!(on.exact_match, Some(true));
+        assert_eq!(on.ignore_case, Some(true));
+        assert_eq!(on.use_direnv, Some(true));
+        assert_eq!(on.use_nix, Some(true));
+
+        let off = parse(&[
+            "nixon",
+            "--no-exact",
+            "--no-ignore-case",
+            "--no-direnv",
+            "--no-nix",
+        ])
+        .global
+        .to_config();
+        assert_eq!(off.exact_match, Some(false));
+        assert_eq!(off.ignore_case, Some(false));
+        assert_eq!(off.use_direnv, Some(false));
+        assert_eq!(off.use_nix, Some(false));
+    }
+
+    #[test]
+    fn the_last_of_a_tri_state_pair_wins() {
+        assert_eq!(
+            parse(&["nixon", "-e", "--no-exact"])
+                .global
+                .to_config()
+                .exact_match,
+            Some(false)
+        );
+        assert_eq!(
+            parse(&["nixon", "--no-exact", "-e"])
+                .global
+                .to_config()
+                .exact_match,
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn path_is_repeatable_and_appends_to_project_dirs() {
+        let config = parse(&["nixon", "-p", "/one", "--path", "/two"])
+            .global
+            .to_config();
+        assert_eq!(
+            config.project_dirs,
+            ["/one", "/two"].map(PathBuf::from).to_vec()
+        );
+    }
+
+    #[test]
+    fn log_levels_include_both_spellings_of_warning() {
+        for (text, expected) in [
+            ("debug", LogLevel::Debug),
+            ("info", LogLevel::Info),
+            ("warning", LogLevel::Warning),
+            ("warn", LogLevel::Warning),
+            ("error", LogLevel::Error),
+        ] {
+            let config = parse(&["nixon", "-L", text]).global.to_config();
+            assert_eq!(config.loglevel, Some(expected), "for {text}");
+        }
+        assert!(Cli::try_parse_from(["nixon", "-L", "nonsense"]).is_err());
+    }
+
+    #[test]
+    fn bin_dirs_project_types_and_commands_are_not_settable_from_the_cli() {
+        let config = parse(&["nixon"]).global.to_config();
+        assert!(config.bin_dirs.is_empty());
+        assert!(config.project_types.is_empty());
+        assert!(config.commands.is_empty());
+        for flag in ["--bin-dirs", "--project-types", "--commands"] {
+            assert!(Cli::try_parse_from(["nixon", flag, "x"]).is_err());
+        }
+    }
+
+    #[test]
+    fn bare_arguments_become_the_run_subcommand() {
+        let parsed = parse(&["nixon", "foo", "bar"]);
+        match parsed.command {
+            Some(Commands::External(args)) => assert_eq!(args, ["foo", "bar"]),
+            other => panic!("expected an external subcommand, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_subcommand_keyword_is_never_a_command_name() {
+        assert!(matches!(
+            parse(&["nixon", "edit"]).command,
+            Some(Commands::Edit { .. })
+        ));
+        assert!(matches!(
+            parse(&["nixon", "gc"]).command,
+            Some(Commands::Gc { .. })
+        ));
+    }
+
+    #[test]
+    fn eval_placeholders_are_parsed_with_the_grammar() {
+        let parsed = parse(&["nixon", "eval", "vim \"$1\"", "${git-files:m}"]);
+        let Some(Commands::Eval(args)) = parsed.command else {
+            panic!("expected eval");
+        };
+        assert_eq!(args.placeholders.len(), 1);
+        assert_eq!(args.placeholders[0].name, "git-files");
+        assert!(args.placeholders[0].multiple);
+    }
+
+    #[test]
+    fn an_unparseable_eval_placeholder_is_a_cli_error() {
+        assert!(Cli::try_parse_from(["nixon", "eval", "x", "${unterminated"]).is_err());
+    }
+
+    #[test]
+    fn new_has_the_documented_defaults() {
+        let parsed = parse(&["nixon", "new"]);
+        let Some(Commands::New(args)) = parsed.command else {
+            panic!("expected new");
+        };
+        assert_eq!(args.name, "<name>");
+        assert_eq!(args.desc, "Description…");
+        assert_eq!(args.lang.to_string(), "bash");
+        assert_eq!(args.src, "");
+    }
+
+    #[test]
+    fn the_removed_backend_flags_do_not_parse() {
+        for args in [
+            vec!["nixon", "-b", "fzf"],
+            vec!["nixon", "--backend", "rofi"],
+            vec!["nixon", "-T"],
+            vec!["nixon", "--force-tty"],
+            vec!["nixon", "-t", "xterm"],
+            vec!["nixon", "--terminal", "xterm"],
+        ] {
+            assert!(
+                Cli::try_parse_from(&args).is_err(),
+                "{args:?} should not parse"
+            );
+        }
+    }
 }
