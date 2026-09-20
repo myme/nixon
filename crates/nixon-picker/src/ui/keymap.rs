@@ -21,6 +21,10 @@ pub enum Action {
     PageUp,
     /// Move a screenful towards the end.
     PageDown,
+    /// Move half a screenful towards the start.
+    HalfPageUp,
+    /// Move half a screenful towards the end.
+    HalfPageDown,
     /// Mark or unmark the current row, when multi-select is on.
     ToggleMark,
     /// Confirm with this selection type.
@@ -55,8 +59,13 @@ pub fn action_for(key: KeyEvent, expect: &[(KeyEvent, SelectionType)]) -> Action
         // fzf binds Ctrl-J and Ctrl-K to list movement, not kill-line.
         (KeyCode::Down, _, _) | (KeyCode::Char('n' | 'j'), true, _) => return Action::MoveDown,
         (KeyCode::Up, _, _) | (KeyCode::Char('p' | 'k'), true, _) => return Action::MoveUp,
-        (KeyCode::PageDown, _, _) => return Action::PageDown,
-        (KeyCode::PageUp, _, _) => return Action::PageUp,
+        // PgUp/PgDn are awkward on some layouts, so the emacs pair works
+        // too, and Alt-J/Alt-K mirror Ctrl-J/Ctrl-K a half page at a time.
+        // Ctrl-D and Ctrl-U are readline's, not fzf's, in the query line.
+        (KeyCode::PageDown, _, _) | (KeyCode::Char('v'), true, _) => return Action::PageDown,
+        (KeyCode::PageUp, _, _) | (KeyCode::Char('v'), _, true) => return Action::PageUp,
+        (KeyCode::Char('j'), _, true) => return Action::HalfPageDown,
+        (KeyCode::Char('k'), _, true) => return Action::HalfPageUp,
 
         _ => {}
     }
@@ -144,6 +153,18 @@ mod tests {
     #[case('c', Action::Cancel)]
     fn control_keys_move_or_cancel(#[case] c: char, #[case] expected: Action) {
         assert_eq!(action_for(ctrl(c), &[]), expected);
+    }
+
+    #[rstest]
+    #[case(ctrl('v'), Action::PageDown)]
+    #[case(alt('v'), Action::PageUp)]
+    #[case(alt('j'), Action::HalfPageDown)]
+    #[case(alt('k'), Action::HalfPageUp)]
+    fn the_page_keys_have_keyboard_friendly_equivalents(
+        #[case] key: KeyEvent,
+        #[case] expected: Action,
+    ) {
+        assert_eq!(action_for(key, &[]), expected);
     }
 
     #[test]

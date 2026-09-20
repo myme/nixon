@@ -268,7 +268,8 @@ Moving:
 |---|---|
 | `Down`, `Ctrl-N`, `Ctrl-J` | Next candidate |
 | `Up`, `Ctrl-P`, `Ctrl-K` | Previous candidate |
-| `PgDn`, `PgUp` | A screenful at a time |
+| `PgDn`, `Ctrl-V` / `PgUp`, `Alt-V` | A full page |
+| `Alt-J` / `Alt-K` | Half a page |
 
 Editing the query — and the same keys work in the edit-before-run editor,
 where `Up`/`Down` move between lines and `Alt-Enter` inserts a newline:

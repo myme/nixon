@@ -220,8 +220,10 @@ impl App {
             }
             Action::MoveUp => self.move_cursor(-1),
             Action::MoveDown => self.move_cursor(1),
-            Action::PageUp => self.page(-1),
-            Action::PageDown => self.page(1),
+            Action::PageUp => self.page(-1, self.height),
+            Action::PageDown => self.page(1, self.height),
+            Action::HalfPageUp => self.page(-1, self.height / 2),
+            Action::HalfPageDown => self.page(1, self.height / 2),
             Action::ToggleMark => self.toggle_mark(),
             Action::Confirm(kind) => self.confirm(kind),
             Action::Cancel => self.outcome = Some(Selection::Canceled),
@@ -261,9 +263,9 @@ impl App {
         self.scroll_into_view();
     }
 
-    /// Moves a screenful. ENGINEERING §7.2.
-    fn page(&mut self, direction: isize) {
-        for _ in 0..self.height.max(1) {
+    /// Moves `rows` candidates, at least one. ENGINEERING §7.2.
+    fn page(&mut self, direction: isize, rows: usize) {
+        for _ in 0..rows.max(1) {
             self.move_cursor(direction);
         }
     }
@@ -341,6 +343,11 @@ mod tests {
 
     fn ctrl(app: &mut App, c: char) {
         app.handle(KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL));
+        app.tick_until_settled();
+    }
+
+    fn alt(app: &mut App, c: char) {
+        app.handle(KeyEvent::new(KeyCode::Char(c), KeyModifiers::ALT));
         app.tick_until_settled();
     }
 
@@ -473,6 +480,36 @@ mod tests {
         assert_eq!(app.cursor, 2);
         press(&mut app, KeyCode::PageUp);
         assert_eq!(app.cursor, 0);
+    }
+
+    #[test]
+    fn control_v_and_alt_v_page_like_the_page_keys() {
+        let mut app = app(&["a", "b", "c", "d", "e", "f"]);
+        app.set_height(2);
+        ctrl(&mut app, 'v');
+        assert_eq!(app.cursor, 2);
+        alt(&mut app, 'v');
+        assert_eq!(app.cursor, 0);
+    }
+
+    #[test]
+    fn alt_j_and_alt_k_move_half_a_screenful() {
+        let mut app = app(&["a", "b", "c", "d", "e", "f", "g", "h"]);
+        app.set_height(4);
+        alt(&mut app, 'j');
+        assert_eq!(app.cursor, 2);
+        alt(&mut app, 'j');
+        assert_eq!(app.cursor, 4);
+        alt(&mut app, 'k');
+        assert_eq!(app.cursor, 2);
+    }
+
+    #[test]
+    fn a_half_page_still_moves_one_row_on_a_tiny_list() {
+        let mut app = app(&["a", "b", "c"]);
+        app.set_height(1);
+        alt(&mut app, 'j');
+        assert_eq!(app.cursor, 1);
     }
 
     #[test]
@@ -609,6 +646,20 @@ mod tests {
         assert!(!app.is_done());
         press(&mut app, KeyCode::Enter);
         assert!(app.is_done());
+    }
+
+    #[test]
+    fn an_empty_query_keeps_the_input_order() {
+        let mut app = app(&["zzzzzzzz", "a", "mmmm"]);
+        assert_eq!(shown(&mut app), ["zzzzzzzz", "a", "mmmm"]);
+    }
+
+    #[test]
+    fn ties_break_on_length_then_input_order() {
+        // All three contain "ab"; fzf shows the shortest first.
+        let mut app = app(&["ab-longest-one", "ab", "ab-mid"]);
+        type_query(&mut app, "ab");
+        assert_eq!(shown(&mut app), ["ab", "ab-mid", "ab-longest-one"]);
     }
 
     #[test]
