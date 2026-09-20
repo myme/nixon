@@ -690,6 +690,13 @@ mod tests {
 
     /// Guards the fix for the 95k-candidate slowdown: a keystroke must not
     /// cost a pass over the candidates. ENGINEERING §2.1.
+    ///
+    /// The threshold is deliberately loose. This runs unoptimised and
+    /// alongside the other nix checks, where it measured 57ms against a
+    /// 50ms line; in release on an idle machine it is ~11ms. What it has to
+    /// catch is matching moving back onto the UI thread, which cost ~180ms
+    /// per keystroke in release and seconds here — so half a second is a
+    /// wide but decisive line, not a performance target.
     #[test]
     fn a_keystroke_stays_within_a_frame_on_a_large_list() {
         let items: Vec<Candidate> = (0..200_000)
@@ -704,7 +711,7 @@ mod tests {
             let _ = app.rows();
             let elapsed = start.elapsed();
             assert!(
-                elapsed < std::time::Duration::from_millis(50),
+                elapsed < std::time::Duration::from_millis(500),
                 "a keystroke took {elapsed:?}; matching must stay off the UI thread"
             );
         }
