@@ -75,10 +75,10 @@ pub fn walk(file: &str, nodes: &[Node]) -> Result<ParsedFile, MarkdownError> {
                 }
             }
 
-            Node::Source { attrs, .. } if attrs.iter().any(|attr| attr == "config") => {
+            Node::Source { line, attrs, .. } if attrs.iter().any(|attr| attr == "config") => {
                 let nodes = std::slice::from_ref(node);
-                let (config, _) = parse_config(file, 0, nodes)?;
-                set_config(file, 0, &mut parsed, config)?;
+                let (config, _) = parse_config(file, *line, nodes)?;
+                set_config(file, *line, &mut parsed, config)?;
             }
 
             _ => {}
@@ -111,7 +111,13 @@ fn parse_config<'n>(
     line: usize,
     nodes: &'n [Node],
 ) -> Result<(Config, &'n [Node]), MarkdownError> {
-    let Some(Node::Source { lang, text, .. }) = nodes.first() else {
+    let Some(Node::Source {
+        line: at,
+        lang,
+        text,
+        ..
+    }) = nodes.first()
+    else {
         return Err(MarkdownError::new(
             file,
             Some(line),
@@ -119,7 +125,7 @@ fn parse_config<'n>(
         ));
     };
     let config = parse_block(&lang.to_string(), text)
-        .map_err(|err| MarkdownError::new(file, Some(line), err.to_string()))?;
+        .map_err(|err| MarkdownError::new(file, Some(*at), err.to_string()))?;
     Ok((config, &nodes[1..]))
 }
 

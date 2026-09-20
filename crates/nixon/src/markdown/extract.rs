@@ -19,6 +19,8 @@ pub enum Node {
     },
     /// A fenced code block.
     Source {
+        /// 1-based line the fence starts on.
+        line: usize,
         /// Language from the info string's first word.
         lang: Language,
         /// Remaining words of the info string.
@@ -81,6 +83,7 @@ pub fn extract<'a>(node: &'a AstNode<'a>) -> Vec<Node> {
                 },
             );
             vec![Node::Source {
+                line: pos.start.line,
                 lang,
                 attrs,
                 text: block.literal.clone(),

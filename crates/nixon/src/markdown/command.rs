@@ -33,7 +33,10 @@ pub fn parse_command<'n>(
         }
     }
 
-    let Some(Node::Source { lang, attrs, text }) = rest.first() else {
+    let Some(Node::Source {
+        lang, attrs, text, ..
+    }) = rest.first()
+    else {
         return Err(MarkdownError::new(
             file,
             Some(line),
