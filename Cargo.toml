@@ -21,6 +21,8 @@ thiserror = "2"
 winnow = "1"
 
 comrak = "0.55"
+etcetera = "0.11"
+assert_fs = "1"
 proptest = "1"
 rstest = { version = "0.27", default-features = false }
 

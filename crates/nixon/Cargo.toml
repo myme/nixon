@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 comrak.workspace = true
+etcetera.workspace = true
 nixon-picker.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true
@@ -18,6 +19,7 @@ thiserror.workspace = true
 winnow.workspace = true
 
 [dev-dependencies]
+assert_fs.workspace = true
 proptest.workspace = true
 rstest.workspace = true
 

@@ -18,6 +18,7 @@ use std::process::ExitCode;
 pub mod command;
 pub mod config;
 pub mod format;
+pub mod fs;
 pub mod language;
 pub mod markdown;
 pub mod placeholder;
