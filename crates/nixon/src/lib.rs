@@ -3,6 +3,7 @@
 
 use std::process::ExitCode;
 
+pub mod language;
 pub mod select;
 
 /// Runs nixon. Subcommand dispatch lands with SPEC §10.

@@ -14,6 +14,8 @@ authors = ["Martin Øinæs Myrseth"]
 nixon = { path = "crates/nixon", version = "0.2.0" }
 nixon-picker = { path = "crates/nixon-picker", version = "0.2.0" }
 
+rstest = { version = "0.27", default-features = false }
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 missing_docs = "warn"
