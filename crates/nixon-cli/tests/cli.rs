@@ -483,3 +483,39 @@ fn a_selection_without_a_terminal_is_a_named_error() {
         .code(1)
         .stderr(contains("interactive selection needs a terminal"));
 }
+
+/// `--list` matches the way the picker does, so a local `exact_match` has to
+/// reach it too; it used to read the global config only.
+#[test]
+fn list_matching_honours_the_projects_own_config() {
+    let fixture = Fixture::with_config(
+        "\
+```json config
+{\"exact_match\": true}
+```
+
+# `deploy-staging`
+
+```bash
+echo staging
+```
+",
+    );
+
+    // `dpst` is a fuzzy match for `deploy-staging`, and no exact one.
+    fixture
+        .nixon()
+        .args(["run", "-l", "dpst"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr(contains("No commands."));
+
+    // The same query without the local setting does match.
+    Fixture::new()
+        .nixon()
+        .args(["run", "-l", "hlo"])
+        .assert()
+        .success()
+        .stdout(contains("hello"));
+}

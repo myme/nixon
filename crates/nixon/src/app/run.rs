@@ -29,9 +29,12 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         let commands = self.commands_for(project)?;
         let candidates = select::command_candidates(&commands);
 
+        // The project's config, as the picker uses: a local `exact_match`
+        // must mean the same thing for `--list` as for selecting.
+        let config = self.config_for(project)?;
         let options = PickerOptions {
             initial_query: query.map(ToOwned::to_owned),
-            matching: crate::matcher_options(&self.config),
+            matching: crate::matcher_options(&config),
             ..PickerOptions::default()
         };
         let selection = FilterPicker.pick(&options, candidates)?;
