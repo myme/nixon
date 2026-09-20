@@ -23,7 +23,7 @@ craneLib.devShell {
     taplo
 
     # Nix tooling.
-    nixfmt-rfc-style
+    nixfmt
     statix
     deadnix
 
