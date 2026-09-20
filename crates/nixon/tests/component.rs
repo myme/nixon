@@ -488,3 +488,40 @@ fn cancelling_project_edit_or_new_exits_130() {
         assert_eq!(err.exit_code(), 130);
     }
 }
+
+/// An empty candidate command is a failure with a reason, not a cancel.
+#[test]
+fn a_placeholder_command_that_produces_nothing_is_reported() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[&["vim-file"]]);
+    // `git-files` runs and prints nothing.
+    let runner = FakeRunner::new().with_output(&[]);
+
+    let err = fixture
+        .app(picker, runner)
+        .run(&RunOpts::default())
+        .unwrap_err();
+
+    assert!(
+        matches!(&err, NixonError::NoCandidates { name } if name == "git-files"),
+        "got {err:?}"
+    );
+    assert_eq!(err.exit_code(), 1);
+}
+
+/// A picker answering with a value no command owns is a bug, not a command.
+#[test]
+fn a_selection_that_names_no_command_is_an_error() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[&["not-a-command"]]);
+
+    let err = fixture
+        .app(picker, FakeRunner::new())
+        .run(&RunOpts::default())
+        .unwrap_err();
+
+    assert!(
+        matches!(&err, NixonError::UnknownCommand { name } if name == "not-a-command"),
+        "got {err:?}"
+    );
+}

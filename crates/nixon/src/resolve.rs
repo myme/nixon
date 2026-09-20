@@ -150,7 +150,13 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
 
         match selection {
             Selection::Selected { items, .. } => Ok(items.into_iter().map(|c| c.value).collect()),
-            Selection::Empty | Selection::Canceled => Err(NixonError::Canceled),
+            // A command that produced nothing is not a user who changed
+            // their mind: reporting it as a cancel exited 130 and said
+            // "Selection canceled." for an empty `git ls-files`.
+            Selection::Empty => Err(NixonError::NoCandidates {
+                name: placeholder.name.clone(),
+            }),
+            Selection::Canceled => Err(NixonError::Canceled),
         }
     }
 

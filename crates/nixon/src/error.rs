@@ -51,6 +51,13 @@ pub enum NixonError {
         source: serde_json::Error,
     },
 
+    /// A placeholder's command produced nothing to choose from.
+    #[error("no candidates from {name}")]
+    NoCandidates {
+        /// The command the placeholder referenced.
+        name: String,
+    },
+
     /// Nothing was selected. SPEC §10.7.
     #[error("{0}")]
     NothingSelected(String),

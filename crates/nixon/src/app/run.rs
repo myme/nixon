@@ -4,7 +4,7 @@ use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection};
 
 use super::{App, RunOpts};
 use crate::command::Command;
-use crate::error::Result;
+use crate::error::{NixonError, Result};
 use crate::output;
 use crate::process::{ExitCode, ProcessRunner};
 use crate::project::Project;
@@ -81,12 +81,30 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         let candidates = select::command_candidates(commands);
         let selection = self.picker.pick(&options, candidates)?;
 
-        Ok(selection.map(|candidate| {
-            commands
-                .iter()
-                .find(|command| command.name == candidate.value)
-                .cloned()
-                .unwrap_or_default()
-        }))
+        // A value that maps to no command means the picker and the command
+        // list have gone out of step. Defaulting produced an empty command
+        // that then ran, writing an empty script and executing it.
+        match selection {
+            Selection::Empty => Ok(Selection::Empty),
+            Selection::Canceled => Ok(Selection::Canceled),
+            Selection::Selected { kind, items } => {
+                let picked: Result<Vec<Command>> = items
+                    .into_iter()
+                    .map(|candidate| {
+                        commands
+                            .iter()
+                            .find(|command| command.name == candidate.value)
+                            .cloned()
+                            .ok_or(NixonError::UnknownCommand {
+                                name: candidate.value,
+                            })
+                    })
+                    .collect();
+                Ok(Selection::Selected {
+                    kind,
+                    items: picked?,
+                })
+            }
+        }
     }
 }
