@@ -1248,6 +1248,7 @@ dependencies = [
  "sha1",
  "shell-words",
  "shellexpand",
+ "signal-hook",
  "thiserror 2.0.20",
  "winnow",
 ]

@@ -14,6 +14,7 @@ etcetera.workspace = true
 glob.workspace = true
 sha1.workspace = true
 shell-words.workspace = true
+signal-hook.workspace = true
 shellexpand.workspace = true
 nixon-picker.workspace = true
 serde.workspace = true
