@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+
+      - uses: cachix/cachix-action@v17
+        with:
+          name: myme
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Check
+        run: nix flake check -L
+
+      - name: Build
+        run: nix build -L
+
+      - name: Coverage report
+        run: |
+          system=$(nix eval --raw --impure --expr builtins.currentSystem)
+          nix build -L --out-link coverage ".#checks.$system.coverage"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage/
+
+  mutants:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+
+      - uses: cachix/cachix-action@v17
+        with:
+          name: myme
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Mutation testing
+        run: nix develop -c cargo mutants --in-place --no-shuffle
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants
+          path: mutants.out/
