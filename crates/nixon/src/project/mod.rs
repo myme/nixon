@@ -4,6 +4,7 @@
 //! data the config block parses into.
 
 pub mod detect;
+pub mod discover;
 
 use std::path::PathBuf;
 
