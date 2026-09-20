@@ -246,6 +246,26 @@ impl Picker for ScriptedPicker {
         self.calls.push((options.clone(), candidates));
         Ok(self.answers.pop_front().unwrap_or(Selection::Empty))
     }
+
+    /// Consumes candidates as they arrive, as the real picker does.
+    ///
+    /// The default would block on `collect`, which hides every ordering
+    /// question the streaming path raises.
+    fn pick_stream(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<Selection<Candidate>> {
+        let mut candidates = Vec::new();
+        loop {
+            candidates.extend(stream.drain());
+            if stream.is_finished() {
+                break;
+            }
+            std::thread::yield_now();
+        }
+        self.pick(options, candidates)
+    }
 }
 
 /// A picker that picks candidates by position, for tests.

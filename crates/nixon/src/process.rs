@@ -387,38 +387,71 @@ impl ProcessRunner for FakeRunner {
         Ok(())
     }
 
+    /// Feeds the sink from a thread, as a real child does.
+    ///
+    /// Producing everything before returning would hide every ordering and
+    /// liveness bug in whatever consumes the stream, which is the part worth
+    /// testing.
     fn run_streaming(
         &mut self,
         invocation: &Invocation,
         mut sink: Box<dyn FnMut(String) + Send>,
     ) -> io::Result<Box<dyn Running>> {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+
         self.calls.push((RunKind::Streamed, invocation.clone()));
         let output = self.outputs.pop_front().unwrap_or_default();
-        for line in String::from_utf8_lossy(&output).lines() {
-            sink(line.to_owned());
-        }
-        Ok(Box::new(FinishedFake {
+        let lines: Vec<String> = String::from_utf8_lossy(&output)
+            .lines()
+            .map(ToOwned::to_owned)
+            .collect();
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = Arc::clone(&stop);
+        let feeder = std::thread::spawn(move || {
+            for line in lines {
+                if stopped.load(Ordering::SeqCst) {
+                    break;
+                }
+                sink(line);
+                std::thread::yield_now();
+            }
+        });
+
+        Ok(Box::new(StreamingFake {
             code: self.next_code(),
-            killed: std::sync::Arc::clone(&self.killed),
+            killed: Arc::clone(&self.killed),
+            stop,
+            feeder: Some(feeder),
         }))
     }
 }
 
-/// A fake child that has already produced everything it will.
+/// A fake child with a thread feeding the sink.
 #[cfg(any(test, feature = "test-util"))]
-struct FinishedFake {
+struct StreamingFake {
     code: ExitCode,
     killed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    feeder: Option<std::thread::JoinHandle<()>>,
 }
 
 #[cfg(any(test, feature = "test-util"))]
-impl Running for FinishedFake {
+impl Running for StreamingFake {
     fn wait(&mut self) -> io::Result<ExitCode> {
+        if let Some(feeder) = self.feeder.take() {
+            let _ = feeder.join();
+        }
         Ok(self.code)
     }
 
     fn kill(&mut self) -> io::Result<()> {
+        self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
         self.killed.store(true, std::sync::atomic::Ordering::SeqCst);
+        if let Some(feeder) = self.feeder.take() {
+            let _ = feeder.join();
+        }
         Ok(())
     }
 }
@@ -687,6 +720,9 @@ mod tests {
             )
             .unwrap();
 
+        // The fake feeds from a thread, so the lines are there once it has
+        // been waited for, not before.
+        running.wait().unwrap();
         assert_eq!(*seen.lock().unwrap(), ["one", "two"]);
         assert_eq!(runner.calls[0].0, RunKind::Streamed);
 

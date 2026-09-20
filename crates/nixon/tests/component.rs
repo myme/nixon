@@ -379,11 +379,20 @@ fn the_nix_wrapper_reaches_the_runner_when_enabled() {
 fn a_lines_placeholder_streams_its_candidates() {
     let fixture = Fixture::new(VIM_FILE_MD);
     let picker = picks(&[&["vim-file"], &["README.md"]]);
+    // The fake feeds these from a thread, one at a time.
     let runner = FakeRunner::new().with_output(&["Cargo.toml", "README.md"]);
     let mut app = fixture.app(picker, runner);
 
     app.run(&RunOpts::default()).unwrap();
     assert_eq!(app.runner.calls[0].0, RunKind::Streamed);
+
+    // Every line reached the picker, in the order the command wrote them.
+    let offered: Vec<String> = app.picker.calls[1]
+        .1
+        .iter()
+        .map(|candidate| candidate.value.clone())
+        .collect();
+    assert_eq!(offered, ["Cargo.toml", "README.md"]);
 }
 
 /// Columns need every row before the widths are known, so they stay buffered.
