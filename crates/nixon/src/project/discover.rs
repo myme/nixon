@@ -44,26 +44,33 @@ pub fn find_projects(
     source_dirs: &[PathBuf],
     expansion: &Expansion<'_>,
 ) -> Vec<Project> {
+    let roots: Vec<PathBuf> = source_dirs
+        .iter()
+        .flat_map(|source| expansion.expand(source))
+        .collect();
+    scan(max_depth, ptypes, &roots)
+}
+
+/// The recursion, over paths that are already real. SPEC §9.6.
+///
+/// Only `project_dirs` entries are patterns. Putting a `read_dir` result back
+/// through the glob dropped any directory whose name contained a metacharacter
+/// — `c++[wip]` read as a character class, `brack[et` as an unterminated
+/// pattern — and re-expanded a `$VAR` in a literal name.
+fn scan(max_depth: i64, ptypes: &[ProjectType], roots: &[PathBuf]) -> Vec<Project> {
     if max_depth < 0 {
         return Vec::new();
     }
 
     let mut found = Vec::new();
-    for source in source_dirs {
-        for candidate in expansion.expand(source) {
-            if !candidate.is_dir() {
-                continue;
-            }
-            if let Some(project) = find_project(ptypes, &candidate) {
-                found.push(project);
-            }
-            found.extend(find_projects(
-                max_depth - 1,
-                ptypes,
-                &children(&candidate),
-                expansion,
-            ));
+    for candidate in roots {
+        if !candidate.is_dir() {
+            continue;
         }
+        if let Some(project) = find_project(ptypes, candidate) {
+            found.push(project);
+        }
+        found.extend(scan(max_depth - 1, ptypes, &children(candidate)));
     }
     found
 }
@@ -185,6 +192,40 @@ mod tests {
             ".marker-{}",
             temp.path().file_name().unwrap().to_string_lossy()
         )
+    }
+
+    #[test]
+    fn child_directories_are_not_re_expanded_as_glob_patterns() {
+        let temp = TempDir::new().unwrap();
+        let marker = unique_marker(&temp);
+        let src = temp.child("src");
+        src.create_dir_all().unwrap();
+
+        for name in ["plain", "c++[wip]", "has$VAR", "brack[et"] {
+            make_project(&src, name, &marker);
+        }
+
+        let found = get_sorted_projects(
+            &[marker_type(&marker)],
+            &[src.to_path_buf()],
+            &Expansion {
+                home: temp.path(),
+                // A real lookup, as the subcommands pass: `has$VAR` must
+                // survive that too.
+                var: &|_| Some("expanded".to_owned()),
+            },
+            false,
+        );
+        let names: Vec<String> = found
+            .iter()
+            .map(|p| p.name.to_string_lossy().into_owned())
+            .collect();
+
+        assert_eq!(
+            names,
+            ["brack[et", "c++[wip]", "has$VAR", "plain"],
+            "child project dirs were dropped"
+        );
     }
 
     fn make_project(parent: &assert_fs::fixture::ChildPath, name: &str, marker: &str) -> PathBuf {
