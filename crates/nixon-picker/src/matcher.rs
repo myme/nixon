@@ -49,7 +49,7 @@ impl MatchOptions {
     }
 
     /// The query as nucleo should read it, with `exact` applied.
-    pub fn query<'a>(self, raw: &'a str) -> Cow<'a, str> {
+    pub fn query(self, raw: &str) -> Cow<'_, str> {
         if self.exact {
             Cow::Owned(exact_query(raw))
         } else {
@@ -178,7 +178,7 @@ pub fn match_indices(matcher: &mut Matcher, pattern: &Pattern, text: &str, out: 
 
 #[cfg(test)]
 mod tests {
-    use super::{Match, MatchOptions, exact_query, match_indices, matches};
+    use super::{Match, MatchOptions, match_indices, matches};
     use crate::candidate::Candidate;
     use nucleo_matcher::{Config, Matcher};
 

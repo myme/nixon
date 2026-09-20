@@ -18,7 +18,11 @@ let
   commonArgs = {
     inherit src;
     strictDeps = true;
-    nativeBuildInputs = [ pkgs.installShellFiles ];
+    nativeBuildInputs = [
+      pkgs.installShellFiles
+      # setsid, for the test that runs nixon with no controlling terminal.
+      pkgs.util-linux
+    ];
   };
 
   # Built once and reused by every check, so a code change never rebuilds

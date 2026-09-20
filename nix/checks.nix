@@ -55,8 +55,6 @@ in
       inherit cargoArtifacts;
       partitions = 1;
       partitionType = "count";
-      # setsid, for the test that runs nixon with no controlling terminal.
-      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.util-linux ];
     }
   );
 

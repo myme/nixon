@@ -79,7 +79,7 @@ impl Description {
     }
 
     /// Whether there is nothing to show.
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.spans.is_empty()
     }
 }
