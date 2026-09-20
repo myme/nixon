@@ -301,6 +301,55 @@ mod tests {
         assert_eq!(err.line, Some(1));
     }
 
+    /// Everything after an attribute block is ignored, so an option there
+    /// would be dropped without a word. It is an error instead.
+    #[test]
+    fn an_option_after_the_attribute_block_is_an_error() {
+        let err = parse(
+            FILE,
+            &md(&[
+                "# `deploy` {type=\"git\"} --force",
+                "",
+                "```bash",
+                "true",
+                "```",
+            ]),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.message,
+            "--force: options must come before the attribute block"
+        );
+        assert_eq!(err.line, Some(1));
+    }
+
+    #[test]
+    fn other_trailing_text_after_the_attribute_block_is_still_ignored() {
+        let parsed = commands(&[
+            "# `deploy` {type=\"git\"} and some words",
+            "",
+            "```bash",
+            "true",
+            "```",
+        ]);
+        assert_eq!(parsed[0].name, "deploy");
+        assert_eq!(parsed[0].project_types, ["git"]);
+        assert!(parsed[0].options.is_empty());
+    }
+
+    #[test]
+    fn an_option_before_the_attribute_block_is_read() {
+        let parsed = commands(&[
+            "# `deploy --force` {type=\"git\"}",
+            "",
+            "```bash",
+            "true",
+            "```",
+        ]);
+        assert_eq!(parsed[0].options.len(), 1);
+        assert_eq!(parsed[0].project_types, ["git"]);
+    }
+
     #[test]
     fn an_option_survives_a_heading_that_falls_back_to_all_name() {
         let parsed = commands(&[

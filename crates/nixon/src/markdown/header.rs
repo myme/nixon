@@ -14,6 +14,8 @@ pub struct HeaderArgs {
     pub args: Vec<String>,
     /// `key=value` pairs, in order.
     pub kwargs: Vec<(String, String)>,
+    /// Whatever followed the attribute block, which is otherwise ignored.
+    pub trailing: String,
 }
 
 impl HeaderArgs {
@@ -36,11 +38,16 @@ impl HeaderArgs {
 pub fn parse_header_args(input: &str) -> HeaderArgs {
     // Anything after the attribute block is ignored rather than fatal, as in v1.
     let mut rest = input;
-    header(&mut rest).unwrap_or_else(|_| HeaderArgs {
-        name: input.to_owned(),
-        args: Vec::new(),
-        kwargs: Vec::new(),
-    })
+    match header(&mut rest) {
+        Ok(mut parsed) => {
+            parsed.trailing.push_str(rest.trim());
+            parsed
+        }
+        Err(_) => HeaderArgs {
+            name: input.to_owned(),
+            ..HeaderArgs::default()
+        },
+    }
 }
 
 fn header(input: &mut &str) -> ModalResult<HeaderArgs> {

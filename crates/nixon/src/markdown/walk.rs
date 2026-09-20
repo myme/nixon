@@ -65,6 +65,15 @@ pub fn walk(file: &str, nodes: &[Node]) -> Result<ParsedFile, MarkdownError> {
                     set_config(file, *line, &mut parsed, config)?;
                     rest = remaining;
                 } else if attrs.has_arg("command") {
+                    // An option after the attribute block would be dropped
+                    // with the rest of the trailing text, so say so.
+                    if let Some(token) = option_token(&attrs.trailing) {
+                        return Err(MarkdownError::new(
+                            file,
+                            Some(*line),
+                            format!("{token}: options must come before the attribute block"),
+                        ));
+                    }
                     let mut types = own;
                     types.extend(inherited);
                     let (mut command, remaining) =
@@ -149,4 +158,11 @@ fn set_config(
     }
     parsed.config = Some(config);
     Ok(())
+}
+
+/// The first option-looking token in a heading's trailing text.
+fn option_token(trailing: &str) -> Option<&str> {
+    trailing
+        .split_whitespace()
+        .find(|token| crate::command::option_name(token).is_some())
 }
