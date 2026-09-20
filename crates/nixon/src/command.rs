@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use crate::language::Language;
-use crate::placeholder::{ParseError, Placeholder, scan_all};
+use crate::placeholder::{ParseError, Placeholder, scan_spans};
 
 /// Where a command is defined, so `edit` and `new` can find it.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -90,6 +90,43 @@ impl fmt::Display for Description {
     }
 }
 
+/// A flag declared in a command heading and toggled at the prompt.
+///
+/// Only on/off for now. The `=value` form parses so the syntax has room for
+/// valued options later; the value is not read.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CommandOption {
+    /// The token with its dashes stripped and any `=…` dropped.
+    pub name: String,
+    /// The token as written, which is what goes into argv when it is on.
+    pub token: String,
+    /// Whether it starts on. An option with no declaration starts off.
+    pub default: bool,
+    /// From the declaration list item, if there was one.
+    pub description: Option<Description>,
+}
+
+impl CommandOption {
+    /// The environment variable the option is exported as.
+    pub fn env_var(&self) -> String {
+        format!("nixon_opt_{}", self.name.replace('-', "_"))
+    }
+}
+
+/// One argument a heading declares, in the order it was written.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ArgSpec {
+    /// A value chosen at the prompt.
+    Placeholder(Placeholder),
+    /// A flag toggled at the prompt; the index is into [`Command::options`].
+    Option(usize),
+}
+
+/// Wraps placeholders as arguments, for callers that have no options.
+pub fn arg_specs(placeholders: Vec<Placeholder>) -> Vec<ArgSpec> {
+    placeholders.into_iter().map(ArgSpec::Placeholder).collect()
+}
+
 /// A runnable command.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Command {
@@ -105,8 +142,10 @@ pub struct Command {
     pub source: String,
     /// Working directory; only `eval` sets this.
     pub pwd: Option<PathBuf>,
-    /// Placeholders from the heading or the info string.
-    pub placeholders: Vec<Placeholder>,
+    /// Arguments from the heading or the info string, in order.
+    pub args: Vec<ArgSpec>,
+    /// Options declared in the heading, in order.
+    pub options: Vec<CommandOption>,
     /// Marked `&`: runs detached.
     pub is_bg: bool,
     /// Name starts with `_`: hidden from the run picker.
@@ -121,10 +160,23 @@ impl Command {
         use std::fmt::Write as _;
 
         let mut out = self.name.clone();
-        for placeholder in &self.placeholders {
+        for placeholder in self.placeholders() {
             let _ = write!(out, " ${{{}}}", placeholder.name);
         }
         out
+    }
+
+    /// The placeholders among the arguments, in order.
+    pub fn placeholders(&self) -> impl Iterator<Item = &Placeholder> {
+        self.args.iter().filter_map(|arg| match arg {
+            ArgSpec::Placeholder(placeholder) => Some(placeholder),
+            ArgSpec::Option(_) => None,
+        })
+    }
+
+    /// The option with this name, if the command declares one.
+    pub fn option(&self, name: &str) -> Option<&CommandOption> {
+        self.options.iter().find(|option| option.name == name)
     }
 }
 
@@ -138,26 +190,97 @@ impl fmt::Display for Command {
     }
 }
 
-/// Splits a command heading into its name and its placeholders.
+/// Splits a command heading into its name and its arguments.
 ///
 /// The name is the first whitespace-delimited word; everything after it is
-/// scanned for placeholders and otherwise ignored, so a trailing `&` and
-/// ordinary shell text are skipped.
-pub fn parse_command_name(input: &str) -> Result<(String, Vec<Placeholder>), ParseError> {
+/// scanned for placeholders and option tokens, and otherwise ignored, so a
+/// trailing `&` and ordinary shell text are skipped.
+pub fn parse_command_name(
+    input: &str,
+) -> Result<(String, Vec<ArgSpec>, Vec<CommandOption>), ParseError> {
     let trimmed = input.trim_start();
     let Some(end) = trimmed.find(char::is_whitespace) else {
-        return Ok((trimmed.to_owned(), scan_all("")?));
+        return Ok((trimmed.to_owned(), Vec::new(), Vec::new()));
     };
     let (name, rest) = trimmed.split_at(end);
-    Ok((name.to_owned(), scan_all(rest)?))
+    let (args, options) = parse_args(rest)?;
+    Ok((name.to_owned(), args, options))
+}
+
+/// Scans a heading tail, or an info string, into arguments and options.
+///
+/// A token is an option when it is `-x` or `--name`, optionally `=value`;
+/// anything else is either a placeholder or text to ignore.
+pub fn parse_args(input: &str) -> Result<(Vec<ArgSpec>, Vec<CommandOption>), ParseError> {
+    let spans = scan_spans(input)?;
+    let mut args = Vec::new();
+    let mut options: Vec<CommandOption> = Vec::new();
+
+    let mut at = 0;
+    for (range, placeholder) in spans {
+        scan_options(&input[at..range.start], &mut args, &mut options)?;
+        args.push(ArgSpec::Placeholder(placeholder));
+        at = range.end;
+    }
+    scan_options(&input[at..], &mut args, &mut options)?;
+
+    Ok((args, options))
+}
+
+/// Collects the option tokens in a stretch of heading text.
+fn scan_options(
+    text: &str,
+    args: &mut Vec<ArgSpec>,
+    options: &mut Vec<CommandOption>,
+) -> Result<(), ParseError> {
+    for token in text.split_whitespace() {
+        let Some(name) = option_name(token) else {
+            continue;
+        };
+        if options.iter().any(|option| option.name == name) {
+            return Err(ParseError::DuplicateOption(name));
+        }
+        args.push(ArgSpec::Option(options.len()));
+        options.push(CommandOption {
+            name,
+            token: token.to_owned(),
+            ..CommandOption::default()
+        });
+    }
+    Ok(())
+}
+
+/// The name an option token declares: `-f`, or `--name` with an optional
+/// `=value` that is dropped.
+pub(crate) fn option_name(token: &str) -> Option<String> {
+    if let Some(long) = token.strip_prefix("--") {
+        let name = long.split_once('=').map_or(long, |(name, _)| name);
+        let mut chars = name.chars();
+        let first = chars.next()?;
+        if !first.is_ascii_alphanumeric() {
+            return None;
+        }
+        if !chars.all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return None;
+        }
+        return Some(name.to_owned());
+    }
+
+    let short = token.strip_prefix('-')?;
+    let mut chars = short.chars();
+    let first = chars.next()?;
+    if !first.is_ascii_alphanumeric() || chars.next().is_some() {
+        return None;
+    }
+    Some(short.to_owned())
 }
 
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
 
-    use super::parse_command_name;
-    use crate::placeholder::{Placeholder, PlaceholderFormat, PlaceholderType};
+    use super::{ArgSpec, parse_command_name};
+    use crate::placeholder::{ParseError, Placeholder, PlaceholderFormat, PlaceholderType};
 
     fn arg(name: &str) -> Placeholder {
         Placeholder::new(PlaceholderType::Arg, name)
@@ -181,16 +304,31 @@ mod tests {
         p
     }
 
+    /// Name and placeholders, for the cases that declare no options.
+    fn parsed(input: &str) -> Result<(String, Vec<Placeholder>), ParseError> {
+        let (name, args, options) = parse_command_name(input)?;
+        assert!(options.is_empty(), "expected no options, got {options:?}");
+        Ok((
+            name,
+            args.into_iter()
+                .map(|arg| match arg {
+                    ArgSpec::Placeholder(placeholder) => placeholder,
+                    ArgSpec::Option(_) => unreachable!(),
+                })
+                .collect(),
+        ))
+    }
+
     #[test]
     fn parses_empty_name() {
-        assert_eq!(parse_command_name(""), Ok((String::new(), vec![])));
+        assert_eq!(parsed(""), Ok((String::new(), vec![])));
     }
 
     #[rstest]
     #[case("echo 'foo bar baz'", "echo")]
     #[case("   echo 'foo bar baz'", "echo")]
     fn parses_text_part(#[case] input: &str, #[case] name: &str) {
-        assert_eq!(parse_command_name(input), Ok((name.to_owned(), vec![])));
+        assert_eq!(parsed(input), Ok((name.to_owned(), vec![])));
     }
 
     #[rstest]
@@ -212,10 +350,7 @@ mod tests {
     #[case("cat \"={some-arg}\"", env("some_arg", "some-arg"))]
     #[case("cat some_arg={some-arg}", env("some_arg", "some-arg"))]
     fn parses_placeholder_part(#[case] input: &str, #[case] expected: Placeholder) {
-        assert_eq!(
-            parse_command_name(input),
-            Ok(("cat".to_owned(), vec![expected]))
-        );
+        assert_eq!(parsed(input), Ok(("cat".to_owned(), vec![expected])));
     }
 
     #[test]
@@ -223,7 +358,7 @@ mod tests {
         let mut expected = arg("arg");
         expected.list = true;
         assert_eq!(
-            parse_command_name("cat ${arg | list}"),
+            parsed("cat ${arg | list}"),
             Ok(("cat".to_owned(), vec![expected]))
         );
     }
@@ -233,7 +368,7 @@ mod tests {
         let mut expected = arg("arg");
         expected.filter = Some("filter".to_owned());
         assert_eq!(
-            parse_command_name("cat ${arg | filter \"filter\"}"),
+            parsed("cat ${arg | filter \"filter\"}"),
             Ok(("cat".to_owned(), vec![expected]))
         );
     }
@@ -242,18 +377,81 @@ mod tests {
     #[case("echo $SOME_VAR", "echo")]
     #[case("echo <SOME_VAR", "echo")]
     fn a_lone_dollar_or_angle_is_not_a_placeholder(#[case] input: &str, #[case] name: &str) {
-        assert_eq!(parse_command_name(input), Ok((name.to_owned(), vec![])));
+        assert_eq!(parsed(input), Ok((name.to_owned(), vec![])));
     }
 
     #[test]
     fn fails_on_unterminated_arg() {
-        assert!(parse_command_name("cat \"${arg\"").is_err());
+        assert!(parsed("cat \"${arg\"").is_err());
+    }
+
+    /// A `-x` or `--name` token in the heading declares a toggleable option.
+    #[rstest]
+    #[case("remove --force", &["force"], &["--force"])]
+    #[case("remove -f", &["f"], &["-f"])]
+    #[case("clone --depth=1", &["depth"], &["--depth=1"])]
+    #[case("build --no-cache --release", &["no-cache", "release"], &["--no-cache", "--release"])]
+    fn option_tokens_declare_options(
+        #[case] input: &str,
+        #[case] names: &[&str],
+        #[case] tokens: &[&str],
+    ) {
+        let (_, _, options) = parse_command_name(input).unwrap();
+        assert_eq!(
+            options.iter().map(|o| o.name.as_str()).collect::<Vec<_>>(),
+            names
+        );
+        assert_eq!(
+            options.iter().map(|o| o.token.as_str()).collect::<Vec<_>>(),
+            tokens
+        );
+        assert!(options.iter().all(|o| !o.default));
+    }
+
+    #[rstest]
+    #[case("cmd -")]
+    #[case("cmd --")]
+    #[case("cmd -ab")]
+    #[case("cmd --=1")]
+    #[case("cmd --a.b")]
+    #[case("cmd &")]
+    #[case("cmd -$")]
+    fn other_tokens_are_not_options(#[case] input: &str) {
+        let (_, _, options) = parse_command_name(input).unwrap();
+        assert!(options.is_empty(), "{input} declared {options:?}");
+    }
+
+    #[test]
+    fn options_keep_their_place_among_the_placeholders() {
+        let (name, args, options) = parse_command_name("remove --force ${worktree} -v").unwrap();
+
+        assert_eq!(name, "remove");
+        assert_eq!(options.len(), 2);
+        assert!(matches!(args[0], ArgSpec::Option(0)));
+        assert!(matches!(&args[1], ArgSpec::Placeholder(p) if p.name == "worktree"));
+        assert!(matches!(args[2], ArgSpec::Option(1)));
+    }
+
+    #[test]
+    fn a_repeated_option_is_an_error() {
+        assert_eq!(
+            parse_command_name("cmd --force --force"),
+            Err(ParseError::DuplicateOption("force".to_owned()))
+        );
+        // The `=value` form names the same option.
+        assert!(parse_command_name("cmd --depth --depth=1").is_err());
+    }
+
+    #[test]
+    fn an_options_env_var_replaces_dashes() {
+        let (_, _, options) = parse_command_name("cmd --no-cache").unwrap();
+        assert_eq!(options[0].env_var(), "nixon_opt_no_cache");
     }
 
     #[test]
     fn a_trailing_background_marker_is_not_a_placeholder() {
         assert_eq!(
-            parse_command_name("hello ${arg} ${another-arg} &"),
+            parsed("hello ${arg} ${another-arg} &"),
             Ok(("hello".to_owned(), vec![arg("arg"), arg("another-arg")]))
         );
     }

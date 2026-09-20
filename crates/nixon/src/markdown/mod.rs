@@ -212,7 +212,7 @@ mod tests {
             Some("Command description.")
         );
         assert_eq!(parsed[0].source, "echo Hello World\n");
-        assert!(parsed[0].placeholders.is_empty());
+        assert_eq!(parsed[0].placeholders().count(), 0);
         assert!(parsed[0].is_bg);
     }
 
@@ -254,6 +254,107 @@ mod tests {
     }
 
     #[test]
+    fn a_list_item_declares_an_options_default_and_description() {
+        let parsed = commands(&[
+            "# `remove --force ${worktree}`",
+            "",
+            "Removes a worktree.",
+            "",
+            "- `--force`: on — also removes worktrees with local changes",
+            "",
+            "```bash",
+            "git worktree remove \"$@\"",
+            "```",
+        ]);
+
+        let options = &parsed[0].options;
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].name, "force");
+        assert!(options[0].default);
+        assert_eq!(
+            options[0].description.as_ref().map(Description::plain),
+            Some("also removes worktrees with local changes".to_owned())
+        );
+        assert_eq!(
+            parsed[0].desc.as_ref().map(Description::plain).as_deref(),
+            Some("Removes a worktree.")
+        );
+    }
+
+    #[test]
+    fn an_undeclared_option_in_a_list_item_is_an_error() {
+        let err = parse(
+            FILE,
+            &md(&[
+                "# `remove --force`",
+                "",
+                "- `--quiet`: off",
+                "",
+                "```bash",
+                "true",
+                "```",
+            ]),
+        )
+        .unwrap_err();
+        assert_eq!(err.message, "Undeclared option: quiet");
+    }
+
+    #[test]
+    fn a_value_that_is_not_on_or_off_is_not_supported_yet() {
+        let err = parse(
+            FILE,
+            &md(&[
+                "# `clone --depth`",
+                "",
+                "- `--depth`: 1",
+                "",
+                "```bash",
+                "true",
+                "```",
+            ]),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.message,
+            "Option --depth is set to 1; only on and off are supported"
+        );
+    }
+
+    #[test]
+    fn an_ordinary_list_item_is_not_a_declaration() {
+        let parsed = commands(&[
+            "# `remove --force`",
+            "",
+            "Removes a worktree.",
+            "",
+            "- one",
+            "- `git` is not a declaration",
+            "",
+            "```bash",
+            "true",
+            "```",
+        ]);
+        assert_eq!(parsed[0].options.len(), 1);
+        assert!(!parsed[0].options[0].default);
+    }
+
+    #[test]
+    fn an_option_declared_in_the_info_string_works_the_same_way() {
+        let parsed = commands(&[
+            "# `remove`",
+            "",
+            "- `--force`: on",
+            "",
+            "```bash --force ${worktree}",
+            "true",
+            "```",
+        ]);
+        assert_eq!(parsed[0].options.len(), 1);
+        assert!(parsed[0].options[0].default);
+        assert_eq!(parsed[0].placeholders().count(), 1);
+    }
+
+    #[test]
     fn detects_command_by_code_block() {
         let parsed = commands(&["# `hello`", "```bash", "echo Hello World", "```"]);
         assert_eq!(parsed[0].lang, Language::Bash);
@@ -269,7 +370,7 @@ mod tests {
         let fence = format!("```bash {info}");
         let parsed = commands(&["# `hello`", &fence, "echo Hello World", "```"]);
         assert_eq!(parsed[0].name, "hello");
-        assert_eq!(parsed[0].placeholders[0].format, expected);
+        assert_eq!(parsed[0].placeholders().next().unwrap().format, expected);
     }
 
     #[test]
@@ -321,7 +422,10 @@ mod tests {
         ]);
         assert_eq!(parsed[0].name, "hello");
         assert!(parsed[0].is_bg);
-        assert_eq!(parsed[0].placeholders, vec![arg("arg"), arg("another-arg")]);
+        assert_eq!(
+            parsed[0].placeholders().cloned().collect::<Vec<_>>(),
+            vec![arg("arg"), arg("another-arg")]
+        );
     }
 
     #[test]
@@ -351,9 +455,9 @@ mod tests {
             .map(|c| {
                 (
                     c.lang.clone(),
-                    c.placeholders[0].name.clone(),
-                    c.placeholders[0].format.clone(),
-                    c.placeholders[0].multiple,
+                    c.placeholders().next().unwrap().name.clone(),
+                    c.placeholders().next().unwrap().format.clone(),
+                    c.placeholders().next().unwrap().multiple,
                 )
             })
             .collect();

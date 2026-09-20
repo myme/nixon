@@ -31,6 +31,8 @@ pub enum Node {
     },
     /// A paragraph, with its inline code kept apart.
     Paragraph(Description),
+    /// One item of a list, flattened to its text.
+    ListItem(Description),
     /// Closes a container; carries the line after the container's last.
     End {
         /// One past the container's last line.
@@ -93,6 +95,12 @@ pub fn extract<'a>(node: &'a AstNode<'a>) -> Vec<Node> {
         NodeValue::Paragraph => {
             let children: Vec<_> = node.children().collect();
             vec![Node::Paragraph(description(&children))]
+        }
+        // A list item is one line as far as nixon is concerned: it is where
+        // a command declares an option.
+        NodeValue::Item(_) | NodeValue::TaskItem(_) => {
+            let children: Vec<_> = node.children().collect();
+            vec![Node::ListItem(description(&children))]
         }
         _ => {
             let mut nodes: Vec<Node> = node.children().flat_map(extract).collect();

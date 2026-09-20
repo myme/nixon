@@ -69,7 +69,8 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             ..Resolved::default()
         };
 
-        for (placeholder, query) in zip_args(&command.placeholders, args) {
+        let placeholders: Vec<Placeholder> = command.placeholders().cloned().collect();
+        for (placeholder, query) in zip_args(&placeholders, args) {
             let values = if placeholder.value.is_empty() {
                 self.select_for(&placeholder, query.as_deref())?
             } else {
@@ -317,7 +318,7 @@ mod tests {
             name: name.to_owned(),
             source: source.to_owned(),
             lang: Language::Bash,
-            placeholders,
+            args: crate::command::arg_specs(placeholders),
             ..Command::default()
         }
     }

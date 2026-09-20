@@ -127,7 +127,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         placeholder.multiple = true;
 
         let producer = Command {
-            placeholders: vec![placeholder],
+            args: crate::command::arg_specs(vec![placeholder]),
             ..Command::default()
         };
 

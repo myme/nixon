@@ -50,7 +50,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             source,
             lang: opts.language.clone().unwrap_or(detected),
             pwd: Some(project.path()),
-            placeholders: opts.placeholders.clone(),
+            args: crate::command::arg_specs(opts.placeholders.clone()),
             ..Command::default()
         };
 

@@ -5,7 +5,7 @@ pub mod grammar;
 
 use std::fmt;
 
-pub use grammar::{ParseError, parse_one, scan_all};
+pub use grammar::{ParseError, parse_one, scan_all, scan_spans};
 
 /// How a resolved placeholder reaches the command.
 #[derive(Clone, Debug, Eq, PartialEq)]

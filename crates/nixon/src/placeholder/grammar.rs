@@ -7,6 +7,8 @@
 //! modifiers   := pipe-modifiers | colon-modifiers
 //! ```
 
+use std::ops::Range;
+
 use winnow::ascii::{digit1, space0};
 use winnow::combinator::{alt, cut_err, delimited, opt, preceded, repeat, separated};
 use winnow::error::{ContextError, ParseError as WinnowParseError};
@@ -25,6 +27,9 @@ pub enum ParseError {
     /// The grammar did not match.
     #[error("{0}")]
     Syntax(String),
+    /// A heading declared the same option twice.
+    #[error("Duplicate option: {0}")]
+    DuplicateOption(String),
 }
 
 /// One modifier, before it is folded into a placeholder.
@@ -48,10 +53,22 @@ pub fn parse_one(input: &str) -> Result<Placeholder, ParseError> {
 /// A `${`, `<{` or `alias={` that is never closed is an error rather than
 /// ordinary text, matching v1's committed parse.
 pub fn scan_all(input: &str) -> Result<Vec<Placeholder>, ParseError> {
+    Ok(scan_spans(input)?
+        .into_iter()
+        .map(|(_, placeholder)| placeholder)
+        .collect())
+}
+
+/// Every placeholder in `input`, with the byte range it spans.
+///
+/// The ranges are what lets a heading interleave placeholders with option
+/// tokens in the order they were written.
+pub fn scan_spans(input: &str) -> Result<Vec<(Range<usize>, Placeholder)>, ParseError> {
     let mut found = Vec::new();
     let mut rest = input;
 
     while !rest.is_empty() {
+        let at = input.len() - rest.len();
         let mut probe = rest;
         if placeholder_start(&mut probe).is_ok() {
             let mut cursor = rest;
@@ -61,7 +78,8 @@ pub fn scan_all(input: &str) -> Result<Vec<Placeholder>, ParseError> {
                     |ctx| ParseError::Syntax(ctx.to_string()),
                 )
             })?;
-            found.push(parsed?);
+            let end = input.len() - cursor.len();
+            found.push((at..end, parsed?));
             rest = cursor;
         } else {
             let mut chars = rest.chars();
