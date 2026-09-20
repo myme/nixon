@@ -348,6 +348,9 @@ command line has a few deliberate differences.
   v1 reported its parent directory with an empty name.
 - **`type="…"` on a section heading** applies to the commands beneath it. v1
   documented this but only honoured it on command headings.
+- **Git worktrees are discovered**, including those of bare repositories and
+  those living outside `project_dirs`. Set `git_worktrees: false` in the
+  config block to turn it off.
 
 ## Some history, inspirations & similar projects
 

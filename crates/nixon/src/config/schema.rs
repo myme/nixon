@@ -27,6 +27,8 @@ pub struct ConfigBlock {
     pub use_direnv: Option<bool>,
     /// Wrap commands in `nix-shell`.
     pub use_nix: Option<bool>,
+    /// Whether discovery also finds git worktrees. ENGINEERING §7.6.
+    pub git_worktrees: Option<bool>,
 }
 
 /// One entry of `project_types`. `name` and `desc` are required. SPEC §3.4.

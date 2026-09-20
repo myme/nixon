@@ -114,6 +114,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             &self.config.project_types,
             &self.config.project_dirs,
             &expansion,
+            self.config.finds_worktrees(),
         )
     }
 

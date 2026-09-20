@@ -65,6 +65,8 @@ pub struct Config {
     pub use_nix: Option<bool>,
     /// Verbosity.
     pub loglevel: Option<LogLevel>,
+    /// Whether discovery also finds git worktrees. ENGINEERING §7.6.
+    pub git_worktrees: Option<bool>,
 }
 
 impl Config {
@@ -72,8 +74,15 @@ impl Config {
     pub fn defaults() -> Self {
         Self {
             loglevel: Some(LogLevel::Warning),
+            // Worktree discovery is on unless turned off. ENGINEERING §7.6.
+            git_worktrees: Some(true),
             ..Self::default()
         }
+    }
+
+    /// Whether to look for git worktrees. ENGINEERING §7.6.
+    pub fn finds_worktrees(&self) -> bool {
+        self.git_worktrees.unwrap_or(true)
     }
 
     /// Merges `rhs` over `self`. SPEC §3.3.
@@ -96,6 +105,7 @@ impl Config {
         self.use_direnv = rhs.use_direnv.or(self.use_direnv);
         self.use_nix = rhs.use_nix.or(self.use_nix);
         self.loglevel = rhs.loglevel.or(self.loglevel);
+        self.git_worktrees = rhs.git_worktrees.or(self.git_worktrees);
         self
     }
 }
@@ -112,6 +122,7 @@ impl From<schema::ConfigBlock> for Config {
             use_direnv: block.use_direnv,
             use_nix: block.use_nix,
             loglevel: None,
+            git_worktrees: block.git_worktrees,
         }
     }
 }

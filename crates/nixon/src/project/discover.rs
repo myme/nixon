@@ -2,8 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
-use super::detect::{find_project, sort_projects};
-use super::{Project, ProjectType};
+use super::detect::{find_project, find_project_types, sort_projects};
+use super::{Project, ProjectType, worktree};
 
 /// What `~` and `$VAR` expand to, passed in so discovery stays testable.
 /// SPEC §9.6.
@@ -68,16 +68,76 @@ pub fn find_projects(
     found
 }
 
-/// Discovery as the subcommands see it: depth 1, sorted by path, no dedupe.
-/// SPEC §9.6.
+/// Discovery as the subcommands see it: depth 1, sorted by path. SPEC §9.6.
+///
+/// With `worktrees`, every git directory found also contributes its
+/// worktrees, which live inside bare repositories or outside `project_dirs`
+/// and would otherwise be missed. ENGINEERING §7.6.
 pub fn get_sorted_projects(
     ptypes: &[ProjectType],
     source_dirs: &[PathBuf],
     expansion: &Expansion<'_>,
+    worktrees: bool,
 ) -> Vec<Project> {
     let mut projects = find_projects(1, ptypes, source_dirs, expansion);
+    if worktrees {
+        projects.extend(find_worktrees(ptypes, source_dirs, expansion, &projects));
+    }
     sort_projects(&mut projects);
     projects
+}
+
+/// The worktrees of every git directory at or below the source directories.
+/// ENGINEERING §7.6.
+///
+/// Scanned independently of `found`, because a bare repository is not itself
+/// a project the marker search would return, yet its worktrees are.
+fn find_worktrees(
+    ptypes: &[ProjectType],
+    source_dirs: &[PathBuf],
+    expansion: &Expansion<'_>,
+    found: &[Project],
+) -> Vec<Project> {
+    let mut seen: std::collections::BTreeSet<PathBuf> = found.iter().map(Project::path).collect();
+
+    let mut worktrees = Vec::new();
+    for dir in git_dirs(source_dirs, expansion) {
+        for root in worktree::worktrees_of(&dir) {
+            // A worktree that is also under project_dirs is already there.
+            if !seen.insert(root.clone()) {
+                continue;
+            }
+            // Types come from the worktree's own directory: it has a `.git`
+            // file, so `git` matches, and Cargo.toml and friends match as
+            // usual.
+            worktrees.push(Project::from_path(&root, find_project_types(&root, ptypes)));
+        }
+    }
+    worktrees
+}
+
+/// Git directories at, or immediately below, the source directories.
+///
+/// The same depth-1 shape as project discovery, so a `~/src` holding bare
+/// repositories is scanned without walking the whole tree.
+fn git_dirs(source_dirs: &[PathBuf], expansion: &Expansion<'_>) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    for source in source_dirs {
+        for candidate in expansion.expand(source) {
+            if !candidate.is_dir() {
+                continue;
+            }
+            if worktree::is_git_dir(&candidate) {
+                dirs.push(candidate.clone());
+            }
+            dirs.extend(
+                children(&candidate)
+                    .into_iter()
+                    .filter(|child| child.is_dir() && worktree::is_git_dir(child)),
+            );
+        }
+    }
+    dirs
 }
 
 /// Immediate children of a directory, dotfiles included. SPEC §9.6.
@@ -138,6 +198,187 @@ mod tests {
         projects.iter().map(crate::project::Project::path).collect()
     }
 
+    /// Builds a working tree's `.git` layout, without running git.
+    fn working_tree(at: &assert_fs::fixture::ChildPath) {
+        at.create_dir_all().unwrap();
+        at.child(".git/HEAD")
+            .write_str("ref: refs/heads/main\n")
+            .unwrap();
+        at.child(".git/objects").create_dir_all().unwrap();
+        at.child(".git/refs").create_dir_all().unwrap();
+        at.child(".git/config")
+            .write_str("[core]\n\tbare = false\n")
+            .unwrap();
+    }
+
+    fn bare_repo(at: &assert_fs::fixture::ChildPath) {
+        at.create_dir_all().unwrap();
+        at.child("HEAD")
+            .write_str("ref: refs/heads/main\n")
+            .unwrap();
+        at.child("objects").create_dir_all().unwrap();
+        at.child("refs").create_dir_all().unwrap();
+        at.child("config")
+            .write_str("[core]\n\tbare = true\n")
+            .unwrap();
+    }
+
+    fn register_worktree(
+        git_dir: &assert_fs::fixture::ChildPath,
+        name: &str,
+        root: &assert_fs::fixture::ChildPath,
+    ) {
+        root.create_dir_all().unwrap();
+        let admin = git_dir.child(format!("worktrees/{name}"));
+        admin.create_dir_all().unwrap();
+        admin
+            .child("gitdir")
+            .write_str(&format!("{}\n", root.child(".git").path().display()))
+            .unwrap();
+        root.child(".git")
+            .write_str(&format!("gitdir: {}\n", admin.path().display()))
+            .unwrap();
+    }
+
+    fn git_type() -> ProjectType {
+        ProjectType {
+            id: "git".to_owned(),
+            markers: vec![ProjectMarker::Path(PathBuf::from(".git"))],
+            description: "Git".to_owned(),
+        }
+    }
+
+    #[test]
+    fn worktrees_are_found_even_outside_the_source_dirs() {
+        let temp = TempDir::new().unwrap();
+        let src = temp.child("src");
+        src.create_dir_all().unwrap();
+        let repo = src.child("repo");
+        working_tree(&repo);
+
+        // Deliberately outside src/, where marker discovery never looks.
+        let tree = temp.child("elsewhere/feature");
+        register_worktree(&repo.child(".git"), "feature", &tree);
+
+        let found = get_sorted_projects(
+            &[git_type()],
+            &[src.to_path_buf()],
+            &expansion(temp.path()),
+            true,
+        );
+        // Sorted by path, so elsewhere/ comes before src/.
+        assert_eq!(paths(&found), vec![tree.to_path_buf(), repo.to_path_buf()]);
+    }
+
+    #[test]
+    fn a_bare_repository_contributes_its_worktrees() {
+        let temp = TempDir::new().unwrap();
+        let src = temp.child("src");
+        src.create_dir_all().unwrap();
+        let repo = src.child("repo.git");
+        bare_repo(&repo);
+        let tree = temp.child("trees/main");
+        register_worktree(&repo, "main", &tree);
+
+        let found = get_sorted_projects(
+            &[git_type()],
+            &[src.to_path_buf()],
+            &expansion(temp.path()),
+            true,
+        );
+        // The bare repo is itself a git project, and its worktree comes too.
+        assert_eq!(paths(&found), vec![repo.to_path_buf(), tree.to_path_buf()]);
+    }
+
+    #[test]
+    fn a_worktree_carries_the_types_of_its_own_directory() {
+        let temp = TempDir::new().unwrap();
+        let src = temp.child("src");
+        src.create_dir_all().unwrap();
+        let repo = src.child("repo");
+        working_tree(&repo);
+        let tree = temp.child("trees/feature");
+        register_worktree(&repo.child(".git"), "feature", &tree);
+        tree.child("Cargo.toml").write_str("[package]\n").unwrap();
+
+        let cargo = ProjectType {
+            id: "cargo".to_owned(),
+            markers: vec![ProjectMarker::Path(PathBuf::from("Cargo.toml"))],
+            description: "Cargo".to_owned(),
+        };
+        let found = get_sorted_projects(
+            &[git_type(), cargo],
+            &[src.to_path_buf()],
+            &expansion(temp.path()),
+            true,
+        );
+        let worktree = found
+            .iter()
+            .find(|p| p.path() == tree.to_path_buf())
+            .unwrap();
+        let ids: Vec<&str> = worktree.types.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids, ["git", "cargo"]);
+    }
+
+    #[test]
+    fn a_stale_worktree_is_not_offered() {
+        let temp = TempDir::new().unwrap();
+        let src = temp.child("src");
+        src.create_dir_all().unwrap();
+        let repo = src.child("repo");
+        working_tree(&repo);
+        let gone = temp.child("trees/gone");
+        register_worktree(&repo.child(".git"), "gone", &gone);
+        std::fs::remove_dir_all(gone.path()).unwrap();
+
+        let found = get_sorted_projects(
+            &[git_type()],
+            &[src.to_path_buf()],
+            &expansion(temp.path()),
+            true,
+        );
+        assert_eq!(paths(&found), vec![repo.to_path_buf()]);
+    }
+
+    #[test]
+    fn a_worktree_already_under_the_source_dirs_is_not_duplicated() {
+        let temp = TempDir::new().unwrap();
+        let src = temp.child("src");
+        src.create_dir_all().unwrap();
+        let repo = src.child("repo");
+        working_tree(&repo);
+        // The worktree sits beside the repo, so discovery finds it too.
+        let tree = src.child("feature");
+        register_worktree(&repo.child(".git"), "feature", &tree);
+
+        let found = get_sorted_projects(
+            &[git_type()],
+            &[src.to_path_buf()],
+            &expansion(temp.path()),
+            true,
+        );
+        assert_eq!(paths(&found), vec![tree.to_path_buf(), repo.to_path_buf()]);
+    }
+
+    #[test]
+    fn worktree_discovery_can_be_turned_off() {
+        let temp = TempDir::new().unwrap();
+        let src = temp.child("src");
+        src.create_dir_all().unwrap();
+        let repo = src.child("repo");
+        working_tree(&repo);
+        let tree = temp.child("elsewhere/feature");
+        register_worktree(&repo.child(".git"), "feature", &tree);
+
+        let found = get_sorted_projects(
+            &[git_type()],
+            &[src.to_path_buf()],
+            &expansion(temp.path()),
+            false,
+        );
+        assert_eq!(paths(&found), vec![repo.to_path_buf()]);
+    }
+
     #[test]
     fn scans_children_of_a_source_dir() {
         let temp = TempDir::new().unwrap();
@@ -152,6 +393,7 @@ mod tests {
             &[marker_type(&marker)],
             &[src.to_path_buf()],
             &expansion(temp.path()),
+            true,
         );
         assert_eq!(paths(&found), vec![one, two]);
     }
@@ -169,6 +411,7 @@ mod tests {
             &[marker_type(&marker)],
             &[src.to_path_buf()],
             &expansion(temp.path()),
+            true,
         );
         assert_eq!(paths(&found), vec![src.to_path_buf(), inner]);
     }
@@ -187,6 +430,7 @@ mod tests {
             &[marker_type(&marker)],
             &[src.to_path_buf()],
             &expansion(temp.path()),
+            true,
         );
         assert!(found.is_empty());
     }
@@ -219,6 +463,7 @@ mod tests {
             &[marker_type(&marker)],
             &[src.to_path_buf()],
             &expansion(temp.path()),
+            true,
         );
         assert_eq!(paths(&found), vec![hidden]);
     }
@@ -237,6 +482,7 @@ mod tests {
             &[marker_type(&marker)],
             &[src.to_path_buf(), src.to_path_buf()],
             &expansion(temp.path()),
+            true,
         );
         assert_eq!(
             paths(&found),
@@ -256,6 +502,7 @@ mod tests {
             &[marker_type(&marker)],
             &[PathBuf::from("~/src")],
             &expansion(temp.path()),
+            true,
         );
         assert_eq!(paths(&found), vec![one]);
     }
@@ -277,6 +524,7 @@ mod tests {
                 home: temp.path(),
                 var: &lookup,
             },
+            true,
         );
         assert_eq!(paths(&found), vec![one]);
     }
@@ -291,8 +539,12 @@ mod tests {
         let beta = make_project(&src.child("b"), "beta", &marker);
 
         let pattern = src.path().join("*");
-        let found =
-            get_sorted_projects(&[marker_type(&marker)], &[pattern], &expansion(temp.path()));
+        let found = get_sorted_projects(
+            &[marker_type(&marker)],
+            &[pattern],
+            &expansion(temp.path()),
+            true,
+        );
         assert_eq!(paths(&found), vec![alpha, beta]);
     }
 
@@ -304,6 +556,7 @@ mod tests {
             &[marker_type(&marker)],
             &[temp.path().join("nope")],
             &expansion(temp.path()),
+            true,
         );
         assert!(found.is_empty());
     }

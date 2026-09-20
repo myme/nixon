@@ -19,9 +19,16 @@ pub fn find_project_types(path: &Path, ptypes: &[ProjectType]) -> Vec<ProjectTyp
 }
 
 /// Whether one marker holds for a directory. SPEC §9.2.
+///
+/// A `.git` path marker is also satisfied by a bare repository, so the usual
+/// `test: [".git"]` classifies one as a git project without new config.
+/// ENGINEERING §7.6.
 pub fn test_marker(path: &Path, marker: &ProjectMarker) -> bool {
     match marker {
-        ProjectMarker::Path(p) => path.join(p).exists(),
+        ProjectMarker::Path(p) => {
+            path.join(p).exists()
+                || (p.as_os_str() == ".git" && super::worktree::is_bare_repo(path))
+        }
         ProjectMarker::File(p) => path.join(p).is_file(),
         ProjectMarker::Dir(p) => path.join(p).is_dir(),
         ProjectMarker::Or(markers) => markers.iter().any(|m| test_marker(path, m)),
