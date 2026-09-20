@@ -533,3 +533,150 @@ fn a_selection_that_names_no_command_is_an_error() {
         "got {err:?}"
     );
 }
+
+const OPTIONS_MD: &str = "\
+# `_worktrees`
+
+```bash
+git worktree list
+```
+
+# `remove --force ${_worktrees}`
+
+Removes a worktree.
+
+- `--force`: off — also removes worktrees with local changes
+
+```bash
+git worktree remove \"$@\"
+```
+
+# `build --release`
+
+- `--release`: off
+
+```bash
+cargo build \"$@\"
+```
+";
+
+/// The toggles ride along with the placeholder picker.
+#[test]
+fn a_placeholder_picker_shows_the_commands_options() {
+    let fixture = Fixture::new(OPTIONS_MD);
+    let picker = picks(&[&["remove"], &["../wt"]]);
+    let runner = FakeRunner::new().with_output(&["../wt"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts::default()).unwrap();
+
+    // Call 0 is the command picker, call 1 the placeholder's.
+    let shown = &app.picker.calls[1].0.options;
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].label, "--force");
+    assert!(!shown[0].on);
+    assert_eq!(
+        shown[0].description.as_deref(),
+        Some("also removes worktrees with local changes")
+    );
+}
+
+/// A toggle flipped at the placeholder picker reaches argv.
+#[test]
+fn toggling_at_the_picker_changes_what_runs() {
+    let fixture = Fixture::new(OPTIONS_MD);
+    // Only the placeholder pick is offered the toggles; it flips the first,
+    // as `Alt-1` would.
+    let picker =
+        ScriptedPicker::new(vec![selected(&["remove"]), selected(&["../wt"])]).toggling(&[0]);
+    let runner = FakeRunner::new().with_output(&["../wt"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts::default()).unwrap();
+
+    let invocation = app.runner.last().unwrap();
+    assert_eq!(&invocation.argv[2..], ["--force", "../wt"]);
+    assert!(
+        invocation
+            .env
+            .contains(&("nixon_opt_force".to_owned(), "1".to_owned()))
+    );
+}
+
+/// With no placeholder there is nothing to pick, so the options get a prompt
+/// of their own.
+#[test]
+fn a_command_with_only_options_is_confirmed() {
+    let fixture = Fixture::new(OPTIONS_MD);
+    let picker = ScriptedPicker::new(vec![selected(&["build"])]).toggling(&[0]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    app.run(&RunOpts {
+        command: Some("build".to_owned()),
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert_eq!(&app.runner.last().unwrap().argv[2..], ["--release"]);
+}
+
+/// Cancelling the confirm prompt is a cancel, not a run with defaults.
+#[test]
+fn cancelling_the_confirm_prompt_exits_130() {
+    let fixture = Fixture::new(OPTIONS_MD);
+    let mut picker = ScriptedPicker::new(vec![selected(&["build"])]);
+    picker.cancel_confirm = true;
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    let err = app
+        .run(&RunOpts {
+            command: Some("build".to_owned()),
+            ..RunOpts::default()
+        })
+        .unwrap_err();
+    assert!(matches!(err, NixonError::Canceled));
+    assert_eq!(err.exit_code(), 130);
+}
+
+/// A command line that settles every option has nothing left to ask.
+#[test]
+fn a_complete_command_line_skips_the_confirm_prompt() {
+    let fixture = Fixture::new(OPTIONS_MD);
+    let picker = ScriptedPicker::new(vec![selected(&["build"])]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    app.run(&RunOpts {
+        command: Some("build".to_owned()),
+        args: vec!["--release".to_owned()],
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    // Only the command pick; no confirm call was recorded.
+    assert_eq!(app.picker.calls.len(), 1);
+    assert_eq!(&app.runner.last().unwrap().argv[2..], ["--release"]);
+}
+
+/// A placeholder's own command runs with its own defaults, not with the
+/// toggles the prompt is showing for the command that referenced it.
+#[test]
+fn an_inner_command_is_not_given_the_outer_commands_toggles() {
+    let fixture = Fixture::new(OPTIONS_MD);
+    let picker =
+        ScriptedPicker::new(vec![selected(&["remove"]), selected(&["../wt"])]).toggling(&[0]);
+    let runner = FakeRunner::new().with_output(&["../wt"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts::default()).unwrap();
+
+    // `_worktrees` has no options of its own, so it gets no option vars.
+    let inner = &app.runner.calls[0].1;
+    assert!(
+        !inner
+            .env
+            .iter()
+            .any(|(name, _)| name.starts_with("nixon_opt_")),
+        "the inner command saw {:?}",
+        inner.env
+    );
+}

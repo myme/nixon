@@ -1,6 +1,8 @@
 //! Resolving a command's placeholders.
 
-use nixon_picker::{Candidate, CandidateStream, FilterPicker, Picker, PickerOptions, Selection};
+use nixon_picker::{
+    Candidate, CandidateStream, FilterPicker, Picker, PickerOption, PickerOptions, Selection,
+};
 use serde::Deserialize;
 
 use crate::command::{ArgSpec, Command};
@@ -53,12 +55,19 @@ pub struct Resolver<'a, P: Picker, R: ProcessRunner> {
     pub runner: &'a mut R,
     /// Picker header: `show_command` of the *outer* command.
     pub header: String,
+    /// The outer command's toggles, shown on every placeholder picker and
+    /// carried from one to the next.
+    pub options: Vec<PickerOption>,
 }
 
 impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
     /// Resolves `command` with its options at their defaults.
+    ///
+    /// This is the inner path: a command a placeholder references runs with
+    /// its own defaults, never with the toggles the prompt is showing for
+    /// the command that referenced it.
     pub fn resolve_env(&mut self, command: &Command, args: &[String]) -> Result<Resolved> {
-        self.resolve_with(command, args, &command.default_options())
+        self.resolve_inner(command, args, &command.default_options(), false)
     }
 
     /// Resolves every argument of `command`, with the options in `on`.
@@ -73,12 +82,45 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
         args: &[String],
         on: &[bool],
     ) -> Result<Resolved> {
+        self.resolve_inner(command, args, on, true)
+    }
+
+    /// `outer` says whether the toggles on screen belong to this command.
+    fn resolve_inner(
+        &mut self,
+        command: &Command,
+        args: &[String],
+        on: &[bool],
+        outer: bool,
+    ) -> Result<Resolved> {
         let mut resolved = Resolved {
             env: vec![(
                 PROJECT_PATH_VAR.to_owned(),
                 self.project.path().to_string_lossy().into_owned(),
             )],
             ..Resolved::default()
+        };
+
+        let placeholders: Vec<Placeholder> = command.placeholders().cloned().collect();
+        let queries = zip_args(&placeholders, args);
+
+        // Every pick can change a toggle, so the picks come first and argv
+        // is assembled from where the toggles ended up.
+        let mut picked = Vec::with_capacity(queries.len());
+        for (placeholder, query) in queries {
+            let values = if placeholder.value.is_empty() {
+                self.select_for(&placeholder, query.as_deref())?
+            } else {
+                placeholder.value.clone()
+            };
+            picked.push((placeholder, values));
+        }
+
+        // The picks above may have moved a toggle, so the final state wins.
+        let on: Vec<bool> = if outer && !self.options.is_empty() {
+            self.options.iter().map(|option| option.on).collect()
+        } else {
+            on.to_vec()
         };
 
         for (index, option) in command.options.iter().enumerate() {
@@ -88,9 +130,7 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
                 .push((option.env_var(), if set { "1" } else { "" }.to_owned()));
         }
 
-        let placeholders: Vec<Placeholder> = command.placeholders().cloned().collect();
-        let mut queries = zip_args(&placeholders, args).into_iter();
-
+        let mut picked = picked.into_iter();
         for spec in &command.args {
             match spec {
                 ArgSpec::Option(index) => {
@@ -100,45 +140,20 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
                     }
                 }
                 ArgSpec::Placeholder(_) => {
-                    let Some((placeholder, query)) = queries.next() else {
+                    let Some((placeholder, values)) = picked.next() else {
                         continue;
                     };
-                    self.apply(&mut resolved, &placeholder, query.as_deref())?;
+                    place(&mut resolved, &placeholder, values);
                 }
             }
         }
 
         // Arguments beyond the placeholders, already expanded.
-        for (placeholder, query) in queries {
-            self.apply(&mut resolved, &placeholder, query.as_deref())?;
+        for (placeholder, values) in picked {
+            place(&mut resolved, &placeholder, values);
         }
 
         Ok(resolved)
-    }
-
-    /// Resolves one placeholder into the right part of `resolved`.
-    fn apply(
-        &mut self,
-        resolved: &mut Resolved,
-        placeholder: &Placeholder,
-        query: Option<&str>,
-    ) -> Result<()> {
-        let values = if placeholder.value.is_empty() {
-            self.select_for(placeholder, query)?
-        } else {
-            placeholder.value.clone()
-        };
-
-        match &placeholder.kind {
-            PlaceholderType::Stdin => {
-                resolved.stdin.get_or_insert_with(Vec::new).extend(values);
-            }
-            PlaceholderType::Arg => resolved.args.extend(values),
-            PlaceholderType::EnvVar(name) => {
-                resolved.env.push((name.clone(), values.join(" ")));
-            }
-        }
-        Ok(())
     }
 
     /// Runs the command a placeholder references and selects from its output.
@@ -175,6 +190,7 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             multi: placeholder.multiple,
             select_one: true,
             matching: crate::matcher_options(self.context.config),
+            options: self.options.clone(),
             ..PickerOptions::default()
         };
 
@@ -188,7 +204,9 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             let mut stream = self.stream_candidates(&command, &evaluation, &placeholder.format)?;
             // Dropping the stream stops the command, on this path and on
             // the error path alike.
-            self.picker.pick_stream(&options, &mut stream)?
+            let (selection, state) = self.picker.pick_stream_options(&options, &mut stream)?;
+            self.set_options(&state);
+            selection
         } else {
             // Columns need every row before the widths are known and JSON
             // needs the whole document, so those stay buffered.
@@ -204,7 +222,9 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             if placeholder.list {
                 FilterPicker.pick(&options, candidates)?
             } else {
-                self.picker.pick(&options, candidates)?
+                let (selection, state) = self.picker.pick_options(&options, candidates)?;
+                self.set_options(&state);
+                selection
             }
         };
 
@@ -217,6 +237,13 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
                 name: placeholder.name.clone(),
             }),
             Selection::Canceled => Err(NixonError::Canceled),
+        }
+    }
+
+    /// Carries the toggles from one placeholder picker to the next.
+    fn set_options(&mut self, state: &[bool]) {
+        for (option, on) in self.options.iter_mut().zip(state) {
+            option.on = *on;
         }
     }
 
@@ -306,6 +333,19 @@ fn line_candidate(line: &str, fields: &[usize]) -> Candidate {
     }
     let words: Vec<String> = line.split_whitespace().map(ToOwned::to_owned).collect();
     Candidate::with_title(line, pick_fields(fields, &words).join(" "))
+}
+
+/// Puts a placeholder's values in the right part of `resolved`.
+fn place(resolved: &mut Resolved, placeholder: &Placeholder, values: Vec<String>) {
+    match &placeholder.kind {
+        PlaceholderType::Stdin => {
+            resolved.stdin.get_or_insert_with(Vec::new).extend(values);
+        }
+        PlaceholderType::Arg => resolved.args.extend(values),
+        PlaceholderType::EnvVar(name) => {
+            resolved.env.push((name.clone(), values.join(" ")));
+        }
+    }
 }
 
 /// Pairs placeholders with the arguments given on the command line.
@@ -416,6 +456,7 @@ mod tests {
                 picker,
                 runner,
                 header: outer.show(),
+                options: Vec::new(),
             };
             resolver.resolve_env(outer, args)
         }
@@ -442,6 +483,7 @@ mod tests {
                 picker,
                 runner,
                 header: outer.show(),
+                options: Vec::new(),
             };
             resolver.resolve_with(outer, args, on)
         }

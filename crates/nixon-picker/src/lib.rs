@@ -7,6 +7,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 pub mod candidate;
+pub mod confirm;
 pub mod editor;
 pub mod filter;
 pub mod matcher;

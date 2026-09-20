@@ -3,8 +3,8 @@ source: crates/nixon-picker/src/ui/render.rs
 expression: draw(&mut app())
 ---
 "Select command                                                                  "
-">                                                                            2/2"
 "[ ] --force  [x] -v                                                             "
+">                                                                            2/2"
 "▌ remove - Remove a worktree                                                    "
 "  add - Add a worktree                                                          "
 "                                                                                "

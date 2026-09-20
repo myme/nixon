@@ -7,6 +7,7 @@ use crossterm::event::{self, Event};
 use std::time::Duration;
 
 use crate::candidate::Candidate;
+use crate::confirm;
 use crate::filter::filter;
 use crate::options::PickerOptions;
 use crate::selection::Selection;
@@ -35,6 +36,43 @@ pub trait Picker {
         let candidates = stream.collect();
         self.pick(options, candidates)
     }
+
+    /// Picks, and reports where the toggles ended up.
+    ///
+    /// The default leaves them as they were given, which is right for every
+    /// picker that draws nothing.
+    fn pick_options(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        let selection = self.pick(options, candidates)?;
+        Ok((selection, option_state(options)))
+    }
+
+    /// The same for a stream.
+    fn pick_stream_options(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        let selection = self.pick_stream(options, stream)?;
+        Ok((selection, option_state(options)))
+    }
+
+    /// Asks only about the toggles: no list, no query.
+    ///
+    /// `None` means the user cancelled. The default accepts them unchanged,
+    /// so a picker that cannot draw runs with the defaults rather than
+    /// failing — the same principle as `-1`.
+    fn confirm(&mut self, options: &PickerOptions) -> io::Result<Option<Vec<bool>>> {
+        Ok(Some(option_state(options)))
+    }
+}
+
+/// The toggles as the caller set them.
+fn option_state(options: &PickerOptions) -> Vec<bool> {
+    options.options.iter().map(|option| option.on).collect()
 }
 
 /// The real picker: a terminal UI on stderr.
@@ -47,12 +85,7 @@ impl Picker for TuiPicker {
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<Selection<Candidate>> {
-        if let Some(selection) = short_circuit(options, &candidates) {
-            return Ok(selection);
-        }
-
-        let mut app = App::new(candidates, options.clone());
-        run_loop(&mut app, options, None)
+        Ok(self.pick_options(options, candidates)?.0)
     }
 
     fn pick_stream(
@@ -60,13 +93,48 @@ impl Picker for TuiPicker {
         options: &PickerOptions,
         stream: &mut CandidateStream,
     ) -> io::Result<Selection<Candidate>> {
+        Ok(self.pick_stream_options(options, stream)?.0)
+    }
+
+    fn pick_options(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        // `-1` still applies: with a unique match there is nothing to ask,
+        // and the toggles stay as they were given.
+        if let Some(selection) = short_circuit(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
+
+        let mut app = App::new(candidates, options.clone());
+        let selection = run_loop(&mut app, options, None)?;
+        Ok((selection, app.option_state()))
+    }
+
+    fn pick_stream_options(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
         // The picker opens on an empty list and fills as the producer runs.
         let mut app = App::empty(options.clone());
         let selection = run_loop(&mut app, options, Some(stream))?;
         if matches!(selection, Selection::Canceled) {
             stream.cancel();
         }
-        Ok(selection)
+        Ok((selection, app.option_state()))
+    }
+
+    /// Draws the toggles and waits for `Enter` or `Esc`.
+    ///
+    /// Without a terminal there is nothing to ask with, so the defaults
+    /// stand: a command with options is runnable from a script.
+    fn confirm(&mut self, options: &PickerOptions) -> io::Result<Option<Vec<bool>>> {
+        if options.options.is_empty() {
+            return Ok(Some(Vec::new()));
+        }
+        confirm::run(options)
     }
 }
 
@@ -214,6 +282,10 @@ pub struct ScriptedPicker {
     answers: std::collections::VecDeque<Selection<Candidate>>,
     /// Every `(options, candidates)` it was asked, in order.
     pub calls: Vec<(PickerOptions, Vec<Candidate>)>,
+    /// Toggles to flip on the next pick, as a key press would.
+    pub toggles: std::collections::VecDeque<Vec<usize>>,
+    /// Whether `confirm` should cancel rather than accept.
+    pub cancel_confirm: bool,
 }
 
 #[cfg(any(test, feature = "test-util"))]
@@ -223,7 +295,27 @@ impl ScriptedPicker {
         Self {
             answers: answers.into(),
             calls: Vec::new(),
+            toggles: std::collections::VecDeque::new(),
+            cancel_confirm: false,
         }
+    }
+
+    /// Flips these toggles on the next pick, as `Alt-<n>` would.
+    #[must_use]
+    pub fn toggling(mut self, indices: &[usize]) -> Self {
+        self.toggles.push_back(indices.to_vec());
+        self
+    }
+
+    /// The state after applying whatever this pick was scripted to toggle.
+    fn toggled(&mut self, options: &PickerOptions) -> Vec<bool> {
+        let mut state = option_state(options);
+        for index in self.toggles.pop_front().unwrap_or_default() {
+            if let Some(on) = state.get_mut(index) {
+                *on = !*on;
+            }
+        }
+        state
     }
 
     /// Builds a picker that always selects the row at `index`.
@@ -244,6 +336,35 @@ impl Picker for ScriptedPicker {
     ) -> io::Result<Selection<Candidate>> {
         self.calls.push((options.clone(), candidates));
         Ok(self.answers.pop_front().unwrap_or(Selection::Empty))
+    }
+
+    fn pick_options(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        let state = self.toggled(options);
+        let selection = self.pick(options, candidates)?;
+        Ok((selection, state))
+    }
+
+    fn pick_stream_options(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        let state = self.toggled(options);
+        let selection = self.pick_stream(options, stream)?;
+        Ok((selection, state))
+    }
+
+    fn confirm(&mut self, options: &PickerOptions) -> io::Result<Option<Vec<bool>>> {
+        if self.cancel_confirm {
+            return Ok(None);
+        }
+        let state = self.toggled(options);
+        self.calls.push((options.clone(), Vec::new()));
+        Ok(Some(state))
     }
 
     /// Consumes candidates as they arrive, as the real picker does.

@@ -1,9 +1,9 @@
 //! What happens once a command has been selected.
 
-use nixon_picker::{Picker, Selection, SelectionType};
+use nixon_picker::{Picker, PickerOption, PickerOptions, Selection, SelectionType};
 
 use super::{App, RunOpts, context};
-use crate::command::Command;
+use crate::command::{Command, Description};
 use crate::error::{NixonError, Result};
 use crate::eval::{Evaluation, evaluate};
 use crate::output;
@@ -86,7 +86,25 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         // A word matching an option's token settles it; the rest stay
         // placeholder queries.
         let overrides = command.split_args(args);
-        let on = overrides.apply(&command.default_options());
+        let mut on = overrides.apply(&command.default_options());
+
+        // With no placeholder to ask about, the toggles get a prompt of
+        // their own — unless the command line already settled them all, or
+        // there is no terminal, in which case the defaults stand.
+        if command.placeholders().next().is_none()
+            && !command.options.is_empty()
+            && !overrides.is_complete()
+        {
+            let prompt = PickerOptions {
+                header: Some(command.show()),
+                options: picker_options(command, &on),
+                ..PickerOptions::default()
+            };
+            match self.picker.confirm(&prompt)? {
+                Some(state) => on = state,
+                None => return Err(NixonError::Canceled),
+            }
+        }
 
         let resolved = {
             let context = context(&self.env, &config, &cache);
@@ -97,6 +115,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
                 picker: &mut self.picker,
                 runner: &mut self.runner,
                 header,
+                options: picker_options(command, &on),
             };
             resolver.resolve_with(command, &overrides.queries, &on)?
         };
@@ -144,6 +163,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             picker: &mut self.picker,
             runner: &mut self.runner,
             header: command.show(),
+            options: Vec::new(),
         };
         Ok(resolver.resolve_env(&producer, &[])?.args)
     }
@@ -185,4 +205,18 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         self.runner.run(&invocation)?;
         Ok(())
     }
+}
+
+/// The toggles a command shows, at the state it is about to run with.
+fn picker_options(command: &Command, on: &[bool]) -> Vec<PickerOption> {
+    command
+        .options
+        .iter()
+        .enumerate()
+        .map(|(index, option)| PickerOption {
+            label: option.token.clone(),
+            description: option.description.as_ref().map(Description::plain),
+            on: on.get(index).copied().unwrap_or(option.default),
+        })
+        .collect()
 }

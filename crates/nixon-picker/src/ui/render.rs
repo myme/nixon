@@ -36,15 +36,16 @@ pub fn render(app: &mut App, frame: &mut Frame<'_>) {
     let has_header = app.header().is_some();
     let has_options = !app.option_row().is_empty();
 
+    // Header, then the options row, then the query, then the list: the
+    // toggles belong to the command named in the header, not to the list.
     let mut constraints = Vec::new();
     if has_header {
         constraints.push(Constraint::Length(1));
     }
-    // Query, then the options row, then whatever is left for the list.
-    constraints.push(Constraint::Length(1));
     if has_options {
         constraints.push(Constraint::Length(1));
     }
+    constraints.push(Constraint::Length(1));
     constraints.push(Constraint::Min(0));
 
     let rows = Layout::default()
@@ -64,12 +65,12 @@ pub fn render(app: &mut App, frame: &mut Frame<'_>) {
     } else {
         0
     };
-    let query_row = rows[next];
-    next += 1;
     if has_options {
         render_options(app, frame, rows[next]);
         next += 1;
     }
+    let query_row = rows[next];
+    next += 1;
     let list_row = rows[next];
 
     render_query(app, frame, query_row);
@@ -761,6 +762,19 @@ mod option_row {
         let mut app = app();
         press(&mut app, KeyCode::Char('o'), KeyModifiers::ALT);
         insta::assert_snapshot!(draw(&mut app));
+    }
+
+    /// The options row pushes the query down; the cursor goes with it.
+    #[test]
+    fn the_cursor_stays_on_the_query_line() {
+        let mut app = app();
+        let mut terminal = Terminal::new(TestBackend::new(80, 10)).unwrap();
+        app.set_height(7);
+        terminal.draw(|frame| render(&mut app, frame)).unwrap();
+
+        let at = terminal.get_cursor_position().unwrap();
+        // Header on row 0, options on row 1, query on row 2.
+        assert_eq!((at.x, at.y), (2, 2));
     }
 
     #[test]
