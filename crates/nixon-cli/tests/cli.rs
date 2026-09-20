@@ -670,3 +670,20 @@ fn new_writes_through_a_symlinked_config() {
         "the file behind the link was not updated"
     );
 }
+
+/// The confirm prompt is a convenience: with no terminal to ask with, the
+/// defaults are already valid and the command runs.
+#[test]
+#[cfg(unix)]
+fn a_command_with_options_runs_on_its_defaults_without_a_terminal() {
+    let fixture = Fixture::with_config(
+        "# `show --force -v`\n\n- `-v`: on\n\n```bash\necho \"args: $*\"\n```\n",
+    );
+    let nixon = assert_cmd::cargo::cargo_bin("nixon");
+
+    let mut cmd = Command::new("setsid");
+    cmd.arg("--wait").arg(nixon).arg("show");
+    fixture.apply(&mut cmd);
+
+    cmd.write_stdin("").assert().success().stdout("args: -v\n");
+}

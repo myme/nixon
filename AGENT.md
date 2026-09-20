@@ -85,6 +85,9 @@ Fixture rules, each learned from a failure:
 - The kitty keyboard protocol is an improvement, not a requirement: the legacy
   encoding carries the whole keymap, and both spellings of a key reach us as
   the same `KeyCode`.
+- The options row sits between the header and the query: it belongs to the
+  command, not to the list. `Alt-1`…`Alt-9` toggle from anywhere; `Alt-o`
+  focuses the row, where typing is swallowed but `Ctrl-C` is not.
 - Cancelling signals the child's **process group**. The child is an
   interpreter; the work is its children, and killing only the interpreter
   leaves them holding the stdout pipe.
@@ -108,6 +111,11 @@ Fixture rules, each learned from a failure:
   depend on it.
 - Hidden `_commands` are excluded from the run picker but available to
   placeholders, `--list`, `edit` and `new`.
+- A heading's `-f`/`--name` tokens are options: toggled at the prompt, placed
+  in argv where the heading put them, exported as `nixon_opt_<name>`. Malformed
+  option syntax fails the file with a position, never silently. The prompt is
+  a convenience — with no terminal, or a command line that settled every
+  option, the defaults run.
 - Script cache: `$XDG_CACHE_HOME/nixon/<sha1-of-source>-<name><ext>`. Scripts
   are never made executable; the interpreter is always explicit, so a shebang
   is ignored.

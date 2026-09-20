@@ -281,6 +281,39 @@ mod tests {
         );
     }
 
+    /// A heading with a `{` that is not an attribute block becomes all name
+    /// (v1 parity). The options in it are still options, and an error in
+    /// them still fails the file rather than being swallowed.
+    #[test]
+    fn an_option_error_wins_over_the_attribute_fallback() {
+        let err = parse(
+            FILE,
+            &md(&[
+                "# `remove --force --force` {not an attribute block",
+                "",
+                "```bash",
+                "true",
+                "```",
+            ]),
+        )
+        .unwrap_err();
+        assert_eq!(err.message, "Duplicate option: force");
+        assert_eq!(err.line, Some(1));
+    }
+
+    #[test]
+    fn an_option_survives_a_heading_that_falls_back_to_all_name() {
+        let parsed = commands(&[
+            "# `remove --force` {not an attribute block",
+            "",
+            "```bash",
+            "true",
+            "```",
+        ]);
+        assert_eq!(parsed[0].name, "remove");
+        assert_eq!(parsed[0].options.len(), 1);
+    }
+
     #[test]
     fn an_undeclared_option_in_a_list_item_is_an_error() {
         let err = parse(

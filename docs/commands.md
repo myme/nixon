@@ -39,6 +39,63 @@ x-terminal-emulator
 ```
 ````
 
+## Options
+
+A heading token of the form `-f` or `--name` declares an **option**: a flag
+you toggle at the prompt, which lands in the command's arguments where the
+heading put it.
+
+````markdown
+### `remove --force ${worktree}`
+
+Removes a worktree.
+
+- `--force`: on — also removes worktrees with local changes
+
+```bash
+git worktree remove "$@"
+```
+````
+
+- The token is written as the command should receive it. `--depth=1` parses,
+  but the value is not read yet; see the note below.
+- The name is the token without its dashes and without any `=…`, so `--force`
+  is `force` and `--no-cache` is `no-cache`.
+- A list item of the form `` `--token`: on|off — description `` gives an
+  option its default and the text shown beside it in the prompt. Without one,
+  an option starts off.
+- An option declared twice, a declaration for a token the heading does not
+  declare, and a value other than `on` or `off` all fail the file.
+
+At the prompt the options appear in a row under the command's name. `Alt-1` to
+`Alt-9` flip them directly; see [the picker](picker.md) for the rest of the
+keys. A command with options but no placeholders gets a small prompt of its
+own — the toggles, `Enter` to run, `Esc` to cancel — and one with neither
+prompts for nothing.
+
+The prompt is a convenience, not a gate. With no terminal to draw on, a
+command runs on its defaults rather than failing, so it stays usable from a
+script.
+
+On the command line, a word equal to an option's token turns it on and
+`--no-<name>` turns it off:
+
+```shell
+nixon remove --force
+nixon remove --no-force
+```
+
+Anything else stays a search query for the command's placeholders, so an
+unknown `--x` searches rather than failing. A command line that settles every
+option skips the prompt entirely.
+
+Each option is also exported to the command as `nixon_opt_<name>`, `1` when
+on and empty when off, with `-` replaced by `_`.
+
+Only on/off options exist. The `=value` form is accepted by the grammar so
+that valued and choice options can be added later without changing what is
+already written.
+
 ## Languages
 
 The code fence's info string names the interpreter.

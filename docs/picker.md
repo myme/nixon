@@ -27,6 +27,26 @@ Marks stick. Search for one thing and mark a few rows, then search for
 something else and mark more: `Enter` returns all of them, including the rows
 the current query no longer shows.
 
+## Options
+
+A command that declares [options](commands.md#options) shows them in a row
+under its name, above the query: `[x] --force  [ ] -v`.
+
+| Key | Action |
+|---|---|
+| `Alt-1` … `Alt-9` | Flip the first to ninth option, wherever the focus is |
+| `Alt-o` | Move the focus onto the row, or back to the query |
+| `Left`, `Right`, `Tab`, `Shift-Tab` | Move along the row |
+| `Space`, `Enter` | Flip the focused option |
+| `Esc` | Back to the query |
+
+While the row has focus, typing goes nowhere; `Ctrl-C` and the list keys still
+work. The toggles carry from one placeholder prompt to the next, so a command
+with several placeholders is only asked about them once.
+
+A command with options and no placeholders gets a prompt with the row and
+nothing else, where `Enter` runs and `Esc` cancels.
+
 ## Moving
 
 | Key | Action |

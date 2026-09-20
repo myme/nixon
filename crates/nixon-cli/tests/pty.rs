@@ -502,3 +502,110 @@ echo \"picked: $@\"
         "output was: {output}"
     );
 }
+
+/// The heading the user reported the missing options row for.
+const GWR_MD: &str = "\
+# `_git-worktree`
+
+```bash
+printf '/tmp/wt-one\\n/tmp/wt-two\\n'
+```
+
+# `gwr --force ${_git-worktree}`
+
+Remove a worktree.
+
+- `--force`: off — also removes worktrees with local changes
+
+```bash
+echo \"gwr args: $*\"
+```
+
+# `flags --release`
+
+- `--release`: off
+
+```bash
+echo \"flags args: $* release=$nixon_opt_release\"
+```
+";
+
+/// The options row is drawn on the placeholder picker, and `Alt-1` there
+/// changes what runs.
+#[test]
+fn alt_one_toggles_an_option_at_the_placeholder_picker() {
+    let pty = Pty::with_config(GWR_MD);
+    let mut session = pty.spawn(&["run", "gwr"]);
+
+    settle();
+    // Alt-1 flips `--force`, then Enter takes the first worktree.
+    session.send("\u{1b}1").unwrap();
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(
+        output.contains("gwr args: --force /tmp/wt-one"),
+        "output was: {output}"
+    );
+}
+
+/// Without the toggle, the same picker runs on the declared default.
+#[test]
+fn a_placeholder_picker_leaves_an_option_at_its_default() {
+    let pty = Pty::with_config(GWR_MD);
+    let mut session = pty.spawn(&["run", "gwr"]);
+
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(
+        output.contains("gwr args: /tmp/wt-one"),
+        "output was: {output}"
+    );
+}
+
+/// A command with options and no placeholder gets a prompt of its own.
+#[test]
+fn the_confirm_prompt_toggles_and_runs() {
+    let pty = Pty::with_config(GWR_MD);
+    let mut session = pty.spawn(&["run", "flags"]);
+
+    settle();
+    // Space toggles the focused option, Enter runs.
+    session.send(" ").unwrap();
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(
+        output.contains("flags args: --release release=1"),
+        "output was: {output}"
+    );
+}
+
+/// Escaping the confirm prompt cancels rather than running on defaults.
+#[test]
+fn escaping_the_confirm_prompt_exits_130() {
+    let pty = Pty::with_config(GWR_MD);
+    let mut session = pty.spawn(&["run", "flags"]);
+
+    settle();
+    session.send("\u{1b}").unwrap();
+
+    assert_eq!(wait_code(&mut session), 130);
+}
+
+/// A command line that settles every option never opens the prompt.
+#[test]
+fn a_complete_command_line_runs_without_the_confirm_prompt() {
+    let pty = Pty::with_config(GWR_MD);
+    let mut session = pty.spawn(&["run", "flags", "--release"]);
+
+    let output = drain(&mut session);
+    assert!(
+        output.contains("flags args: --release release=1"),
+        "output was: {output}"
+    );
+}
