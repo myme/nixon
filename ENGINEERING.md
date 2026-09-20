@@ -507,6 +507,35 @@ Everything in SPEC §15 (`todos.org`), plus: picker height/style config,
 per-language interpreters, `flake.nix` support for the nix wrapper, a
 `loglevel` config file key.
 
+### 7.6 v2 additions (not in v1)
+
+**Git worktree awareness in project discovery** (requested after first use).
+Worktrees live inside bare repos or outside `project_dirs`, so marker-based
+discovery misses them.
+
+- A directory counts as a **git dir** if it contains `.git` (dir or file)
+  or is itself a **bare repository** (`HEAD`, `objects/`, `refs/` present
+  and `config` has `bare = true`). For marker matching, a `.git` path marker
+  is satisfied by a bare repository too, so `test: [".git"]` classifies bare
+  repos as `git` projects without new config.
+- For every discovered git dir, enumerate its worktrees **without invoking
+  `git`**: read `<gitdir>/worktrees/<name>/gitdir` (gitdir = `dir/.git`, or
+  `dir` for bare; follow a `.git` file's `gitdir:` pointer for the main
+  repo's gitdir if needed). Each file holds the path of the worktree's `.git`
+  file; its parent is the worktree root. Skip entries whose path no longer
+  exists (stale worktrees) and dedupe against projects already found.
+- Each worktree becomes a `Project` with `name = basename`, `dir = parent`,
+  and types detected on **its own** directory (it has a `.git` file, so `git`
+  matches; `Cargo.toml` etc. match as usual). Worktrees are found regardless
+  of depth or `project_dirs`.
+- Config key `git_worktrees: bool`, default `true`, to turn it off.
+- Local `nixon.md` resolution and everything else treat a worktree like any
+  project (its own root is the project root).
+- Tests: fixtures build the gitdir layout by hand (no `git` binary): normal
+  repo with two worktrees (one outside `project_dirs`), bare repo with
+  worktrees, stale worktree entry, disabled by config, dedupe when a worktree
+  is also under `project_dirs`.
+
 ## Sources
 
 - [ratatui crate](https://crates.io/crates/ratatui) · [Backends](https://ratatui.rs/concepts/backends/) · [Testing with insta snapshots](https://ratatui.rs/recipes/testing/snapshots/)
