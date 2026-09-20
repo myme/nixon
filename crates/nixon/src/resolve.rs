@@ -235,6 +235,7 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             // "Selection canceled." for an empty `git ls-files`.
             Selection::Empty => Err(NixonError::NoCandidates {
                 name: placeholder.name.clone(),
+                filter: placeholder.filter.clone(),
             }),
             Selection::Canceled => Err(NixonError::Canceled),
         }
@@ -604,6 +605,36 @@ mod tests {
             .map(|candidate| candidate.value.clone())
             .collect();
         assert_eq!(offered, ["src/main.rs"]);
+    }
+
+    #[test]
+    fn a_filter_that_matches_nothing_says_which_filter() {
+        let harness = Harness::new(vec![command("files", "ls\n", Vec::new())]);
+        let mut placeholder = arg("files");
+        placeholder.filter = Some("rs$".to_owned());
+        let outer = command("edit", "vim\n", vec![placeholder]);
+
+        let mut picker = ScriptedPicker::new(Vec::new());
+        let mut runner = FakeRunner::new().with_output(&["README.md"]);
+
+        let err = harness
+            .resolve(&outer, &[], &mut picker, &mut runner)
+            .unwrap_err();
+        assert_eq!(err.to_string(), "no candidates from `files` matching `rs$`");
+    }
+
+    #[test]
+    fn candidates_from_a_command_that_printed_nothing_name_only_the_command() {
+        let harness = Harness::new(vec![command("files", "ls\n", Vec::new())]);
+        let outer = command("edit", "vim\n", vec![arg("files")]);
+
+        let mut picker = ScriptedPicker::new(Vec::new());
+        let mut runner = FakeRunner::new();
+
+        let err = harness
+            .resolve(&outer, &[], &mut picker, &mut runner)
+            .unwrap_err();
+        assert_eq!(err.to_string(), "no candidates from `files`");
     }
 
     #[test]

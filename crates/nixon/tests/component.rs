@@ -511,7 +511,7 @@ fn a_placeholder_command_that_produces_nothing_is_reported() {
         .unwrap_err();
 
     assert!(
-        matches!(&err, NixonError::NoCandidates { name } if name == "git-files"),
+        matches!(&err, NixonError::NoCandidates { name, .. } if name == "git-files"),
         "got {err:?}"
     );
     assert_eq!(err.exit_code(), 1);

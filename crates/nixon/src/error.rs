@@ -52,10 +52,12 @@ pub enum NixonError {
     },
 
     /// A placeholder's command produced nothing to choose from.
-    #[error("no candidates from {name}")]
+    #[error("no candidates from `{name}`{}", filtered(.filter.as_deref()))]
     NoCandidates {
         /// The command the placeholder referenced.
         name: String,
+        /// The `| filter` query, when one narrowed the list away.
+        filter: Option<String>,
     },
 
     /// Nothing was selected.
@@ -86,6 +88,11 @@ impl From<std::io::Error> for NixonError {
             Self::Io(err)
         }
     }
+}
+
+/// The "matching …" tail, when a filter is what emptied the list.
+fn filtered(filter: Option<&str>) -> String {
+    filter.map_or_else(String::new, |query| format!(" matching `{query}`"))
 }
 
 impl NixonError {
