@@ -1,11 +1,11 @@
 //! Resolving a command's placeholders. SPEC §5.6.
 
-use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection};
+use nixon_picker::{Candidate, CandidateStream, FilterPicker, Picker, PickerOptions, Selection};
 use serde::Deserialize;
 
 use crate::command::Command;
 use crate::error::{NixonError, Result};
-use crate::eval::{Context, Evaluation, PROJECT_PATH_VAR, evaluate_capture};
+use crate::eval::{Context, Evaluation, PROJECT_PATH_VAR, evaluate_capture, prepare};
 use crate::format::{format_columns, pick_fields};
 use crate::placeholder::{Placeholder, PlaceholderFormat, PlaceholderType};
 use crate::process::ProcessRunner;
@@ -109,21 +109,14 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
         // The referenced command resolves its own placeholders first, with no
         // arguments of its own.
         let resolved = self.resolve_env(&command, &[])?;
-        let captured = evaluate_capture(
-            self.context,
-            self.runner,
-            &command,
-            &Evaluation {
-                args: resolved.args,
-                // A placeholder command always runs in the project, whatever
-                // its own pwd says. SPEC §5.6.
-                cwd: Some(self.project.path()),
-                env: resolved.env,
-                stdin: resolved.stdin,
-            },
-        )?;
-
-        let candidates = candidates_for(&placeholder.format, &captured, &placeholder.name)?;
+        let evaluation = Evaluation {
+            args: resolved.args,
+            // A placeholder command always runs in the project, whatever its
+            // own pwd says. SPEC §5.6.
+            cwd: Some(self.project.path()),
+            env: resolved.env,
+            stdin: resolved.stdin,
+        };
 
         let options = PickerOptions {
             header: Some(self.header.clone()),
@@ -133,18 +126,67 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             ..PickerOptions::default()
         };
 
-        // `| list` prints matches instead of asking, whatever picker is
-        // configured. SPEC §5.6.
-        let selection = if placeholder.list {
-            FilterPicker.pick(&options, candidates)?
+        let selection = if placeholder.can_stream() && !placeholder.list {
+            // Line-oriented formats are fed to the picker as the command
+            // produces them, so it opens without waiting for the command.
+            let mut stream = self.stream_candidates(&command, &evaluation, &placeholder.format)?;
+            let selection = self.picker.pick_stream(&options, &mut stream)?;
+            stream.cancel();
+            selection
         } else {
-            self.picker.pick(&options, candidates)?
+            // Columns need every row before the widths are known and JSON
+            // needs the whole document, so those stay buffered.
+            let captured = evaluate_capture(self.context, self.runner, &command, &evaluation)?;
+            let candidates = candidates_for(&placeholder.format, &captured, &placeholder.name)?;
+
+            // `| list` prints matches instead of asking, whatever picker is
+            // configured. SPEC §5.6.
+            if placeholder.list {
+                FilterPicker.pick(&options, candidates)?
+            } else {
+                self.picker.pick(&options, candidates)?
+            }
         };
 
         match selection {
             Selection::Selected { items, .. } => Ok(items.into_iter().map(|c| c.value).collect()),
             Selection::Empty | Selection::Canceled => Err(NixonError::Canceled),
         }
+    }
+
+    /// Starts the command and streams its lines in as candidates. SPEC §5.6.
+    fn stream_candidates(
+        &mut self,
+        command: &Command,
+        evaluation: &Evaluation,
+        format: &PlaceholderFormat,
+    ) -> Result<CandidateStream> {
+        let invocation = prepare(self.context, command, evaluation)?;
+        let (sender, receiver) = std::sync::mpsc::channel();
+
+        let fields = match format {
+            PlaceholderFormat::Fields(fields) => fields.clone(),
+            _ => Vec::new(),
+        };
+
+        let running = self.runner.run_streaming(
+            &invocation,
+            Box::new(move |line| {
+                let _ = sender.send(line_candidate(&line, &fields));
+            }),
+        )?;
+
+        // Cancelling the pick kills the command, rather than leaving it to
+        // finish into a channel nobody is reading.
+        let running = std::sync::Mutex::new(running);
+        Ok(CandidateStream::new(
+            receiver,
+            Box::new(move || {
+                if let Ok(mut running) = running.lock() {
+                    let _ = running.kill();
+                }
+            }),
+        ))
     }
 }
 
@@ -189,6 +231,15 @@ fn candidates_for(
             parsed.into_iter().map(Into::into).collect()
         }
     })
+}
+
+/// One output line as a candidate, for the line-oriented formats. SPEC §5.6.
+fn line_candidate(line: &str, fields: &[usize]) -> Candidate {
+    if fields.is_empty() {
+        return Candidate::identity(line);
+    }
+    let words: Vec<String> = line.split_whitespace().map(ToOwned::to_owned).collect();
+    Candidate::with_title(line, pick_fields(fields, &words).join(" "))
 }
 
 /// Pairs placeholders with the arguments given on the command line.

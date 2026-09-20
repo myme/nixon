@@ -39,6 +39,17 @@ impl Captured {
     }
 }
 
+/// A child that is still running, streaming its output. SPEC §5.6.
+///
+/// Send, because cancelling a pick kills the child from the picker's side.
+pub trait Running: Send {
+    /// Waits for the child and returns its exit code.
+    fn wait(&mut self) -> io::Result<ExitCode>;
+
+    /// Kills the child, for when a selection is cancelled.
+    fn kill(&mut self) -> io::Result<()>;
+}
+
 /// The seam every subprocess goes through, so tests need no real ones.
 /// ENGINEERING §4.2.
 pub trait ProcessRunner {
@@ -50,6 +61,16 @@ pub trait ProcessRunner {
 
     /// Runs detached and returns at once, for `&` commands. SPEC §7.3.
     fn spawn_detached(&mut self, invocation: &Invocation) -> io::Result<()>;
+
+    /// Starts the command, handing each stdout line to `sink` as it arrives.
+    ///
+    /// Returns as soon as the child is spawned, so a picker can open and be
+    /// interactive while the command is still producing candidates.
+    fn run_streaming(
+        &mut self,
+        invocation: &Invocation,
+        sink: Box<dyn FnMut(String) + Send>,
+    ) -> io::Result<Box<dyn Running>>;
 }
 
 /// Runs real processes.
@@ -118,6 +139,92 @@ impl ProcessRunner for RealRunner {
 
         command.spawn().map(|_| ())
     }
+
+    fn run_streaming(
+        &mut self,
+        invocation: &Invocation,
+        mut sink: Box<dyn FnMut(String) + Send>,
+    ) -> io::Result<Box<dyn Running>> {
+        let mut command = Self::command(invocation)?;
+        command.stdin(stdin_for(invocation));
+        command.stdout(Stdio::piped());
+
+        // Its own group, so cancelling can take the whole pipeline down.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt as _;
+            command.process_group(0);
+        }
+
+        let mut child = command.spawn()?;
+        write_stdin(&mut child, invocation.stdin.as_deref())?;
+
+        let stdout = child.stdout.take();
+        let reader = stdout.map(|stdout| {
+            std::thread::spawn(move || {
+                use std::io::BufRead as _;
+                for line in io::BufReader::new(stdout).lines() {
+                    match line {
+                        Ok(line) => sink(line),
+                        Err(_) => break,
+                    }
+                }
+            })
+        });
+
+        Ok(Box::new(RunningChild { child, reader }))
+    }
+}
+
+/// A real child with a thread draining its stdout.
+struct RunningChild {
+    child: std::process::Child,
+    /// Left to finish on its own: it ends when the pipe closes, and waiting
+    /// for that is exactly what `kill` must not do.
+    reader: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Running for RunningChild {
+    fn wait(&mut self) -> io::Result<ExitCode> {
+        let status = self.child.wait()?;
+        // Join only here: the pipe is closed, so the reader is about to end.
+        if let Some(reader) = self.reader.take() {
+            let _ = reader.join();
+        }
+        Ok(exit_code(status))
+    }
+
+    /// Kills the whole process group, not just the child.
+    ///
+    /// A command is run through an interpreter, so the child is a shell and
+    /// the work is its children. Killing only the shell leaves them holding
+    /// the stdout pipe open, and a `sleep 30` in a command would keep nixon
+    /// waiting after the user had already cancelled.
+    fn kill(&mut self) -> io::Result<()> {
+        #[cfg(unix)]
+        {
+            use nix::sys::signal::{Signal, killpg};
+            use nix::unistd::Pid;
+
+            let pid = Pid::from_raw(
+                i32::try_from(self.child.id())
+                    .map_err(|_| io::Error::other("child pid out of range"))?,
+            );
+            // The child leads its own group, so its pid is the group id.
+            let _ = killpg(pid, Signal::SIGTERM);
+        }
+
+        match self.child.kill() {
+            // Already gone is not a failure.
+            Err(err) if err.kind() == io::ErrorKind::InvalidInput => Ok(()),
+            other => other,
+        }?;
+        let _ = self.child.wait();
+        // The reader is deliberately not joined: a grandchild may still hold
+        // the pipe, and the thread ends by itself when it closes.
+        drop(self.reader.take());
+        Ok(())
+    }
 }
 
 /// Piped when nixon supplies the lines, inherited otherwise. SPEC §7.3.
@@ -167,6 +274,8 @@ pub enum RunKind {
     Captured,
     /// [`ProcessRunner::spawn_detached`].
     Detached,
+    /// [`ProcessRunner::run_streaming`].
+    Streamed,
 }
 
 /// A runner that records what it was asked and replays scripted output.
@@ -178,6 +287,7 @@ pub struct FakeRunner {
     pub calls: Vec<(RunKind, Invocation)>,
     outputs: std::collections::VecDeque<Vec<u8>>,
     codes: std::collections::VecDeque<ExitCode>,
+    killed: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[cfg(any(test, feature = "test-util"))]
@@ -225,6 +335,11 @@ impl FakeRunner {
         self.calls.last().map(|(_, invocation)| invocation)
     }
 
+    /// Whether a streamed child was killed, as cancelling does.
+    pub fn was_killed(&self) -> bool {
+        self.killed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     fn next_code(&mut self) -> ExitCode {
         self.codes.pop_front().unwrap_or(0)
     }
@@ -247,6 +362,41 @@ impl ProcessRunner for FakeRunner {
 
     fn spawn_detached(&mut self, invocation: &Invocation) -> io::Result<()> {
         self.calls.push((RunKind::Detached, invocation.clone()));
+        Ok(())
+    }
+
+    fn run_streaming(
+        &mut self,
+        invocation: &Invocation,
+        mut sink: Box<dyn FnMut(String) + Send>,
+    ) -> io::Result<Box<dyn Running>> {
+        self.calls.push((RunKind::Streamed, invocation.clone()));
+        let output = self.outputs.pop_front().unwrap_or_default();
+        for line in String::from_utf8_lossy(&output).lines() {
+            sink(line.to_owned());
+        }
+        Ok(Box::new(FinishedFake {
+            code: self.next_code(),
+            killed: std::sync::Arc::clone(&self.killed),
+        }))
+    }
+}
+
+/// A fake child that has already produced everything it will.
+#[cfg(any(test, feature = "test-util"))]
+struct FinishedFake {
+    code: ExitCode,
+    killed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+#[cfg(any(test, feature = "test-util"))]
+impl Running for FinishedFake {
+    fn wait(&mut self) -> io::Result<ExitCode> {
+        Ok(self.code)
+    }
+
+    fn kill(&mut self) -> io::Result<()> {
+        self.killed.store(true, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 }
@@ -385,6 +535,78 @@ mod tests {
         let mut runner = FakeRunner::new().with_code(3);
         assert_eq!(runner.run(&sh("x")).unwrap(), 3);
         assert_eq!(runner.run(&sh("y")).unwrap(), 0);
+    }
+
+    #[test]
+    fn a_real_child_streams_its_lines_as_they_arrive() {
+        use std::sync::{Arc, Mutex};
+
+        let mut runner = RealRunner;
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&seen);
+
+        let mut running = runner
+            .run_streaming(
+                &sh("printf 'one\ntwo\nthree\n'"),
+                Box::new(move |line| sink.lock().unwrap().push(line)),
+            )
+            .unwrap();
+
+        assert_eq!(running.wait().unwrap(), 0);
+        assert_eq!(*seen.lock().unwrap(), ["one", "two", "three"]);
+    }
+
+    #[test]
+    fn a_streamed_child_reports_its_exit_code() {
+        let mut runner = RealRunner;
+        let mut running = runner
+            .run_streaming(&sh("echo out; exit 4"), Box::new(|_| {}))
+            .unwrap();
+        assert_eq!(running.wait().unwrap(), 4);
+    }
+
+    #[test]
+    fn killing_a_streamed_child_stops_it() {
+        let mut runner = RealRunner;
+        let mut running = runner
+            .run_streaming(&sh("sleep 30"), Box::new(|_| {}))
+            .unwrap();
+
+        // Returns rather than hanging for the sleep.
+        let start = std::time::Instant::now();
+        running.kill().unwrap();
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
+    }
+
+    #[test]
+    fn killing_a_finished_child_is_not_an_error() {
+        let mut runner = RealRunner;
+        let mut running = runner.run_streaming(&sh("true"), Box::new(|_| {})).unwrap();
+        running.wait().unwrap();
+        running.kill().unwrap();
+    }
+
+    #[test]
+    fn the_fake_streams_its_queued_output_and_records_kills() {
+        use std::sync::{Arc, Mutex};
+
+        let mut runner = FakeRunner::new().with_output(&["one", "two"]);
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&seen);
+
+        let mut running = runner
+            .run_streaming(
+                &sh("x"),
+                Box::new(move |line| sink.lock().unwrap().push(line)),
+            )
+            .unwrap();
+
+        assert_eq!(*seen.lock().unwrap(), ["one", "two"]);
+        assert_eq!(runner.calls[0].0, RunKind::Streamed);
+
+        assert!(!runner.was_killed());
+        running.kill().unwrap();
+        assert!(runner.was_killed());
     }
 
     #[test]

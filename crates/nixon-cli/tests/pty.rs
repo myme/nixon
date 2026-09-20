@@ -344,3 +344,84 @@ fn alt_b_steps_back_a_word_in_the_query() {
     assert!(output.contains("ran-alpha"), "output was: {output}");
     assert!(!output.contains("ran-beta"), "output was: {output}");
 }
+
+/// SPEC §5.6 / Step I: the picker must be usable while the command that
+/// produces its candidates is still running.
+///
+/// The command emits two lines at once and then sleeps. Two matter: with
+/// `-1` in force a single candidate might still turn out to be the only one,
+/// so nixon cannot draw until a second arrives and rules `-1` out. That is
+/// also the moment a real command listing files rules it out — immediately.
+#[test]
+fn the_picker_is_interactive_before_a_slow_command_finishes() {
+    let pty = Pty::with_config(
+        "\
+# `slow-files`
+
+```bash
+printf 'alpha\\nbeta\\n'
+sleep 6
+printf 'omega\\n'
+```
+
+# `show ${slow-files}`
+
+```bash
+echo \"picked: $1\"
+```
+",
+    );
+    let started = std::time::Instant::now();
+    let mut session = pty.spawn(&["run", "show"]);
+
+    // The first line is out almost at once; the command runs six more
+    // seconds. Pick while it is still going.
+    settle();
+    session.send("alpha").unwrap();
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    let elapsed = started.elapsed();
+
+    assert!(output.contains("picked: alpha"), "output was: {output}");
+    assert!(
+        elapsed < Duration::from_secs(6),
+        "took {elapsed:?}; the picker waited for the command instead of \
+         streaming"
+    );
+}
+
+/// Cancelling stops the command rather than leaving it running.
+///
+/// Two lines again, so the picker is open and can take the `Esc`.
+#[test]
+fn cancelling_kills_a_still_running_candidate_command() {
+    let pty = Pty::with_config(
+        "\
+# `slow-files`
+
+```bash
+printf 'alpha\\nbeta\\n'
+sleep 30
+```
+
+# `show ${slow-files}`
+
+```bash
+echo \"picked: $1\"
+```
+",
+    );
+    let started = std::time::Instant::now();
+    let mut session = pty.spawn(&["run", "show"]);
+
+    settle();
+    session.send("\u{1b}").unwrap();
+
+    assert_eq!(wait_code(&mut session), 130);
+    assert!(
+        started.elapsed() < Duration::from_secs(25),
+        "nixon waited for the killed command to finish"
+    );
+}

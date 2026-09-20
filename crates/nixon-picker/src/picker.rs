@@ -4,10 +4,13 @@ use std::io;
 
 use crossterm::event::{self, Event};
 
+use std::time::Duration;
+
 use crate::candidate::Candidate;
 use crate::filter::filter;
 use crate::options::PickerOptions;
 use crate::selection::Selection;
+use crate::stream::CandidateStream;
 use crate::terminal::TerminalGuard;
 use crate::ui::{App, render};
 
@@ -19,6 +22,19 @@ pub trait Picker {
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<Selection<Candidate>>;
+
+    /// Presents candidates that are still arriving.
+    ///
+    /// The default collects them and falls back to [`Picker::pick`], which is
+    /// right for any picker that cannot draw while it waits.
+    fn pick_stream(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<Selection<Candidate>> {
+        let candidates = stream.collect();
+        self.pick(options, candidates)
+    }
 }
 
 /// The real picker: a terminal UI on stderr. ENGINEERING §4.1.
@@ -36,24 +52,105 @@ impl Picker for TuiPicker {
         }
 
         let mut app = App::new(candidates, options.clone());
-        let mut guard = TerminalGuard::new()?;
+        run_loop(&mut app, options, None)
+    }
 
-        while !app.is_done() {
-            // Let the background matcher make progress, then draw what it has.
-            app.tick();
-            let terminal = guard.terminal();
-            terminal.draw(|frame| {
-                app.set_height(list_height(frame.area().height, options));
-                render(&mut app, frame);
-            })?;
-            if let Event::Key(key) = event::read()?
-                && key.kind == event::KeyEventKind::Press
-            {
-                app.handle(key);
+    fn pick_stream(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<Selection<Candidate>> {
+        // The picker opens on an empty list and fills as the producer runs.
+        let mut app = App::empty(options.clone());
+        let selection = run_loop(&mut app, options, Some(stream))?;
+        if matches!(selection, Selection::Canceled) {
+            stream.cancel();
+        }
+        Ok(selection)
+    }
+}
+
+/// The draw/read loop, shared by the ready and streaming entry points.
+///
+/// With a stream, events are polled rather than waited on, so newly arrived
+/// candidates are drawn even while the user types nothing.
+fn run_loop(
+    app: &mut App,
+    options: &PickerOptions,
+    mut stream: Option<&mut CandidateStream>,
+) -> io::Result<Selection<Candidate>> {
+    // Taken lazily. `-1` and streaming pull against each other: `-1` needs the
+    // whole list to know a match is unique, and a script piping `nixon run`
+    // with an unambiguous command has no terminal to take at all. So while
+    // `-1` could still apply, nothing is drawn and no terminal is claimed;
+    // the moment a second candidate matches it cannot apply, and the picker
+    // opens — which for a command listing thousands of files is at once.
+    let mut guard: Option<TerminalGuard> = None;
+    // `-1` is decided once, on the query the picker opened with. Once the
+    // user has typed, narrowing to a single row must not select it for them.
+    let mut untouched = true;
+
+    while !app.is_done() {
+        let streaming = stream.as_mut().is_some_and(|stream| {
+            let injector = app.injector();
+            for candidate in stream.drain() {
+                let plain = candidate.plain();
+                injector.push(candidate, |_, columns| columns[0] = plain.as_str().into());
+            }
+            !stream.is_finished()
+        });
+
+        // Let the background matcher make progress, then draw what it has.
+        app.tick();
+
+        if untouched && options.select_one && app.matched_count() <= 1 {
+            if streaming {
+                // Still arriving, and still possibly unique: wait it out.
+                std::thread::sleep(Duration::from_millis(10));
+                continue;
+            }
+            // The producer is done, but the matcher may not have caught up
+            // with its last candidates; deciding on a partial count would
+            // report "no matches" for a list that has one.
+            app.tick_until_settled();
+            if let Some(selection) = short_circuit_app(app) {
+                return Ok(selection);
             }
         }
 
-        Ok(app.outcome.unwrap_or(Selection::Empty))
+        let terminal = match guard {
+            Some(ref mut guard) => guard.terminal(),
+            None => guard.insert(TerminalGuard::new()?).terminal(),
+        };
+        terminal.draw(|frame| {
+            app.set_height(list_height(frame.area().height, options));
+            render(app, frame);
+        })?;
+
+        if streaming && !event::poll(Duration::from_millis(30))? {
+            // Nothing typed; loop round to pick up more candidates.
+            continue;
+        }
+
+        if let Event::Key(key) = event::read()?
+            && key.kind == event::KeyEventKind::Press
+        {
+            untouched = false;
+            app.handle(key);
+        }
+    }
+
+    Ok(app.outcome.take().unwrap_or(Selection::Empty))
+}
+
+/// `-1` applied to what the matcher has settled on. SPEC §8.4.
+fn short_circuit_app(app: &App) -> Option<Selection<Candidate>> {
+    match app.matched_count() {
+        0 => Some(Selection::Empty),
+        1 => app.current().map(|candidate| {
+            Selection::selected(crate::selection::SelectionType::Default, vec![candidate])
+        }),
+        _ => None,
     }
 }
 

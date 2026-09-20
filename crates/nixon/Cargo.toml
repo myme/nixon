@@ -19,6 +19,7 @@ shell-words.workspace = true
 tracing.workspace = true
 signal-hook.workspace = true
 shellexpand.workspace = true
+nix.workspace = true
 nixon-picker.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true

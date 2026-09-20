@@ -111,10 +111,10 @@ fn a_placeholder_command_runs_then_its_selection_becomes_an_argument() {
     let code = app.run(&RunOpts::default()).unwrap();
     assert_eq!(code, 0);
 
-    // git-files ran first, captured, in the project.
+    // git-files ran first, streamed into the picker, in the project.
     assert_eq!(app.runner.calls.len(), 2);
     let (kind, first) = &app.runner.calls[0];
-    assert_eq!(*kind, RunKind::Captured);
+    assert_eq!(*kind, RunKind::Streamed);
     assert_eq!(first.cwd.as_deref(), Some(fixture.project_path().as_path()));
     assert_eq!(first.argv[0], "bash");
     assert_eq!(
@@ -369,4 +369,92 @@ fn the_nix_wrapper_reaches_the_runner_when_enabled() {
 
     app.run(&RunOpts::default()).unwrap();
     assert_eq!(app.runner.calls[0].1.argv[0], "nix-shell");
+}
+
+/// SPEC §5.6: a line-oriented placeholder feeds the picker as its command
+/// runs, so the picker opens without waiting for it.
+#[test]
+fn a_lines_placeholder_streams_its_candidates() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[&["vim-file"], &["README.md"]]);
+    let runner = FakeRunner::new().with_output(&["Cargo.toml", "README.md"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts::default()).unwrap();
+    assert_eq!(app.runner.calls[0].0, RunKind::Streamed);
+}
+
+/// Columns need every row before the widths are known, so they stay buffered.
+#[test]
+fn a_columns_placeholder_stays_buffered() {
+    let md = "\
+# `rows`
+
+```bash
+printf 'NAME  ID\\nalpha 1\\n'
+```
+
+# `show`
+
+```bash ${rows | cols+h 1}
+echo \"$1\"
+```
+";
+    let fixture = Fixture::new(md);
+    let picker = picks(&[&["show"], &["alpha"]]);
+    let runner = FakeRunner::new().with_output(&["NAME  ID", "alpha 1"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts::default()).unwrap();
+    assert_eq!(app.runner.calls[0].0, RunKind::Captured);
+}
+
+/// JSON needs the whole document before a single candidate exists.
+#[test]
+fn a_json_placeholder_stays_buffered() {
+    let md = "\
+# `items`
+
+```bash
+echo '[\"one\"]'
+```
+
+# `show`
+
+```bash ${items | json}
+echo \"$1\"
+```
+";
+    let fixture = Fixture::new(md);
+    let picker = picks(&[&["show"], &["one"]]);
+    let runner = FakeRunner::new().with_raw_output(b"[\"one\"]");
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts::default()).unwrap();
+    assert_eq!(app.runner.calls[0].0, RunKind::Captured);
+}
+
+/// A `| list` placeholder prints matches, so there is nothing to stream into.
+#[test]
+fn a_list_placeholder_stays_buffered() {
+    let md = "\
+# `files`
+
+```bash
+printf 'a\\nb\\n'
+```
+
+# `show`
+
+```bash ${files | list}
+echo \"$@\"
+```
+";
+    let fixture = Fixture::new(md);
+    let picker = picks(&[&["show"]]);
+    let runner = FakeRunner::new().with_output(&["a", "b"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts::default()).unwrap();
+    assert_eq!(app.runner.calls[0].0, RunKind::Captured);
 }

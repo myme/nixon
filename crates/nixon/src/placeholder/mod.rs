@@ -70,6 +70,17 @@ impl Placeholder {
         }
     }
 
+    /// Whether candidates can be built from output a line at a time.
+    ///
+    /// Columns need every row before the widths are known, and JSON needs the
+    /// whole document, so those wait for the command to finish. SPEC §5.6.
+    pub const fn can_stream(&self) -> bool {
+        matches!(
+            self.format,
+            PlaceholderFormat::Lines | PlaceholderFormat::Fields(_)
+        )
+    }
+
     /// Builds an already-resolved placeholder, as overflow CLI args are.
     /// SPEC §5.6.
     pub fn with_value(kind: PlaceholderType, name: impl Into<String>, value: Vec<String>) -> Self {
