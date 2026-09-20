@@ -72,6 +72,41 @@ in
     }
   );
 
+  # The man pages exist, render without troff warnings, and nothing but
+  # `nixon` was installed alongside them.
+  man =
+    pkgs.runCommand "nixon-check-man"
+      {
+        nativeBuildInputs = [
+          pkgs.man-db
+          pkgs.groff
+        ];
+      }
+      ''
+        installed="$(ls ${nixon}/bin)"
+        if [ "$installed" != "nixon" ]; then
+          echo "expected only nixon in bin, found: $installed" >&2
+          exit 1
+        fi
+
+        # nixpkgs' fixupPhase gzips installed man pages.
+        for page in \
+          ${nixon}/share/man/man1/nixon.1.gz \
+          ${nixon}/share/man/man5/nixon.md.5.gz \
+          ${nixon}/share/man/man7/nixon-picker.7.gz \
+          ${nixon}/share/man/man7/nixon-shell.7.gz
+        do
+          MANROFFSEQ= man --warnings -l "$page" > /dev/null 2> warnings.txt
+          if [ -s warnings.txt ]; then
+            echo "$page renders with warnings:" >&2
+            cat warnings.txt >&2
+            exit 1
+          fi
+        done
+
+        touch $out
+      '';
+
   typos = runCheck "typos" [ pkgs.typos ] "typos";
   statix = runCheck "statix" [ pkgs.statix ] "statix check .";
   deadnix = runCheck "deadnix" [ pkgs.deadnix ] "deadnix --fail .";

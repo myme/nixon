@@ -22,6 +22,7 @@ winnow = "1"
 
 clap = { version = "4", features = ["derive"] }
 clap_complete = { version = "4", features = ["unstable-dynamic"] }
+clap_mangen = "0.2"
 comrak = { version = "0.55", default-features = false }
 ansi-to-tui = "8"
 crossterm = "0.29"

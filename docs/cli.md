@@ -26,6 +26,8 @@ Options:
   -h, --help                 Print help
   -V, --version              Print version
 
+See nixon.md(5), nixon-picker(7), nixon-shell(7).
+
 ```
 
 Global options come before the subcommand. Each on/off flag has a hidden

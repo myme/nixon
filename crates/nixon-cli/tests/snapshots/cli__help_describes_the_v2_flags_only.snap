@@ -1,6 +1,6 @@
 ---
 source: crates/nixon-cli/tests/cli.rs
-expression: stable
+expression: help
 ---
 Command & environment launcher
 
@@ -25,3 +25,5 @@ Options:
   -L, --loglevel <LOGLEVEL>  Log level
   -h, --help                 Print help
   -V, --version              Print version
+
+See nixon.md(5), nixon-picker(7), nixon-shell(7).

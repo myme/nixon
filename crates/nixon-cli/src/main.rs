@@ -9,6 +9,7 @@
 
 mod cli;
 mod complete;
+mod mangen;
 
 use std::process::ExitCode;
 
@@ -23,7 +24,7 @@ use nixon::fs::Dirs;
 use nixon::process::RealRunner;
 use nixon_picker::TuiPicker;
 
-use cli::{Cli, Commands, EvalArgs, ProjectArgs, RunArgs};
+use cli::{Cli, Commands, EvalArgs, Internal, ProjectArgs, RunArgs};
 
 fn main() -> ExitCode {
     // Completion must answer before anything writes to stdout. SPEC §2.4.
@@ -91,6 +92,7 @@ fn run() -> Result<i32> {
         Some(Commands::Eval(args)) => app.eval(&eval_opts(args)),
         Some(Commands::Edit { command }) => app.edit(command.as_deref()),
         Some(Commands::Gc { dry_run }) => app.gc(dry_run),
+        Some(Commands::Internal(Internal::Mangen)) => mangen::write_man_page(),
         Some(Commands::New(args)) => app.new_command(&NewOpts {
             name: args.name,
             desc: args.desc,

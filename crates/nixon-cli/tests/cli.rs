@@ -428,3 +428,33 @@ fn the_documented_help_block_matches_the_binary() {
     );
 }
 
+/// `internal` is packaging machinery; `--help` must not offer it.
+#[test]
+fn the_internal_subcommand_is_hidden() {
+    Fixture::new()
+        .nixon()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(contains("internal").not());
+}
+
+/// The nix build pipes this straight into `share/man/man1/nixon.1`.
+#[test]
+fn internal_mangen_writes_a_man_page() {
+    let output = Fixture::new()
+        .nixon()
+        .args(["internal", "mangen"])
+        .assert()
+        .success();
+    let page = String::from_utf8_lossy(&output.get_output().stdout).into_owned();
+
+    assert!(
+        page.lines().any(|line| line.starts_with(".TH nixon 1")),
+        "man page should carry a .TH header, got:\n{page}"
+    );
+    assert!(
+        page.contains(".SH \"SEE ALSO\""),
+        "man page should point at the docs/ pages"
+    );
+}

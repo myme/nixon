@@ -9,7 +9,12 @@ use nixon::placeholder::{Placeholder, parse_one};
 
 /// Command & environment launcher.
 #[derive(Debug, Parser)]
-#[command(name = "nixon", version, about = "Command & environment launcher")]
+#[command(
+    name = "nixon",
+    version,
+    about = "Command & environment launcher",
+    after_help = "See nixon.md(5), nixon-picker(7), nixon-shell(7)."
+)]
 pub struct Cli {
     /// Global options, which all come before the subcommand.
     #[command(flatten)]
@@ -148,9 +153,20 @@ pub enum Commands {
     /// Select and run a command.
     Run(RunArgs),
 
+    /// Generators that are nixon's own business, not the user's.
+    #[command(hide = true, subcommand)]
+    Internal(Internal),
+
     /// Bare arguments are the `run` subcommand's. SPEC §2.2.
     #[command(external_subcommand)]
     External(Vec<String>),
+}
+
+/// Hidden helpers. SPEC has no equivalent; these exist for packaging.
+#[derive(Debug, Subcommand)]
+pub enum Internal {
+    /// Write the `nixon(1)` man page to stdout.
+    Mangen,
 }
 
 /// `nixon run`. SPEC §2.2.

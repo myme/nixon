@@ -30,9 +30,16 @@ let
     // {
       inherit cargoArtifacts;
 
+      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.pandoc ];
+
       # The widgets are v2's: no -b/-T, which no longer parse. Completion is
       # clap_complete's CompleteEnv, so the loaders are `eval`'d snippets
       # rather than generated files.
+      #
+      # Man pages have two sources and one origin: nixon(1) comes from the
+      # clap command tree via the hidden `internal mangen` subcommand, the
+      # rest from the same docs/ pages the repository serves. Nothing
+      # generated is committed.
       postInstall = ''
         install -Dm444 -t $out/share/nixon \
           ${../extra}/nixon-widget.bash \
@@ -51,6 +58,21 @@ let
         echo 'COMPLETE=fish nixon | source' \
           > $out/share/fish/vendor_completions.d/nixon.fish
 
+        mkdir -p $out/share/man/man1 $out/share/man/man5 $out/share/man/man7
+        $out/bin/nixon internal mangen > $out/share/man/man1/nixon.1
+
+        pandoc -s -f gfm -t man \
+          --metadata title=nixon.md --metadata section=5 \
+          docs/configuration.md docs/commands.md docs/placeholders.md \
+          -o $out/share/man/man5/nixon.md.5
+
+        pandoc -s -f gfm -t man \
+          --metadata title=nixon-picker --metadata section=7 \
+          docs/picker.md -o $out/share/man/man7/nixon-picker.7
+
+        pandoc -s -f gfm -t man \
+          --metadata title=nixon-shell --metadata section=7 \
+          docs/shell-integration.md -o $out/share/man/man7/nixon-shell.7
       '';
 
       meta = {
