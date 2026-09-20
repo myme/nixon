@@ -27,6 +27,7 @@ pub mod markdown;
 pub mod placeholder;
 pub mod process;
 pub mod project;
+pub mod resolve;
 pub mod select;
 
 /// Runs nixon. Subcommand dispatch lands with SPEC §10.
