@@ -1,0 +1,11 @@
+[profile.default]
+retries = 0
+
+[profile.ci]
+retries = { backoff = "fixed", count = 2, delay = "1s" }
+fail-fast = false
+
+# PTY-driven tests are excluded on constrained runners (ENGINEERING §5).
+[[profile.default.overrides]]
+filter = "test(/^pty_/)"
+retries = 2

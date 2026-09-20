@@ -1,0 +1,36 @@
+[workspace]
+members = ["crates/nixon", "crates/nixon-cli", "crates/nixon-picker"]
+resolver = "3"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+repository = "https://github.com/myme/nixon"
+authors = ["Martin Øinæs Myrseth"]
+
+[workspace.dependencies]
+nixon = { path = "crates/nixon", version = "0.2.0" }
+nixon-picker = { path = "crates/nixon-picker", version = "0.2.0" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+dbg_macro = "warn"
+todo = "warn"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"

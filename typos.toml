@@ -1,0 +1,2 @@
+[files]
+extend-exclude = ["src/", "app/", "test/", "SPEC.md", "flake.lock"]
