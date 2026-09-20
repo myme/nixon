@@ -9,6 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+comrak.workspace = true
 nixon-picker.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true

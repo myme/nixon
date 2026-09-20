@@ -19,6 +19,7 @@ pub mod command;
 pub mod config;
 pub mod format;
 pub mod language;
+pub mod markdown;
 pub mod placeholder;
 pub mod project;
 pub mod select;
