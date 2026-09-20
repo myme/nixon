@@ -87,11 +87,12 @@ ignores case, and a query with a capital in it does not.
 
 - `exact_match` (or `-e`) makes a plain term a substring match rather than a
   fuzzy one. `'foo` then means the opposite — match it fuzzily.
-- `ignore_case` (or `-i`) ignores case whatever the query looks like.
+- `ignore_case` (or `-i`) ignores case whatever the query looks like, and
+  `--no-ignore-case` compares case exactly.
 
-A term that uses `^`, `$` or `'` and contains a capital letter matches nothing,
-because the matcher compares the whole candidate rather than the anchored part
-when case is significant. Add `-i`, or keep such terms in lower case.
+Comparing case exactly has a sharp edge: a `^` or `$` term then matches
+nothing, because the matcher compares the whole candidate rather than the
+anchored part. `'` terms are unaffected. Smart case and `-i` are both fine.
 
 Candidates may carry colour; matching always runs on the visible text, so a
 query never matches an escape sequence and the highlights line up with what you

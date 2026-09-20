@@ -13,8 +13,6 @@
     )
 )]
 
-use std::process::ExitCode;
-
 pub mod app;
 pub mod command;
 pub mod config;
@@ -32,34 +30,45 @@ pub mod project;
 pub mod resolve;
 pub mod select;
 
-use nixon_picker::matcher::MatchOptions;
+use nixon_picker::matcher::{Case, MatchOptions};
 
 /// Turns the config's matching flags into the picker's.
+///
+/// `ignore_case` is a tri-state, so all three of its values mean something:
+/// unset is smart case, `-i` ignores case, `--no-ignore-case` respects it.
 pub fn matcher_options(config: &config::Config) -> MatchOptions {
     MatchOptions {
         exact: config.exact_match.unwrap_or(false),
-        ignore_case: config.ignore_case.unwrap_or(false),
+        case: match config.ignore_case {
+            None => Case::Smart,
+            Some(true) => Case::Ignore,
+            Some(false) => Case::Respect,
+        },
         sort: true,
     }
 }
 
-/// Runs nixon. Subcommand dispatch lands with
-#[expect(
-    clippy::missing_const_for_fn,
-    reason = "const only because the body is still empty"
-)]
-pub fn run() -> ExitCode {
-    ExitCode::SUCCESS
-}
-
 #[cfg(test)]
 mod tests {
-    use std::process::ExitCode;
+    use nixon_picker::matcher::Case;
 
-    use super::run;
+    use super::matcher_options;
+    use crate::config::Config;
 
+    fn case_for(ignore_case: Option<bool>) -> Case {
+        matcher_options(&Config {
+            ignore_case,
+            ..Config::default()
+        })
+        .case
+    }
+
+    /// All three values mean something: `--no-ignore-case` used to collapse
+    /// into the unset case and do nothing at all.
     #[test]
-    fn run_succeeds_while_there_is_nothing_to_do() {
-        assert_eq!(format!("{:?}", run()), format!("{:?}", ExitCode::SUCCESS));
+    fn ignore_case_is_a_tri_state() {
+        assert_eq!(case_for(None), Case::Smart);
+        assert_eq!(case_for(Some(true)), Case::Ignore);
+        assert_eq!(case_for(Some(false)), Case::Respect);
     }
 }

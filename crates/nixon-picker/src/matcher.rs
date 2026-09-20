@@ -11,13 +11,31 @@ use nucleo_matcher::{Config, Matcher};
 
 use crate::candidate::Candidate;
 
+/// How case is compared.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Case {
+    /// fzf's smart case: a lower-case query ignores case, one with a capital
+    /// in it does not. The default, and what an unset `ignore_case` means.
+    #[default]
+    Smart,
+    /// Ignore case whatever the query looks like.
+    Ignore,
+    /// Compare case exactly.
+    ///
+    /// Sharp edge: nucleo 0.3 compares the whole candidate rather than the
+    /// anchored part for an ASCII candidate when case is significant, so a
+    /// `^` or `$` term finds nothing under this. A `'` substring term is
+    /// unaffected.
+    Respect,
+}
+
 /// How a query is interpreted.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MatchOptions {
     /// Substring rather than fuzzy matching.
     pub exact: bool,
-    /// Case-insensitive matching.
-    pub ignore_case: bool,
+    /// How case is compared.
+    pub case: Case,
     /// Rank by score; false keeps the candidates' own order.
     pub sort: bool,
 }
@@ -26,7 +44,7 @@ impl Default for MatchOptions {
     fn default() -> Self {
         Self {
             exact: false,
-            ignore_case: false,
+            case: Case::Smart,
             sort: true,
         }
     }
@@ -34,17 +52,11 @@ impl Default for MatchOptions {
 
 impl MatchOptions {
     /// How nucleo should treat case.
-    ///
-    /// Unset means fzf's smart case: a lowercase query ignores case, one
-    /// with a capital in it does not. `Respect` would be the literal reading
-    /// of the option, but nucleo 0.3 compares the whole haystack rather than
-    /// the matched span when case is respected, so `^src` and `.md$` find
-    /// nothing at all under it.
     pub const fn case_matching(self) -> CaseMatching {
-        if self.ignore_case {
-            CaseMatching::Ignore
-        } else {
-            CaseMatching::Smart
+        match self.case {
+            Case::Smart => CaseMatching::Smart,
+            Case::Ignore => CaseMatching::Ignore,
+            Case::Respect => CaseMatching::Respect,
         }
     }
 
@@ -178,7 +190,7 @@ pub fn match_indices(matcher: &mut Matcher, pattern: &Pattern, text: &str, out: 
 
 #[cfg(test)]
 mod tests {
-    use super::{Match, MatchOptions, match_indices, matches};
+    use super::{Case, Match, MatchOptions, match_indices, matches};
     use crate::candidate::Candidate;
     use nucleo_matcher::{Config, Matcher};
 
@@ -229,7 +241,7 @@ mod tests {
         assert!(matched("GIT", &["git-files"], respect).is_empty());
 
         let ignore = MatchOptions {
-            ignore_case: true,
+            case: Case::Ignore,
             ..MatchOptions::default()
         };
         assert_eq!(matched("GIT", &["git-files"], ignore), ["git-files"]);
@@ -277,7 +289,7 @@ mod tests {
 mod extended_syntax {
     use rstest::rstest;
 
-    use super::{MatchOptions, exact_query, matches};
+    use super::{Case, MatchOptions, exact_query, matches};
     use crate::candidate::Candidate;
 
     const ITEMS: [&str; 5] = [
@@ -310,6 +322,26 @@ mod extended_syntax {
         let mut want: Vec<String> = expected.iter().map(|s| (*s).to_owned()).collect();
         want.sort();
         assert_eq!(matched(query, MatchOptions::default()), want);
+    }
+
+    #[rstest]
+    // Smart case: a lower-case query ignores case.
+    #[case(Case::Smart, "main", 2)]
+    // Ignoring case: the same, whatever the query looks like.
+    #[case(Case::Ignore, "MAIN", 2)]
+    // Respecting case: an upper-case query matches nothing here.
+    #[case(Case::Respect, "MAIN", 0)]
+    #[case(Case::Respect, "main", 2)]
+    fn case_handling_follows_the_option(
+        #[case] case: Case,
+        #[case] query: &str,
+        #[case] expected: usize,
+    ) {
+        let opts = MatchOptions {
+            case,
+            ..MatchOptions::default()
+        };
+        assert_eq!(matched(query, opts).len(), expected);
     }
 
     #[test]
