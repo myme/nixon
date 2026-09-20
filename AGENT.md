@@ -80,7 +80,9 @@ Fixture rules, each learned from a failure:
   position, so they survive a query change. nucleo exposes no stable id for a
   matched row, which is why `Candidate` carries one.
 - Matching runs on nucleo's background worker. The UI thread must never make
-  a pass over the candidates: that cost ~180ms per keystroke at 200k.
+  a pass over the candidates: that cost ~180ms per keystroke at 200k. Under
+  `exact_match` every keystroke is a full rescore, because the query rewrite
+  is not append-safe; the 200k guard covers both paths.
 - Only the visible window is built per frame, and match indices are computed
   for those rows only.
 - The kitty keyboard protocol is an improvement, not a requirement: the legacy

@@ -422,9 +422,11 @@ const fn Normalization() -> nucleo::pattern::Normalization {
 #[cfg(test)]
 mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use rstest::rstest;
 
     use super::App;
     use crate::candidate::Candidate;
+    use crate::matcher::MatchOptions;
     use crate::options::PickerOptions;
     use crate::selection::{Selection, SelectionType};
 
@@ -904,12 +906,20 @@ mod tests {
     /// catch is matching moving back onto the UI thread, which cost ~180ms
     /// per keystroke in release and seconds here — so half a second is a
     /// wide but decisive line, not a performance target.
-    #[test]
-    fn a_keystroke_stays_within_a_frame_on_a_large_list() {
+    #[rstest]
+    #[case(MatchOptions::default())]
+    // `exact` rewrites the query, which is not append-safe, so every
+    // keystroke is a full rescore. It has to stay within a frame too.
+    #[case(MatchOptions { exact: true, ..MatchOptions::default() })]
+    fn a_keystroke_stays_within_a_frame_on_a_large_list(#[case] matching: MatchOptions) {
         let items: Vec<Candidate> = (0..200_000)
             .map(|i| Candidate::identity(format!("src/module{}/file_{i}.rs", i % 97)))
             .collect();
-        let mut app = App::new(items, PickerOptions::default());
+        let options = PickerOptions {
+            matching,
+            ..PickerOptions::default()
+        };
+        let mut app = App::new(items, options);
         app.set_height(40);
 
         for c in "file_12".chars() {
