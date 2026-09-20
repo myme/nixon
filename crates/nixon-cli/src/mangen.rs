@@ -4,8 +4,6 @@
 //! Written at package time rather than committed. The other man pages are
 //! rendered from `docs/` by pandoc, which needs no code.
 
-use std::io::Write as _;
-
 use clap::CommandFactory as _;
 use clap::builder::Resettable;
 use nixon::error::Result;
@@ -26,8 +24,6 @@ pub fn write_man_page() -> Result<i32> {
     clap_mangen::Man::new(command).render(&mut page)?;
     page.extend_from_slice(SEE_ALSO.as_bytes());
 
-    let mut out = std::io::stdout().lock();
-    out.write_all(&page)?;
-    out.flush()?;
+    nixon::output::raw(&String::from_utf8_lossy(&page))?;
     Ok(0)
 }
