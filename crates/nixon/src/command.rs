@@ -1,4 +1,4 @@
-//! The command model and its display forms. SPEC §5.1.
+//! The command model and its display forms.
 
 use std::fmt;
 use std::path::PathBuf;
@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use crate::language::Language;
 use crate::placeholder::{ParseError, Placeholder, scan_all};
 
-/// Where a command is defined, so `edit` and `new` can find it. SPEC §4.6.
+/// Where a command is defined, so `edit` and `new` can find it.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandLocation {
     /// The config file the command was parsed from.
@@ -19,7 +19,7 @@ pub struct CommandLocation {
     pub level: usize,
 }
 
-/// A piece of a description, as it was written. SPEC §4.5.
+/// A piece of a description, as it was written.
 ///
 /// Kept apart so the picker can style inline code; everything on stdout uses
 /// [`Description::plain`].
@@ -40,7 +40,7 @@ impl DescSpan {
     }
 }
 
-/// A command's description. SPEC §4.5.
+/// A command's description.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Description {
     /// The pieces, in order, with adjacent prose already merged.
@@ -90,7 +90,7 @@ impl fmt::Display for Description {
     }
 }
 
-/// A runnable command. SPEC §5.1.
+/// A runnable command.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Command {
     /// The name selected by, and referenced by placeholders.
@@ -116,7 +116,7 @@ pub struct Command {
 }
 
 impl Command {
-    /// `name ${placeholder}…`, used as the picker header. SPEC §5.1.
+    /// `name ${placeholder}…`, used as the picker header.
     pub fn show(&self) -> String {
         use std::fmt::Write as _;
 
@@ -128,7 +128,7 @@ impl Command {
     }
 }
 
-/// `name` or `name - desc`, the candidate text in selection. SPEC §5.1.
+/// `name` or `name - desc`, the candidate text in selection.
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.desc {
@@ -138,7 +138,7 @@ impl fmt::Display for Command {
     }
 }
 
-/// Splits a command heading into its name and its placeholders. SPEC §4.5.1.
+/// Splits a command heading into its name and its placeholders.
 ///
 /// The name is the first whitespace-delimited word; everything after it is
 /// scanned for placeholders and otherwise ignored, so a trailing `&` and

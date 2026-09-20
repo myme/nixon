@@ -1,4 +1,4 @@
-//! Resolving a command's placeholders. SPEC §5.6.
+//! Resolving a command's placeholders.
 
 use nixon_picker::{Candidate, CandidateStream, FilterPicker, Picker, PickerOptions, Selection};
 use serde::Deserialize;
@@ -11,7 +11,7 @@ use crate::placeholder::{Placeholder, PlaceholderFormat, PlaceholderType};
 use crate::process::ProcessRunner;
 use crate::project::Project;
 
-/// What a command's placeholders resolved to. SPEC §5.6.
+/// What a command's placeholders resolved to.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Resolved {
     /// Lines piped to the command's stdin.
@@ -22,7 +22,7 @@ pub struct Resolved {
     pub env: Vec<(String, String)>,
 }
 
-/// One JSON candidate: a bare string, or a title and a value. SPEC §8.2.
+/// One JSON candidate: a bare string, or a title and a value.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum JsonCandidate {
@@ -39,24 +39,24 @@ impl From<JsonCandidate> for Candidate {
     }
 }
 
-/// Resolves placeholders by running the commands they reference. SPEC §5.6.
+/// Resolves placeholders by running the commands they reference.
 pub struct Resolver<'a, P: Picker, R: ProcessRunner> {
     /// Everything evaluation needs from outside.
     pub context: &'a Context<'a>,
     /// The project commands run in.
     pub project: &'a Project,
-    /// Every command available here, for looking placeholders up. SPEC §5.5.
+    /// Every command available here, for looking placeholders up.
     pub commands: &'a [Command],
     /// The picker placeholder selections go through.
     pub picker: &'a mut P,
     /// The runner referenced commands are run with.
     pub runner: &'a mut R,
-    /// Picker header: `show_command` of the *outer* command. SPEC §5.6.
+    /// Picker header: `show_command` of the *outer* command.
     pub header: String,
 }
 
 impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
-    /// Resolves every placeholder of `command`. SPEC §5.6.
+    /// Resolves every placeholder of `command`.
     ///
     /// `args` are search queries for the matching placeholders, not values;
     /// args beyond the placeholders become pre-expanded positional arguments.
@@ -91,7 +91,7 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
     }
 
     /// Runs the command a placeholder references and selects from its output.
-    /// SPEC §5.6.
+    ///
     fn select_for(
         &mut self,
         placeholder: &Placeholder,
@@ -112,7 +112,7 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
         let evaluation = Evaluation {
             args: resolved.args,
             // A placeholder command always runs in the project, whatever its
-            // own pwd says. SPEC §5.6.
+            // own pwd says.
             cwd: Some(self.project.path()),
             env: resolved.env,
             stdin: resolved.stdin,
@@ -149,7 +149,7 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             }
 
             // `| list` prints matches instead of asking, whatever picker is
-            // configured. SPEC §5.6.
+            // configured.
             if placeholder.list {
                 FilterPicker.pick(&options, candidates)?
             } else {
@@ -169,7 +169,7 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
         }
     }
 
-    /// Starts the command and streams its lines in as candidates. SPEC §5.6.
+    /// Starts the command and streams its lines in as candidates.
     fn stream_candidates(
         &mut self,
         command: &Command,
@@ -205,7 +205,7 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
     }
 }
 
-/// Builds selectable candidates from a command's output. SPEC §5.6.
+/// Builds selectable candidates from a command's output.
 fn candidates_for(
     format: &PlaceholderFormat,
     captured: &crate::process::Captured,
@@ -248,7 +248,7 @@ fn candidates_for(
     })
 }
 
-/// One output line as a candidate, for the line-oriented formats. SPEC §5.6.
+/// One output line as a candidate, for the line-oriented formats.
 fn line_candidate(line: &str, fields: &[usize]) -> Candidate {
     if fields.is_empty() {
         return Candidate::identity(line);
@@ -261,7 +261,7 @@ fn line_candidate(line: &str, fields: &[usize]) -> Candidate {
 ///
 /// Each argument is the *search query* for its placeholder, not its value.
 /// Arguments beyond the placeholders become pre-expanded `Arg` placeholders;
-/// placeholders beyond the arguments get no query. SPEC §5.6.
+/// placeholders beyond the arguments get no query.
 pub fn zip_args(
     placeholders: &[Placeholder],
     args: &[String],

@@ -1,9 +1,9 @@
-//! Non-interactive matching, for the paths that never draw. SPEC §8.4.
+//! Non-interactive matching, for the paths that never draw.
 
 use crate::candidate::Candidate;
 use crate::matcher::{MatchOptions, matches};
 
-/// Candidates matching `query`, without a terminal. SPEC §8.4 filter mode.
+/// Candidates matching `query`, without a terminal.
 ///
 /// Used by `--list` and by `| list` placeholders, which print matches rather
 /// than opening the picker.

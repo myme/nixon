@@ -1,4 +1,4 @@
-//! Running child processes. SPEC §7.3, §7.4, ENGINEERING §4.2.
+//! Running child processes.
 
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 /// A child's exit code, with the shell's `128 + signal` convention.
 pub type ExitCode = i32;
 
-/// What to run, where, and with what. SPEC §7.3.
+/// What to run, where, and with what.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Invocation {
     /// Interpreter, script path and arguments.
@@ -20,7 +20,7 @@ pub struct Invocation {
     pub stdin: Option<Vec<String>>,
 }
 
-/// A captured run. SPEC §7.3 `run_with_output`.
+/// A captured run.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Captured {
     /// The child's exit code.
@@ -30,7 +30,7 @@ pub struct Captured {
 }
 
 impl Captured {
-    /// stdout as lines, which is how placeholder candidates arrive. SPEC §5.6.
+    /// stdout as lines, which is how placeholder candidates arrive.
     pub fn lines(&self) -> Vec<String> {
         String::from_utf8_lossy(&self.stdout)
             .lines()
@@ -39,7 +39,7 @@ impl Captured {
     }
 }
 
-/// A child that is still running, streaming its output. SPEC §5.6.
+/// A child that is still running, streaming its output.
 ///
 /// Send, because cancelling a pick kills the child from the picker's side.
 pub trait Running: Send {
@@ -51,15 +51,14 @@ pub trait Running: Send {
 }
 
 /// The seam every subprocess goes through, so tests need no real ones.
-/// ENGINEERING §4.2.
 pub trait ProcessRunner {
-    /// Runs in the foreground, inheriting stdout and stderr. SPEC §7.3.
+    /// Runs in the foreground, inheriting stdout and stderr.
     fn run(&mut self, invocation: &Invocation) -> io::Result<ExitCode>;
 
-    /// Runs capturing stdout, stderr inherited. SPEC §7.3.
+    /// Runs capturing stdout, stderr inherited.
     fn run_capture(&mut self, invocation: &Invocation) -> io::Result<Captured>;
 
-    /// Runs detached and returns at once, for `&` commands. SPEC §7.3.
+    /// Runs detached and returns at once, for `&` commands.
     fn spawn_detached(&mut self, invocation: &Invocation) -> io::Result<()>;
 
     /// Starts the command, handing each stdout line to `sink` as it arrives.
@@ -124,9 +123,8 @@ impl ProcessRunner for RealRunner {
 
     /// Detaches with a new process group rather than `fork` + `setsid`.
     ///
-    /// ENGINEERING §2.1: forking a process that owns a threadpool is
-    /// UB-adjacent, and `process_group` is safe, so this crate needs no
-    /// `unsafe` at all.
+    /// Forking a process that owns a threadpool is UB-adjacent, and
+    /// `process_group` is safe, so this crate needs no `unsafe` at all.
     fn spawn_detached(&mut self, invocation: &Invocation) -> io::Result<()> {
         let mut command = Self::command(invocation)?;
         command
@@ -232,7 +230,7 @@ impl Running for RunningChild {
     }
 }
 
-/// Piped when nixon supplies the lines, inherited otherwise. SPEC §7.3.
+/// Piped when nixon supplies the lines, inherited otherwise.
 fn stdin_for(invocation: &Invocation) -> Stdio {
     if invocation.stdin.is_some() {
         Stdio::piped()
@@ -271,7 +269,7 @@ fn join(writer: Option<std::thread::JoinHandle<()>>) {
     }
 }
 
-/// The child's code, or `128 + signal` when it was killed. SPEC §7.3.
+/// The child's code, or `128 + signal` when it was killed.
 fn exit_code(status: std::process::ExitStatus) -> ExitCode {
     status.code().unwrap_or_else(|| {
         #[cfg(unix)]
@@ -301,7 +299,6 @@ pub enum RunKind {
 }
 
 /// A runner that records what it was asked and replays scripted output.
-/// ENGINEERING §4.2.
 #[cfg(any(test, feature = "test-util"))]
 #[derive(Debug, Default)]
 pub struct FakeRunner {

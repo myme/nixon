@@ -1,4 +1,4 @@
-//! Parsing `nixon.md`: config blocks and commands. SPEC §4.
+//! Parsing `nixon.md`: config blocks and commands.
 
 pub mod command;
 pub mod extract;
@@ -12,9 +12,9 @@ pub use walk::ParsedFile;
 
 use crate::config::Config;
 
-/// A markdown file that could not be parsed. SPEC §4.7.
+/// A markdown file that could not be parsed.
 ///
-/// `message` is SPEC's wording so the behaviour stays checkable; `file` and
+/// `message` is v1's wording so the behaviour stays checkable; `file` and
 /// `line` are what miette renders a snippet from.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("{message}")]
@@ -23,12 +23,12 @@ pub struct MarkdownError {
     pub file: String,
     /// 1-based line, when the failure is attributable to one.
     pub line: Option<usize>,
-    /// SPEC's error text.
+    /// What went wrong, in v1's words.
     pub message: String,
 }
 
 impl MarkdownError {
-    /// Builds an error carrying SPEC's wording.
+    /// Builds an error carrying v1's wording.
     pub fn new(file: &str, line: Option<usize>, message: String) -> Self {
         Self {
             file: file.to_owned(),
@@ -38,14 +38,14 @@ impl MarkdownError {
     }
 }
 
-/// Parses a markdown config file into its config and commands. SPEC §4.
+/// Parses a markdown config file into its config and commands.
 pub fn parse(file: &str, text: &str) -> Result<ParsedFile, MarkdownError> {
     let arena = Arena::new();
     let root = parse_document(&arena, text, &Options::default());
     walk::walk(file, &extract::extract(root))
 }
 
-/// Parses a markdown config file into one effective [`Config`]. SPEC §4.
+/// Parses a markdown config file into one effective [`Config`].
 pub fn parse_config_file(file: &str, text: &str) -> Result<Config, MarkdownError> {
     let parsed = parse(file, text)?;
     let mut config = parsed.config.unwrap_or_default();

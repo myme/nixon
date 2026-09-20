@@ -1,10 +1,10 @@
-//! Recognising projects on disk. SPEC §9.2-§9.5.
+//! Recognising projects on disk.
 
 use std::path::{Path, PathBuf};
 
 use super::{Project, ProjectMarker, ProjectType};
 
-/// Every type whose markers all match. SPEC §9.2.
+/// Every type whose markers all match.
 ///
 /// A type with no markers always matches; a non-directory has no types.
 pub fn find_project_types(path: &Path, ptypes: &[ProjectType]) -> Vec<ProjectType> {
@@ -18,11 +18,10 @@ pub fn find_project_types(path: &Path, ptypes: &[ProjectType]) -> Vec<ProjectTyp
         .collect()
 }
 
-/// Whether one marker holds for a directory. SPEC §9.2.
+/// Whether one marker holds for a directory.
 ///
 /// A `.git` path marker is also satisfied by a bare repository, so the usual
 /// `test: [".git"]` classifies one as a git project without new config.
-/// ENGINEERING §7.6.
 pub fn test_marker(path: &Path, marker: &ProjectMarker) -> bool {
     match marker {
         ProjectMarker::Path(p) => {
@@ -35,7 +34,7 @@ pub fn test_marker(path: &Path, marker: &ProjectMarker) -> bool {
     }
 }
 
-/// The project rooted exactly at `dir`, if it is one. SPEC §9.3.
+/// The project rooted exactly at `dir`, if it is one.
 ///
 /// A directory matched only by marker-less catch-all types is not a project,
 /// but the catch-all types are still recorded on one that is.
@@ -50,11 +49,11 @@ pub fn find_project(ptypes: &[ProjectType], dir: &Path) -> Option<Project> {
     Some(Project::from_path(dir, types))
 }
 
-/// The nearest project at or above `path`. SPEC §9.4.
+/// The nearest project at or above `path`.
 ///
 /// The returned project is rooted at the directory whose markers matched.
 /// v1 returned that directory's *parent* with an empty name whenever the
-/// search started below the root; SPEC §9.4 records that as a bug to fix.
+/// search started below the root, which v1 got wrong.
 pub fn find_in_project(ptypes: &[ProjectType], path: &Path) -> Option<Project> {
     let mut dir = path;
     loop {
@@ -67,7 +66,7 @@ pub fn find_in_project(ptypes: &[ProjectType], path: &Path) -> Option<Project> {
     }
 }
 
-/// The nearest project, or `path` itself as a project. SPEC §9.5.
+/// The nearest project, or `path` itself as a project.
 ///
 /// Commands with no type restriction still work outside any project.
 pub fn find_in_project_or_default(ptypes: &[ProjectType], path: &Path) -> Project {
@@ -75,14 +74,14 @@ pub fn find_in_project_or_default(ptypes: &[ProjectType], path: &Path) -> Projec
         .unwrap_or_else(|| Project::from_path(path, find_project_types(path, ptypes)))
 }
 
-/// Sorts projects by full path. SPEC §9.6.
+/// Sorts projects by full path.
 pub fn sort_projects(projects: &mut [Project]) {
     // Cached: `path` joins, so a plain `sort_by_key` allocates twice per
     // comparison.
     projects.sort_by_cached_key(Project::path);
 }
 
-/// Renders projects for `project --inspect`. SPEC §9.7.
+/// Renders projects for `project --inspect`.
 pub fn inspect(projects: &[Project]) -> String {
     projects
         .iter()
@@ -99,7 +98,7 @@ pub fn inspect(projects: &[Project]) -> String {
         .join("\n")
 }
 
-/// The path a project lives at, as SPEC §9.1 defines it.
+/// The path a project lives at.
 impl Project {
     /// Builds a project rooted at `path`.
     pub fn from_path(path: &Path, types: Vec<ProjectType>) -> Self {
@@ -110,7 +109,7 @@ impl Project {
         }
     }
 
-    /// `dir / name`. SPEC §9.1.
+    /// `dir / name`.
     pub fn path(&self) -> PathBuf {
         self.dir.join(&self.name)
     }

@@ -1,4 +1,4 @@
-//! PTY-driven tests of the real event loop. ENGINEERING §5.
+//! PTY-driven tests of the real event loop.
 //!
 //! These are the only tests that exercise terminal setup and teardown, the
 //! key bindings and the picker's redraw loop. Everything else runs the
@@ -345,7 +345,7 @@ fn alt_b_steps_back_a_word_in_the_query() {
     assert!(!output.contains("ran-beta"), "output was: {output}");
 }
 
-/// SPEC §5.6 / Step I: the picker must be usable while the command that
+/// The picker must be usable while the command that
 /// produces its candidates is still running.
 ///
 /// The command emits two lines at once and then sleeps. Two matter: with

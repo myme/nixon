@@ -1,4 +1,4 @@
-//! `nixon new`. SPEC §10.4.
+//! `nixon new`.
 
 use std::path::Path;
 
@@ -9,7 +9,7 @@ use crate::error::{NixonError, Result};
 use crate::language::Language;
 use crate::process::{ExitCode, Invocation, ProcessRunner};
 
-/// The command to splice in. SPEC §10.4.
+/// The command to splice in.
 #[derive(Clone, Debug)]
 pub struct NewOpts {
     /// Name of the new command.
@@ -35,11 +35,11 @@ impl Default for NewOpts {
 
 impl<P: Picker, R: ProcessRunner> App<P, R> {
     /// Splices a new command into a markdown file after a chosen one.
-    /// SPEC §10.4.
+    ///
     ///
     /// The temp file goes in the system temp directory, not `/tmp`, and a
     /// bin command is refused rather than spliced into an executable at line
-    /// zero, both ENGINEERING §7.3 fixes.
+    /// zero, both of which v1 got wrong.
     pub fn new_command(&mut self, opts: &NewOpts) -> Result<ExitCode> {
         let project = self.current_project();
         let commands = self.commands_for(&project)?;
@@ -91,7 +91,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         })?;
 
         // The diff is for the user to read; a non-zero exit just means the
-        // files differ. SPEC §10.4.
+        // files differ.
         self.runner.run(&Invocation {
             argv: vec![
                 "diff".to_owned(),
@@ -115,7 +115,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     }
 }
 
-/// Asks on stderr and reads the answer from stdin. SPEC §10.4.
+/// Asks on stderr and reads the answer from stdin.
 ///
 /// The prompt is for a person, so it goes where the picker goes; stdout
 /// carries data. Only a bare `y` or `Y` accepts; anything else, including
@@ -159,7 +159,7 @@ fn replace(path: &Path, source: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Inserts the template after `end_line`. SPEC §10.4.
+/// Inserts the template after `end_line`.
 ///
 /// Lines keep their terminators, so a file with CRLF endings or without a
 /// final newline comes back as it went in, everywhere but the new section.

@@ -1,4 +1,4 @@
-//! Functional tests against the built binary. SPEC §10, ENGINEERING §5.
+//! Functional tests against the built binary.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -43,7 +43,7 @@ impl Fixture {
     /// The project carries a marker and the global config declares the type,
     /// so `find_in_project` recognises it. Without that, subcommands that
     /// resolve a project fall back to the picker and fail with no TTY —
-    /// which is what v1 does too (SPEC §10.3).
+    /// which is what v1 does too.
     fn with_config(nixon_md: &str) -> Self {
         let temp = TempDir::new().unwrap();
         let project = temp.child("project");
@@ -59,7 +59,7 @@ impl Fixture {
         Self { temp }
     }
 
-    /// The binary, with the host environment cleared. ENGINEERING §5.
+    /// The binary, with the host environment cleared.
     fn nixon(&self) -> Command {
         let mut cmd = Command::cargo_bin("nixon").unwrap();
         self.apply(&mut cmd);

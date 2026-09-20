@@ -1,5 +1,4 @@
 //! A text buffer with a cursor, shared by the query line and the editor.
-//! ENGINEERING §7.2.
 
 /// A cursor movement.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,7 +21,7 @@ pub enum Motion {
     End,
 }
 
-/// One line-editing action. ENGINEERING §7.2.
+/// One line-editing action.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Edit {
     /// Type a character.

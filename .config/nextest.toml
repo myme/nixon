@@ -7,7 +7,6 @@ fail-fast = false
 
 # PTY tests drive a real terminal and are the slowest and least deterministic;
 # `--profile no-pty` skips them on constrained runners. They run in CI.
-# ENGINEERING §5.
 [[profile.default.overrides]]
 filter = "binary(pty)"
 retries = 2

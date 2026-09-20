@@ -1,4 +1,4 @@
-//! `nixon edit`. SPEC §10.5.
+//! `nixon edit`.
 
 use nixon_picker::{Picker, Selection};
 
@@ -7,7 +7,7 @@ use crate::error::{NixonError, Result};
 use crate::process::{ExitCode, ProcessRunner};
 
 impl<P: Picker, R: ProcessRunner> App<P, R> {
-    /// Opens a command where it is defined. SPEC §10.5.
+    /// Opens a command where it is defined.
     ///
     /// Hidden commands are offered here, unlike in the run picker.
     pub fn edit(&mut self, query: Option<&str>) -> Result<ExitCode> {

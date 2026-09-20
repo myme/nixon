@@ -1,6 +1,6 @@
-//! The outcome of a pick. SPEC §8.2, ENGINEERING §4.1.
+//! The outcome of a pick.
 
-/// Which binding confirmed the selection. SPEC §8.2.
+/// Which binding confirmed the selection.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum SelectionType {
     /// `Enter`: run it.
@@ -14,12 +14,12 @@ pub enum SelectionType {
     Visit,
 }
 
-/// What the picker returned. SPEC §8.2.
+/// What the picker returned.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Selection<T> {
     /// Nothing matched.
     Empty,
-    /// The user cancelled with `Esc` or `Ctrl-C`. Exits 130. ENGINEERING §7.2.
+    /// The user cancelled with `Esc` or `Ctrl-C`. Exits 130.
     Canceled,
     /// One or more rows were chosen.
     Selected {
@@ -31,7 +31,7 @@ pub enum Selection<T> {
 }
 
 impl<T> Selection<T> {
-    /// A selection with no items is [`Selection::Empty`]. SPEC §8.2.
+    /// A selection with no items is [`Selection::Empty`].
     pub fn selected(kind: SelectionType, items: Vec<T>) -> Self {
         if items.is_empty() {
             Self::Empty

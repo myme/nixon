@@ -1,5 +1,4 @@
 //! Owning the terminal. The only module that touches crossterm directly.
-//! ENGINEERING §4.1, §2.1.
 
 use std::io::{self, Stderr};
 
@@ -17,7 +16,7 @@ use ratatui::backend::CrosstermBackend;
 /// A terminal in raw mode on the alternate screen, restored on drop.
 ///
 /// Drawing goes to **stderr**: stdout carries data for `--select`, `--list`
-/// and `--insert`, which the shell widgets read. ENGINEERING §2.1.
+/// and `--insert`, which the shell widgets read.
 pub struct TerminalGuard {
     terminal: Terminal<CrosstermBackend<Stderr>>,
     /// Puts the terminal back, however construction or use ends.
@@ -48,7 +47,7 @@ impl TerminalGuard {
     /// for disambiguated escape codes so `Ctrl-H`, `Alt-Enter` and
     /// `Alt-Backspace` arrive as distinct events rather than as whatever
     /// legacy byte they collide with. Terminals without it fall back to the
-    /// legacy encoding, which the keymap also accepts. ENGINEERING §7.2.
+    /// legacy encoding, which the keymap also accepts.
     pub fn new() -> io::Result<Self> {
         install_panic_hook();
         enable_raw_mode().map_err(|_| no_terminal())?;

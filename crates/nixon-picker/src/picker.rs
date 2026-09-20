@@ -1,4 +1,4 @@
-//! The picker interface and its implementations. ENGINEERING §4.1.
+//! The picker interface and its implementations.
 
 use std::io;
 
@@ -14,7 +14,7 @@ use crate::stream::CandidateStream;
 use crate::terminal::TerminalGuard;
 use crate::ui::{App, render};
 
-/// Anything that can turn candidates into a selection. ENGINEERING §4.1.
+/// Anything that can turn candidates into a selection.
 pub trait Picker {
     /// Presents `candidates` and returns what was chosen.
     fn pick(
@@ -37,7 +37,7 @@ pub trait Picker {
     }
 }
 
-/// The real picker: a terminal UI on stderr. ENGINEERING §4.1.
+/// The real picker: a terminal UI on stderr.
 #[derive(Debug, Default)]
 pub struct TuiPicker;
 
@@ -147,7 +147,7 @@ fn run_loop(
     Ok(app.outcome.take().unwrap_or(Selection::Empty))
 }
 
-/// `-1` applied to what the matcher has settled on. SPEC §8.4.
+/// `-1` applied to what the matcher has settled on.
 fn short_circuit_app(app: &App) -> Option<Selection<Candidate>> {
     match app.matched_count() {
         0 => Some(Selection::Empty),
@@ -158,7 +158,7 @@ fn short_circuit_app(app: &App) -> Option<Selection<Candidate>> {
     }
 }
 
-/// Non-interactive matching, for `--list` and `| list`. SPEC §8.4.
+/// Non-interactive matching, for `--list` and `| list`.
 ///
 /// Returns every candidate that matched, in ranked order, so callers read
 /// their `value` — the same field an interactive pick hands back. It never
@@ -182,7 +182,6 @@ impl Picker for FilterPicker {
 }
 
 /// fzf's `-1`: a query matching exactly one row selects it without drawing.
-/// SPEC §8.4.
 fn short_circuit(
     options: &PickerOptions,
     candidates: &[Candidate],
@@ -208,7 +207,7 @@ fn list_height(total: u16, options: &PickerOptions) -> usize {
     usize::from(total).saturating_sub(chrome).max(1)
 }
 
-/// A picker that answers from a queue, for tests. ENGINEERING §4.1.
+/// A picker that answers from a queue, for tests.
 #[cfg(any(test, feature = "test-util"))]
 #[derive(Debug, Default)]
 pub struct ScriptedPicker {

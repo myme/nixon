@@ -1,4 +1,4 @@
-//! Argument parsing. SPEC §2, ENGINEERING §7.2.
+//! Argument parsing.
 
 use std::path::PathBuf;
 
@@ -20,16 +20,15 @@ pub struct Cli {
     #[command(flatten)]
     pub global: GlobalOpts,
 
-    /// The subcommand; bare arguments are `run`'s. SPEC §2.2.
+    /// The subcommand; bare arguments are `run`'s.
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
 
-/// Options that apply to every subcommand. SPEC §2.1.
+/// Options that apply to every subcommand.
 ///
 /// `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went with the backend
 /// concept; passing one is an ordinary unexpected-argument error.
-/// ENGINEERING §7.2.
 #[derive(Debug, Args)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -78,7 +77,7 @@ pub struct GlobalOpts {
 }
 
 impl GlobalOpts {
-    /// The config these options imply, to merge over the file's. SPEC §2.3.
+    /// The config these options imply, to merge over the file's.
     pub fn to_config(&self) -> Config {
         Config {
             project_dirs: self.paths.clone(),
@@ -92,7 +91,7 @@ impl GlobalOpts {
     }
 }
 
-/// `--x` and `--no-x` collapse to a tri-state. SPEC §2.1.
+/// `--x` and `--no-x` collapse to a tri-state.
 const fn tri_state(yes: bool, no: bool) -> Option<bool> {
     match (yes, no) {
         (true, _) => Some(true),
@@ -101,7 +100,7 @@ const fn tri_state(yes: bool, no: bool) -> Option<bool> {
     }
 }
 
-/// The help for `-C`, naming the default path. SPEC §2.1.
+/// The help for `-C`, naming the default path.
 ///
 /// v1 computed it from XDG and `$HOME` at runtime and collapsed `$HOME` to
 /// `~`; so does this.
@@ -113,7 +112,7 @@ fn config_help() -> String {
     format!("Path to config file [default: {}]", default.display())
 }
 
-/// `debug`, `info`, `warning`/`warn`, `error`. SPEC §2.1.
+/// `debug`, `info`, `warning`/`warn`, `error`.
 fn parse_log_level(value: &str) -> Result<LogLevel, String> {
     match value {
         "debug" => Ok(LogLevel::Debug),
@@ -124,7 +123,7 @@ fn parse_log_level(value: &str) -> Result<LogLevel, String> {
     }
 }
 
-/// The subcommands. SPEC §2.2.
+/// The subcommands.
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Edit a command in `$EDITOR`.
@@ -157,19 +156,19 @@ pub enum Commands {
     #[command(hide = true, subcommand)]
     Internal(Internal),
 
-    /// Bare arguments are the `run` subcommand's. SPEC §2.2.
+    /// Bare arguments are the `run` subcommand's.
     #[command(external_subcommand)]
     External(Vec<String>),
 }
 
-/// Hidden helpers. SPEC has no equivalent; these exist for packaging.
+/// Hidden helpers, for packaging rather than for use.
 #[derive(Debug, Subcommand)]
 pub enum Internal {
     /// Write the `nixon(1)` man page to stdout.
     Mangen,
 }
 
-/// `nixon run`. SPEC §2.2.
+/// `nixon run`.
 #[derive(Debug, Default, Args)]
 pub struct RunArgs {
     /// Command to run.
@@ -188,7 +187,7 @@ pub struct RunArgs {
     pub select: bool,
 }
 
-/// `nixon project`. SPEC §2.2.
+/// `nixon project`.
 #[derive(Debug, Default, Args)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -217,7 +216,7 @@ pub struct ProjectArgs {
     pub select: bool,
 }
 
-/// `nixon eval`. SPEC §2.2.
+/// `nixon eval`.
 #[derive(Debug, Default, Args)]
 pub struct EvalArgs {
     /// The expression to evaluate.
@@ -237,7 +236,7 @@ pub struct EvalArgs {
     pub project: bool,
 }
 
-/// `nixon new`. SPEC §2.2.
+/// `nixon new`.
 #[derive(Debug, Args)]
 pub struct NewArgs {
     /// Name of the command.
@@ -255,7 +254,6 @@ pub struct NewArgs {
 }
 
 /// Any string is a language; unknown ones simply have no interpreter.
-/// SPEC §7.1.
 #[expect(
     clippy::unnecessary_wraps,
     reason = "clap's value_parser requires a fallible signature"
@@ -264,7 +262,7 @@ fn parse_language(value: &str) -> Result<Language, String> {
     Ok(Language::from(value))
 }
 
-/// A placeholder argument, e.g. `'${git-files:m}'`. SPEC §2.2.
+/// A placeholder argument, e.g. `'${git-files:m}'`.
 fn parse_placeholder(value: &str) -> Result<Placeholder, String> {
     parse_one(value).map_err(|err| err.to_string())
 }

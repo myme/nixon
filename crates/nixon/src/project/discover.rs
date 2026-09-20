@@ -1,4 +1,4 @@
-//! Finding projects under the configured source directories. SPEC §9.6.
+//! Finding projects under the configured source directories.
 
 use std::path::{Path, PathBuf};
 
@@ -6,7 +6,6 @@ use super::detect::{find_project, find_project_types, sort_projects};
 use super::{Project, ProjectType, worktree};
 
 /// What `~` and `$VAR` expand to, passed in so discovery stays testable.
-/// SPEC §9.6.
 pub struct Expansion<'a> {
     /// The value `~` expands to.
     pub home: &'a Path,
@@ -33,11 +32,11 @@ impl Expansion<'_> {
     }
 }
 
-/// Every project at or below the source directories, to `max_depth`. SPEC §9.6.
+/// Every project at or below the source directories, to `max_depth`.
 ///
 /// A candidate that is itself a project is yielded **and** still has its
-/// children scanned. SPEC §9.6 says the children are skipped in that case,
-/// but v1 concatenated both branches unconditionally; this reproduces v1.
+/// children scanned: v1 concatenated both branches unconditionally, and
+/// this reproduces it.
 pub fn find_projects(
     max_depth: i64,
     ptypes: &[ProjectType],
@@ -51,7 +50,7 @@ pub fn find_projects(
     scan(max_depth, ptypes, &roots)
 }
 
-/// The recursion, over paths that are already real. SPEC §9.6.
+/// The recursion, over paths that are already real.
 ///
 /// Only `project_dirs` entries are patterns. Putting a `read_dir` result back
 /// through the glob dropped any directory whose name contained a metacharacter
@@ -75,11 +74,11 @@ fn scan(max_depth: i64, ptypes: &[ProjectType], roots: &[PathBuf]) -> Vec<Projec
     found
 }
 
-/// Discovery as the subcommands see it: depth 1, sorted by path. SPEC §9.6.
+/// Discovery as the subcommands see it: depth 1, sorted by path.
 ///
 /// With `worktrees`, every git directory found also contributes its
 /// worktrees, which live inside bare repositories or outside `project_dirs`
-/// and would otherwise be missed. ENGINEERING §7.6.
+/// and would otherwise be missed.
 pub fn get_sorted_projects(
     ptypes: &[ProjectType],
     source_dirs: &[PathBuf],
@@ -95,7 +94,6 @@ pub fn get_sorted_projects(
 }
 
 /// The worktrees of every git directory at or below the source directories.
-/// ENGINEERING §7.6.
 ///
 /// Scanned independently of `found`, because a bare repository is not itself
 /// a project the marker search would return, yet its worktrees are.
@@ -147,7 +145,7 @@ fn git_dirs(source_dirs: &[PathBuf], expansion: &Expansion<'_>) -> Vec<PathBuf> 
     dirs
 }
 
-/// Immediate children of a directory, dotfiles included. SPEC §9.6.
+/// Immediate children of a directory, dotfiles included.
 fn children(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();

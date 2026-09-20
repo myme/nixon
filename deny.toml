@@ -4,7 +4,7 @@ all-features = true
 [advisories]
 ignore = []
 
-# ENGINEERING §6: MIT, Apache-2.0, BSD-*, MPL-2.0 (nucleo), Unicode-3.0.
+# Permissive only: MIT, Apache-2.0, BSD-*, MPL-2.0 (nucleo), Unicode-3.0.
 [licenses]
 allow = [
   "MIT",
@@ -27,8 +27,8 @@ unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 
 # Transitive dependencies of comrak. Both licences are permissive; they are
-# listed per-crate rather than added to the allow-list above so the policy in
-# ENGINEERING §6 keeps meaning what it says.
+# listed per-crate rather than added to the allow-list above so the policy
+# keeps meaning what it says.
 [[licenses.exceptions]]
 name = "fmt2io"
 allow = ["MITNFA"]

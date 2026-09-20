@@ -1,6 +1,6 @@
-//! Project types and the markers that identify them. SPEC §9.1.
+//! Project types and the markers that identify them.
 //!
-//! Detection and discovery land with SPEC §9.2-§9.6; this module is the pure
+//! Detection and discovery live in the submodules; this module is the pure
 //! data the config block parses into.
 
 pub mod detect;
@@ -9,9 +9,9 @@ pub mod worktree;
 
 use std::path::PathBuf;
 
-/// What makes a directory a project of some type. SPEC §9.1.
+/// What makes a directory a project of some type.
 ///
-/// SPEC lists a `Func` variant too; it was only constructible from Haskell
+/// v1 had a `Func` variant too; it was only constructible from Haskell
 /// code embedding nixon as a library, never from configuration, so v2 omits it.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProjectMarker {
@@ -25,7 +25,7 @@ pub enum ProjectMarker {
     Or(Vec<Self>),
 }
 
-/// A kind of project, and how to recognise one. SPEC §9.1.
+/// A kind of project, and how to recognise one.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectType {
     /// The name commands reference with `type="…"`.
@@ -36,7 +36,7 @@ pub struct ProjectType {
     pub description: String,
 }
 
-/// A directory recognised as a project. SPEC §9.1.
+/// A directory recognised as a project.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Project {
     /// The project directory's own name.

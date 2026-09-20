@@ -1,4 +1,4 @@
-//! The commands available in a project. SPEC §5.5.
+//! The commands available in a project.
 
 use std::path::{Path, PathBuf};
 
@@ -6,7 +6,7 @@ use crate::command::{Command, CommandLocation};
 use crate::config::Config;
 use crate::project::Project;
 
-/// Every command offered in a project, sorted by name. SPEC §5.5.
+/// Every command offered in a project, sorted by name.
 ///
 /// Hidden `_commands` are included: placeholders reference them by name. The
 /// run picker filters them out itself.
@@ -32,10 +32,10 @@ pub fn find_project_commands(config: &Config, project: &Project) -> Vec<Command>
     commands
 }
 
-/// Executables in the project's `bin_dirs`, as commands. SPEC §5.5.
+/// Executables in the project's `bin_dirs`, as commands.
 ///
-/// SPEC says "every entry that is executable", which is what this does, and
-/// what v1 plainly meant. v1 itself used turtle's `lsif`, whose predicate
+/// Every entry that is executable, which is what v1 plainly meant. v1
+/// itself used turtle's `lsif`, whose predicate
 /// only decides whether to *descend* into a directory: it yielded every
 /// entry, executable or not, directories included, and recursed into any
 /// traversable subdirectory. Non-executable files became commands that could

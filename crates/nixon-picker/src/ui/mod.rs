@@ -1,4 +1,4 @@
-//! The picker's state machine and rendering. ENGINEERING §4.1.
+//! The picker's state machine and rendering.
 
 pub mod keymap;
 pub mod render;
@@ -20,7 +20,7 @@ use crate::selection::{Selection, SelectionType};
 use crate::textbuf::TextBuffer;
 use keymap::{Action, action_for};
 
-/// One visible row, ready to draw. ENGINEERING §4.1.
+/// One visible row, ready to draw.
 ///
 /// Built for the handful of rows on screen, never for the whole list.
 pub struct Row {
@@ -34,7 +34,7 @@ pub struct Row {
     pub is_cursor: bool,
 }
 
-/// The picker's state. ENGINEERING §4.1.
+/// The picker's state.
 ///
 /// Matching runs on nucleo's background worker: the UI thread reparses the
 /// pattern on a keystroke and reads a snapshot per frame, and never makes a
@@ -42,7 +42,7 @@ pub struct Row {
 pub struct App {
     nucleo: Nucleo<Candidate>,
     matcher: Matcher,
-    /// The query line, with its own cursor. ENGINEERING §7.2.
+    /// The query line, with its own cursor.
     pub query: TextBuffer,
     /// Index into the current matches.
     pub cursor: usize,
@@ -50,7 +50,7 @@ pub struct App {
     ///
     /// Keyed rather than positional so marks survive a query change, and
     /// ordered by identity so confirming returns them in list order, however
-    /// they were marked. ENGINEERING §7.2.
+    /// they were marked.
     pub marked: BTreeMap<u32, Candidate>,
     /// First visible row.
     pub offset: usize,
@@ -209,7 +209,7 @@ impl App {
         self.outcome.is_some()
     }
 
-    /// Applies one key press. ENGINEERING §7.2.
+    /// Applies one key press.
     pub fn handle(&mut self, key: KeyEvent) {
         match action_for(key, &self.options.expect) {
             Action::Edit(edit) => {
@@ -224,7 +224,7 @@ impl App {
                     self.offset = 0;
                     // Marks are deliberately kept: they are keyed by
                     // candidate, so narrowing away a marked row does not
-                    // unmark it. ENGINEERING §7.2.
+                    // unmark it.
                     // A frame's worth of matching, no more.
                     self.settle(Duration::from_millis(10));
                 }
@@ -280,7 +280,7 @@ impl App {
         self.scroll_into_view();
     }
 
-    /// Moves `rows` candidates, at least one. ENGINEERING §7.2.
+    /// Moves `rows` candidates, at least one.
     fn page(&mut self, direction: isize, rows: usize) {
         for _ in 0..rows.max(1) {
             self.move_cursor(direction);
@@ -297,7 +297,7 @@ impl App {
         self.offset = self.offset.min(matched.saturating_sub(self.height));
     }
 
-    /// Marks or unmarks the current row, then steps `delta`. ENGINEERING §7.2.
+    /// Marks or unmarks the current row, then steps `delta`.
     ///
     /// fzf moves on after marking so a run of rows can be taken without
     /// reaching for the arrows; Shift-Tab does the same upwards.
@@ -313,7 +313,7 @@ impl App {
         }
     }
 
-    /// Marked rows if any, else the row under the cursor. SPEC §8.2.
+    /// Marked rows if any, else the row under the cursor.
     fn confirm(&mut self, kind: SelectionType) {
         let items: Vec<Candidate> = if self.marked.is_empty() {
             self.current().into_iter().collect()
@@ -614,7 +614,7 @@ mod tests {
     }
 
     /// fzf keeps marks across query changes: mark under one search, change
-    /// it, mark more, and Enter returns everything. ENGINEERING §7.2.
+    /// it, mark more, and Enter returns everything.
     #[test]
     fn marks_survive_a_query_change() {
         let mut app = multi_app(&["alpha-one", "beta-two", "alpha-three"]);
@@ -809,7 +809,7 @@ mod tests {
     }
 
     /// Guards the fix for the 95k-candidate slowdown: a keystroke must not
-    /// cost a pass over the candidates. ENGINEERING §2.1.
+    /// cost a pass over the candidates.
     ///
     /// The threshold is deliberately loose. This runs unoptimised and
     /// alongside the other nix checks, where it measured 57ms against a

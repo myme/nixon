@@ -1,4 +1,4 @@
-//! The edit-before-run editor. ENGINEERING §7.1 decision 4, §7.2.
+//! The edit-before-run editor.
 //!
 //! Replaces v1's single-line haskeline prompt. It shares the query line's
 //! whole readline keymap, adding only multi-line movement: `Up`/`Down`
@@ -26,7 +26,7 @@ pub enum Edited {
     Canceled,
 }
 
-/// One key press in the editor. ENGINEERING §7.2.
+/// One key press in the editor.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EditAction {
     /// `Enter`: submit.
@@ -39,7 +39,7 @@ pub enum EditAction {
     Ignore,
 }
 
-/// Maps a key in the editor. ENGINEERING §7.2.
+/// Maps a key in the editor.
 ///
 /// The same bindings as the query line; only the keys the picker reserves
 /// for the candidate list differ, because here they move between lines.
@@ -66,7 +66,7 @@ pub fn action_for(key: KeyEvent) -> EditAction {
 /// Opens the editor on `initial` and returns what the user did.
 ///
 /// An empty submission is still [`Edited::Submitted`]; the caller reports
-/// `Empty command.` as SPEC §10.7 does.
+/// `Empty command.`, as running an empty source does.
 pub fn edit_text(initial: &str) -> io::Result<Edited> {
     let mut buffer = TextBuffer::new(initial);
     let mut guard = TerminalGuard::new()?;
@@ -89,7 +89,7 @@ pub fn edit_text(initial: &str) -> io::Result<Edited> {
     }
 }
 
-/// Draws the prompt and the buffer, with the cursor. ENGINEERING §7.2.
+/// Draws the prompt and the buffer, with the cursor.
 pub fn render(buffer: &TextBuffer, frame: &mut Frame<'_>) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -161,7 +161,7 @@ mod tests {
         assert_eq!(action_for(ctrl('c')), EditAction::Cancel);
     }
 
-    /// The whole query-line keymap, not a subset. ENGINEERING §7.2.
+    /// The whole query-line keymap, not a subset.
     #[rstest]
     #[case(ctrl('a'), Edit::Move(Motion::Home))]
     #[case(ctrl('e'), Edit::Move(Motion::End))]

@@ -1,5 +1,4 @@
 //! End-to-end tests of the subcommand layer with fake picker and runner.
-//! SPEC §5.6, §7.3, §10.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -373,8 +372,8 @@ fn the_nix_wrapper_reaches_the_runner_when_enabled() {
     assert_eq!(app.runner.calls[0].1.argv[0], "nix-shell");
 }
 
-/// SPEC §5.6: a line-oriented placeholder feeds the picker as its command
-/// runs, so the picker opens without waiting for it.
+/// A line-oriented placeholder feeds the picker as its command runs, so the
+/// picker opens without waiting for it.
 #[test]
 fn a_lines_placeholder_streams_its_candidates() {
     let fixture = Fixture::new(VIM_FILE_MD);

@@ -1,6 +1,6 @@
-//! Column and field extraction from a command's output. SPEC §6.
+//! Column and field extraction from a command's output.
 
-/// Splits column-formatted output into rows of cells. SPEC §6.
+/// Splits column-formatted output into rows of cells.
 ///
 /// Column widths come from the first row, so cells keep embedded spaces and a
 /// row wider than the first shifts, exactly as `column`-style output does.
@@ -13,7 +13,7 @@ pub fn parse_columns(has_header: bool, rows: &[String]) -> Vec<Vec<String>> {
     data.iter().map(|row| split_row(&widths, row)).collect()
 }
 
-/// Builds `(title, value)` candidates from column output. SPEC §6.
+/// Builds `(title, value)` candidates from column output.
 ///
 /// The title is the row as the command printed it; the value is the selected
 /// columns joined by single spaces. A header row is dropped from both, so the
@@ -32,7 +32,7 @@ pub fn format_columns(has_header: bool, cols: &[usize], rows: &[String]) -> Vec<
         .collect()
 }
 
-/// Keeps the 1-based `cols` of every row, in the rows' own order. SPEC §6.
+/// Keeps the 1-based `cols` of every row, in the rows' own order.
 pub fn pick_columns(cols: &[usize], rows: &[Vec<String>]) -> Vec<Vec<String>> {
     rows.iter().map(|row| pick_fields(cols, row)).collect()
 }

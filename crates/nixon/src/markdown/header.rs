@@ -1,4 +1,4 @@
-//! The Pandoc-style heading attribute block, `{.arg key="value"}`. SPEC §4.3.
+//! The Pandoc-style heading attribute block, `{.arg key="value"}`.
 
 use winnow::ascii::space0;
 use winnow::combinator::{alt, delimited, preceded, repeat};
@@ -22,7 +22,7 @@ impl HeaderArgs {
         self.args.iter().any(|arg| arg == key)
     }
 
-    /// Every value given for a key, in order. SPEC §4.4 uses this for `type`.
+    /// Every value given for a key, in order. `type` may be repeated.
     pub fn kwarg_values(&self, key: &str) -> Vec<String> {
         self.kwargs
             .iter()
@@ -32,7 +32,7 @@ impl HeaderArgs {
     }
 }
 
-/// Parses a heading's text. A heading that does not parse is all name. SPEC §4.3.
+/// Parses a heading's text. A heading that does not parse is all name.
 pub fn parse_header_args(input: &str) -> HeaderArgs {
     // Anything after the attribute block is ignored rather than fatal, as in v1.
     let mut rest = input;
@@ -77,7 +77,7 @@ fn arg(input: &mut &str) -> ModalResult<Item> {
         .parse_next(input)
 }
 
-/// SPEC §7.3 widens values: unquoted `[A-Za-z0-9_-]+`, quoted anything but `"`.
+/// Values are unquoted `[A-Za-z0-9_-]+`, or quoted anything but `"`.
 fn kwarg(input: &mut &str) -> ModalResult<Item> {
     let key = identifier.parse_next(input)?;
     '='.parse_next(input)?;

@@ -1,4 +1,4 @@
-//! Flattens the comrak AST into the node list the walker consumes. SPEC §4.2.
+//! Flattens the comrak AST into the node list the walker consumes.
 
 use comrak::nodes::{AstNode, NodeValue};
 
@@ -6,7 +6,7 @@ use super::header::{HeaderArgs, parse_header_args};
 use crate::command::{DescSpan, Description};
 use crate::language::Language;
 
-/// One flattened markdown node. SPEC §4.2.
+/// One flattened markdown node.
 #[derive(Clone, Debug)]
 pub enum Node {
     /// A heading, with its attributes and the line it starts on.
@@ -38,7 +38,7 @@ pub enum Node {
     },
 }
 
-/// Flattens a document. SPEC §4.2.
+/// Flattens a document.
 pub fn extract<'a>(node: &'a AstNode<'a>) -> Vec<Node> {
     let data = node.data.borrow();
     let pos = data.sourcepos;
@@ -104,7 +104,7 @@ pub fn extract<'a>(node: &'a AstNode<'a>) -> Vec<Node> {
     }
 }
 
-/// The text of a node list, concatenated as written. SPEC §4.2.
+/// The text of a node list, concatenated as written.
 ///
 /// v1 joined the pieces with a space, which put two spaces either side of
 /// every inline code span. That was reproduced on purpose and is visible in
@@ -113,7 +113,7 @@ fn get_text<'a>(nodes: &[&'a AstNode<'a>]) -> String {
     description(nodes).plain()
 }
 
-/// A node list as description spans, inline code kept apart. SPEC §4.5.
+/// A node list as description spans, inline code kept apart.
 fn description<'a>(nodes: &[&'a AstNode<'a>]) -> Description {
     let mut spans = Vec::new();
     collect(nodes, &mut spans);

@@ -1,4 +1,4 @@
-//! Turning a command heading and the nodes after it into a command. SPEC §4.5.
+//! Turning a command heading and the nodes after it into a command.
 
 use super::MarkdownError;
 use super::extract::Node;
@@ -8,8 +8,8 @@ use crate::placeholder::scan_all;
 /// Parses one command, returning it and the nodes it did not consume.
 ///
 /// Paragraphs and container ends between the heading and the code block are
-/// skipped; the first paragraph becomes the description. SPEC §4.5 plus the
-/// §7.3 fix that non-paragraph blocks no longer fail the whole file.
+/// skipped; the first paragraph becomes the description. Unlike v1, a
+/// non-paragraph block between the two no longer fails the whole file.
 pub fn parse_command<'n>(
     file: &str,
     line: usize,

@@ -1,4 +1,4 @@
-//! Candidates that arrive over time. ENGINEERING §4.1.
+//! Candidates that arrive over time.
 //!
 //! Lets the picker open and stay interactive while whatever produces its
 //! candidates is still running.

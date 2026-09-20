@@ -1,4 +1,4 @@
-//! The command/config state machine and location tracking. SPEC §4.4, §4.6.
+//! The command/config state machine and location tracking.
 
 use super::MarkdownError;
 use super::command::parse_command;
@@ -15,19 +15,19 @@ pub struct ParsedFile {
     pub commands: Vec<Command>,
 }
 
-/// One enclosing heading and the project types it contributes. SPEC §4.4.
+/// One enclosing heading and the project types it contributes.
 struct Frame {
     level: usize,
     types: Vec<String>,
 }
 
-/// The command whose location has not been closed yet. SPEC §4.6.
+/// The command whose location has not been closed yet.
 struct Pending {
     line: usize,
     level: usize,
 }
 
-/// Walks the flattened nodes. SPEC §4.4.
+/// Walks the flattened nodes.
 pub fn walk(file: &str, nodes: &[Node]) -> Result<ParsedFile, MarkdownError> {
     let mut parsed = ParsedFile::default();
     let mut stack: Vec<Frame> = Vec::new();
@@ -45,8 +45,8 @@ pub fn walk(file: &str, nodes: &[Node]) -> Result<ParsedFile, MarkdownError> {
                 close_location(file, &mut parsed.commands, pending.as_ref(), *line);
 
                 // Any heading scopes its `type=` to everything nested beneath
-                // it, until a sibling or shallower heading. SPEC §4.4 BUG: v1
-                // only did this for command headings.
+                // it, until a sibling or shallower heading. v1 documented
+                // this but only did it for command headings.
                 stack.retain(|frame| frame.level < *level);
                 // Innermost enclosing heading first, as v1 accumulated them.
                 let inherited: Vec<String> = stack
@@ -92,7 +92,7 @@ pub fn walk(file: &str, nodes: &[Node]) -> Result<ParsedFile, MarkdownError> {
     Ok(parsed)
 }
 
-/// Closes the most recent command's location, first write wins. SPEC §4.6.
+/// Closes the most recent command's location, first write wins.
 fn close_location(file: &str, commands: &mut [Command], pending: Option<&Pending>, next: usize) {
     let Some(pending) = pending else { return };
     let Some(command) = commands.last_mut() else {
@@ -109,7 +109,7 @@ fn close_location(file: &str, commands: &mut [Command], pending: Option<&Pending
     });
 }
 
-/// A config heading must be followed immediately by a code block. SPEC §3.4.
+/// A config heading must be followed immediately by a code block.
 fn parse_config<'n>(
     file: &str,
     line: usize,
@@ -133,7 +133,7 @@ fn parse_config<'n>(
     Ok((config, &nodes[1..]))
 }
 
-/// Exactly one config block per file. SPEC §3.4.
+/// Exactly one config block per file.
 fn set_config(
     file: &str,
     line: usize,

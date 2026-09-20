@@ -1,4 +1,4 @@
-//! The JSON/YAML schema of a config block. SPEC §3.4.
+//! The JSON/YAML schema of a config block.
 
 use std::path::PathBuf;
 
@@ -6,10 +6,10 @@ use serde::Deserialize;
 
 use crate::project::{ProjectMarker, ProjectType};
 
-/// A config block's fields. Unknown keys are ignored. SPEC §3.4.
+/// A config block's fields. Unknown keys are ignored.
 ///
-/// SPEC also lists `terminal`; ENGINEERING §7.2 removes it, so it now falls
-/// under the unknown-keys rule like any other stray key.
+/// v1's `terminal` went with the backend concept, so it now falls under the
+/// unknown-keys rule like any other stray key.
 #[derive(Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct ConfigBlock {
@@ -27,11 +27,11 @@ pub struct ConfigBlock {
     pub use_direnv: Option<bool>,
     /// Wrap commands in `nix-shell`.
     pub use_nix: Option<bool>,
-    /// Whether discovery also finds git worktrees. ENGINEERING §7.6.
+    /// Whether discovery also finds git worktrees.
     pub git_worktrees: Option<bool>,
 }
 
-/// One entry of `project_types`. `name` and `desc` are required. SPEC §3.4.
+/// One entry of `project_types`. `name` and `desc` are required.
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 pub struct ProjectTypeSpec {
     /// The type's id.

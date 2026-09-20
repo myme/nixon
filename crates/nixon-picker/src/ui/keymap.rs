@@ -1,4 +1,4 @@
-//! Key bindings. ENGINEERING §7.2.
+//! Key bindings.
 //!
 //! The query line follows readline/fzf defaults. Note that `Ctrl-J` and
 //! `Ctrl-K` move in the list, as in fzf, rather than editing the line.
@@ -37,7 +37,7 @@ pub enum Action {
     Ignore,
 }
 
-/// Maps a key in the picker, `expect` keys taking precedence. ENGINEERING §7.2.
+/// Maps a key in the picker, `expect` keys taking precedence.
 pub fn action_for(key: KeyEvent, expect: &[(KeyEvent, SelectionType)]) -> Action {
     if let Some((_, kind)) = expect
         .iter()
@@ -80,7 +80,6 @@ pub fn action_for(key: KeyEvent, expect: &[(KeyEvent, SelectionType)]) -> Action
 }
 
 /// The readline bindings shared by the query line and the editor.
-/// ENGINEERING §7.2.
 pub const fn line_edit(key: KeyEvent) -> Option<Edit> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let alt = key.modifiers.contains(KeyModifiers::ALT);

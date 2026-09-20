@@ -1,4 +1,4 @@
-//! What happens once a command has been selected. SPEC §10.7.
+//! What happens once a command has been selected.
 
 use nixon_picker::{Picker, Selection, SelectionType};
 
@@ -12,7 +12,7 @@ use crate::project::Project;
 use crate::resolve::Resolver;
 
 impl<P: Picker, R: ProcessRunner> App<P, R> {
-    /// Acts on a command selection. SPEC §10.7.
+    /// Acts on a command selection.
     ///
     /// `--insert` and `--select` are checked before the selection type, so
     /// `nixon -i` followed by Alt-Enter still just prints the source.
@@ -52,7 +52,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         if opts.select {
             let values = self.select_from(project, &command)?;
             output::lines(&values)?;
-            // v1 printed a trailing blank line after the values. SPEC §10.7.
+            // v1 printed a trailing blank line after the values.
             output::line("")?;
             return Ok(0);
         }
@@ -71,7 +71,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         }
     }
 
-    /// Resolves a command's placeholders and runs it. SPEC §5.6, §7.3.
+    /// Resolves a command's placeholders and runs it.
     pub fn run_cmd(
         &mut self,
         project: &Project,
@@ -111,7 +111,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         )
     }
 
-    /// Runs a command and offers its output for selection. SPEC §10.7.
+    /// Runs a command and offers its output for selection.
     ///
     /// `--select` treats the chosen command as a candidate producer, not as
     /// something to run for its effect; multi-select is forced on.
@@ -144,7 +144,6 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     }
 
     /// Opens the source in an inline editor, then runs what comes back.
-    /// SPEC §10.7, ENGINEERING §7.1 decision 4.
     fn edit_then_run(
         &mut self,
         project: &Project,
@@ -164,7 +163,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         self.run_cmd(project, &edited_command, args)
     }
 
-    /// Opens a command where it is defined. SPEC §10.5.
+    /// Opens a command where it is defined.
     pub fn visit_cmd(&mut self, command: &Command) -> Result<()> {
         let location = command.location.as_ref().ok_or_else(|| {
             NixonError::NothingSelected("Unable to find command location.".to_owned())

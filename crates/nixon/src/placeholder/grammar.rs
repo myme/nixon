@@ -1,4 +1,4 @@
-//! The placeholder grammar. SPEC §5.3.
+//! The placeholder grammar.
 //!
 //! ```text
 //! placeholder := start '{' name modifiers? '}'
@@ -15,11 +15,11 @@ use winnow::{ModalResult, Parser};
 
 use super::{Placeholder, PlaceholderFormat, PlaceholderType};
 
-/// A placeholder that could not be parsed. SPEC §5.3.
+/// A placeholder that could not be parsed.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ParseError {
     /// Two format modifiers on one placeholder, e.g. `| cols 1 | fields 2`.
-    /// SPEC §7.3 tightens this: v1 only rejected some orderings.
+    /// v1 only rejected some orderings of this.
     #[error("Placeholder format already set")]
     FormatAlreadySet,
     /// The grammar did not match.
@@ -46,7 +46,7 @@ pub fn parse_one(input: &str) -> Result<Placeholder, ParseError> {
 /// Collects every placeholder in a string, skipping anything else.
 ///
 /// A `${`, `<{` or `alias={` that is never closed is an error rather than
-/// ordinary text, matching v1's committed parse. SPEC §4.5.1.
+/// ordinary text, matching v1's committed parse.
 pub fn scan_all(input: &str) -> Result<Vec<Placeholder>, ParseError> {
     let mut found = Vec::new();
     let mut rest = input;
@@ -99,7 +99,7 @@ fn placeholder(input: &mut &str) -> ModalResult<Result<Placeholder, ParseError>>
     Ok(build(kind, name, modifiers))
 }
 
-/// Folds modifiers onto a placeholder, rejecting a second format. SPEC §7.3.
+/// Folds modifiers onto a placeholder, rejecting a second format.
 fn build(
     kind: PlaceholderType,
     name: &str,
@@ -168,7 +168,7 @@ fn columns_modifier(input: &mut &str) -> ModalResult<Modifier> {
     }))
 }
 
-/// `filter "…"`. SPEC §7.3 widens the value to anything but `"`.
+/// `filter "…"`. v1 accepted alphanumerics only; this takes anything but `"`.
 fn filter_modifier(input: &mut &str) -> ModalResult<Modifier> {
     preceded(
         ("filter", space0),
@@ -247,7 +247,7 @@ mod tests {
         );
     }
 
-    /// SPEC §5.3 QUIRK: the pipe needs no surrounding spaces.
+    /// The pipe needs no surrounding spaces.
     #[rstest]
     #[case("${a|multi}")]
     #[case("${a | multi}")]

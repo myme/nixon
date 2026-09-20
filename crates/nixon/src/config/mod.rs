@@ -1,4 +1,4 @@
-//! The effective configuration and how its sources combine. SPEC §3.
+//! The effective configuration and how its sources combine.
 
 pub mod load;
 pub mod schema;
@@ -10,7 +10,7 @@ use crate::command::Command;
 use crate::project::ProjectType;
 
 /// Verbosity, ordered so a message is emitted iff its level is at least the
-/// configured one. SPEC §11.
+/// configured one.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum LogLevel {
     /// Everything.
@@ -23,11 +23,11 @@ pub enum LogLevel {
     Error,
 }
 
-/// Why a config could not be loaded. SPEC §4.7.
+/// Why a config could not be loaded.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ConfigError {
     /// The config file does not exist. Tolerated for the global config in v2
-    /// (ENGINEERING §7.3); v1 treated it as fatal.
+    /// in v2; v1 treated it as fatal.
     #[error("no such file")]
     NoSuchFile,
     /// The file is empty or only whitespace.
@@ -41,10 +41,9 @@ pub enum ConfigError {
     Markdown(#[from] crate::markdown::MarkdownError),
 }
 
-/// The effective configuration. SPEC §3.2.
+/// The effective configuration.
 ///
-/// `backend`, `force_tty` and `terminal` are gone with the backend concept
-/// (ENGINEERING §7.2).
+/// `backend`, `force_tty` and `terminal` are gone with the backend concept.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Config {
     /// Directories of executables offered as commands.
@@ -65,27 +64,27 @@ pub struct Config {
     pub use_nix: Option<bool>,
     /// Verbosity.
     pub loglevel: Option<LogLevel>,
-    /// Whether discovery also finds git worktrees. ENGINEERING §7.6.
+    /// Whether discovery also finds git worktrees.
     pub git_worktrees: Option<bool>,
 }
 
 impl Config {
-    /// The built-in defaults every other source merges on top of. SPEC §3.2.
+    /// The built-in defaults every other source merges on top of.
     pub fn defaults() -> Self {
         Self {
             loglevel: Some(LogLevel::Warning),
-            // Worktree discovery is on unless turned off. ENGINEERING §7.6.
+            // Worktree discovery is on unless turned off.
             git_worktrees: Some(true),
             ..Self::default()
         }
     }
 
-    /// Whether to look for git worktrees. ENGINEERING §7.6.
+    /// Whether to look for git worktrees.
     pub fn finds_worktrees(&self) -> bool {
         self.git_worktrees.unwrap_or(true)
     }
 
-    /// Merges `rhs` over `self`. SPEC §3.3.
+    /// Merges `rhs` over `self`.
     ///
     /// Options take the right-hand value when it is set; path and type lists
     /// concatenate left-then-right; commands concatenate **right first**, so
@@ -127,7 +126,7 @@ impl From<schema::ConfigBlock> for Config {
     }
 }
 
-/// Parses a config block. SPEC §3.4: `json` or no language is JSON, `yaml` is
+/// Parses a config block: `json` or no language is JSON, `yaml` is
 /// YAML, anything else is an error.
 pub fn parse_block(lang: &str, source: &str) -> Result<Config, ConfigError> {
     let block: schema::ConfigBlock = match lang {

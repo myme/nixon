@@ -1,4 +1,4 @@
-//! The subcommand layer. SPEC §10, ENGINEERING §4.2.
+//! The subcommand layer.
 
 pub mod edit;
 pub mod eval;
@@ -23,42 +23,42 @@ use crate::project::detect::find_in_project_or_default;
 use crate::project::{Project, discover};
 
 /// What the subcommands need from the environment, passed in rather than
-/// read, so the whole layer runs in tests. ENGINEERING §4.2.
+/// read, so the whole layer runs in tests.
 #[derive(Clone, Debug, Default)]
 pub struct Environment {
     /// Where nixon was invoked.
     pub cwd: PathBuf,
-    /// `$SHELL`, for commands with no language. SPEC §7.1.
+    /// `$SHELL`, for commands with no language.
     pub shell: Option<String>,
-    /// `$DIRENV_DIR`, for the direnv wrapper. SPEC §7.3.
+    /// `$DIRENV_DIR`, for the direnv wrapper.
     pub direnv_dir: Option<String>,
-    /// `$VISUAL`, then `$EDITOR`; `nano` when neither is set. SPEC §10.5.
+    /// `$VISUAL`, then `$EDITOR`; `nano` when neither is set.
     pub editor: Option<String>,
 }
 
 impl Environment {
-    /// The editor to open a command in. SPEC §10.5.
+    /// The editor to open a command in.
     pub fn editor(&self) -> &str {
         self.editor.as_deref().unwrap_or("nano")
     }
 }
 
-/// Options shared by `run` and the command half of `project`. SPEC §10.1.
+/// Options shared by `run` and the command half of `project`.
 #[derive(Clone, Debug, Default)]
 pub struct RunOpts {
     /// The command name, used as the picker's query.
     pub command: Option<String>,
     /// Arguments passed to the command.
     pub args: Vec<String>,
-    /// Print the command's source instead of running it. SPEC §10.7.
+    /// Print the command's source instead of running it.
     pub insert: bool,
-    /// List commands instead of running one. SPEC §10.1.
+    /// List commands instead of running one.
     pub list: bool,
-    /// Run the command and offer its output for selection. SPEC §10.7.
+    /// Run the command and offer its output for selection.
     pub select: bool,
 }
 
-/// The evaluation context for a project's config. SPEC §7.2, §7.3.
+/// The evaluation context for a project's config.
 ///
 /// A free function rather than a method so callers can hold it while
 /// borrowing the picker and runner mutably.
@@ -71,7 +71,7 @@ pub fn context<'a>(env: &'a Environment, config: &'a Config, cache: &'a Path) ->
     }
 }
 
-/// Everything the subcommands run against. ENGINEERING §4.2.
+/// Everything the subcommands run against.
 pub struct App<P: Picker, R: ProcessRunner> {
     /// The effective configuration, before any local config is merged.
     pub config: Config,
@@ -98,12 +98,12 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     }
 
     /// The project containing the current directory, or it as a project.
-    /// SPEC §9.5.
+    ///
     pub fn current_project(&self) -> Project {
         find_in_project_or_default(&self.config.project_types, &self.env.cwd)
     }
 
-    /// Every project under the configured source directories. SPEC §9.6.
+    /// Every project under the configured source directories.
     pub fn projects(&self) -> Vec<Project> {
         let home = self.dirs.home.clone();
         let expansion = discover::Expansion {
@@ -119,7 +119,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     }
 
     /// The config for a project: the global one with its local one merged on
-    /// top. SPEC §3.1.
+    /// top.
     pub fn config_for(&self, project: &Project) -> Result<Config> {
         Ok(load::find_local(&project.path())?.map_or_else(
             || self.config.clone(),
@@ -127,13 +127,13 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         ))
     }
 
-    /// Every command offered in a project, local config applied. SPEC §5.5.
+    /// Every command offered in a project, local config applied.
     pub fn commands_for(&self, project: &Project) -> Result<Vec<Command>> {
         let config = self.config_for(project)?;
         Ok(find_project_commands(&config, project))
     }
 
-    /// Finds a command by name among a project's commands. SPEC §5.5.
+    /// Finds a command by name among a project's commands.
     pub fn find_named(commands: &[Command], name: &str) -> Result<Command> {
         commands
             .iter()

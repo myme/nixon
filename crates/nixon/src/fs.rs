@@ -1,9 +1,9 @@
-//! Path lookups and the directories nixon reads. SPEC §3.1, §7.2, §9.8.
+//! Path lookups and the directories nixon reads.
 
 use std::path::{Path, PathBuf};
 
 /// The directories nixon reads, resolved once so nothing below reads the
-/// environment. SPEC §3.1, §7.2.
+/// environment.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Dirs {
     /// The user's home, used to shorten paths for display.
@@ -27,18 +27,18 @@ impl Dirs {
         })
     }
 
-    /// The global config file, `$XDG_CONFIG_HOME/nixon.md`. SPEC §3.1.
+    /// The global config file, `$XDG_CONFIG_HOME/nixon.md`.
     pub fn global_config(&self) -> PathBuf {
         self.config.join("nixon.md")
     }
 
-    /// The script cache, `$XDG_CACHE_HOME/nixon`. SPEC §7.2.
+    /// The script cache, `$XDG_CACHE_HOME/nixon`.
     pub fn cache_dir(&self) -> PathBuf {
         self.cache.join("nixon")
     }
 }
 
-/// Finds `name` in `start` or the nearest ancestor holding it. SPEC §3.1.
+/// Finds `name` in `start` or the nearest ancestor holding it.
 ///
 /// The filesystem root is never itself tested, matching v1's loop condition.
 pub fn find_dominating_file(start: &Path, name: &str) -> Option<PathBuf> {
@@ -54,7 +54,7 @@ pub fn find_dominating_file(start: &Path, name: &str) -> Option<PathBuf> {
     }
 }
 
-/// Replaces a leading `$HOME/` with `~/`. SPEC §9.8.
+/// Replaces a leading `$HOME/` with `~/`.
 ///
 /// A path equal to `$HOME` is left alone: v1 stripped `$HOME/`, with the
 /// separator, so the home directory itself never matched.

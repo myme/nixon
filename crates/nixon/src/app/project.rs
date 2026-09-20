@@ -1,4 +1,4 @@
-//! `nixon project`. SPEC §10.2.
+//! `nixon project`.
 
 use std::path::PathBuf;
 
@@ -12,7 +12,7 @@ use crate::project::Project;
 use crate::project::detect::{find_in_project, inspect};
 use crate::select;
 
-/// What `project` was asked to do. SPEC §10.2.
+/// What `project` was asked to do.
 #[derive(Clone, Debug, Default)]
 pub struct ProjectOpts {
     /// The project name, used as the picker's query.
@@ -28,7 +28,7 @@ pub struct ProjectOpts {
 }
 
 impl<P: Picker, R: ProcessRunner> App<P, R> {
-    /// Selects a project and then a command in it. SPEC §10.2.
+    /// Selects a project and then a command in it.
     pub fn project(&mut self, opts: &ProjectOpts) -> Result<ExitCode> {
         if opts.list {
             return self.list_projects(opts.project.as_deref());
@@ -59,7 +59,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         }
     }
 
-    /// Prints matching project paths with `~` for `$HOME`. SPEC §10.2.
+    /// Prints matching project paths with `~` for `$HOME`.
     pub fn list_projects(&mut self, query: Option<&str>) -> Result<ExitCode> {
         let projects = self.projects();
         let candidates = select::project_candidates(&projects, &self.dirs.home);
@@ -86,7 +86,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         Ok(0)
     }
 
-    /// Picks projects, honouring the `.` shortcut. SPEC §10.2.
+    /// Picks projects, honouring the `.` shortcut.
     ///
     /// `.` means the project containing the current directory, falling back
     /// to an unfiltered picker when there is none.
@@ -128,7 +128,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         }
     }
 
-    /// Picks exactly one project. SPEC §10.3 uses this for `eval --project`.
+    /// Picks exactly one project, which is what `eval --project` wants.
     pub fn pick_one_project(&mut self, query: Option<&str>) -> Result<Project> {
         let (_, projects) = self.pick_projects(query, false)?;
         projects
@@ -137,7 +137,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             .ok_or_else(|| NixonError::NothingSelected("No project selected.".to_owned()))
     }
 
-    /// The project for a query, or the current one. SPEC §10.3.
+    /// The project for a query, or the current one.
     pub fn project_for_query(&mut self, query: Option<&str>) -> Result<Project> {
         if query == Some(".")
             && let Some(project) = find_in_project(&self.config.project_types, &self.env.cwd)

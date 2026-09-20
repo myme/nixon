@@ -1,4 +1,4 @@
-//! Evaluating commands. SPEC §7.2, §7.3, ENGINEERING §7.2.
+//! Evaluating commands.
 
 pub mod cache;
 pub mod wrap;
@@ -10,22 +10,22 @@ use crate::config::Config;
 use crate::error::{NixonError, Result};
 use crate::process::{Captured, ExitCode, Invocation, ProcessRunner};
 
-/// The variable every command can read to find its project. SPEC §5.6.
+/// The variable every command can read to find its project.
 pub const PROJECT_PATH_VAR: &str = "nixon_project_path";
 
 /// Everything evaluation needs that comes from outside the pure layers.
 pub struct Context<'a> {
     /// The effective configuration.
     pub config: &'a Config,
-    /// Where scripts are cached. SPEC §7.2.
+    /// Where scripts are cached.
     pub cache_dir: &'a Path,
-    /// `$SHELL`, for [`crate::language::Language::None`]. SPEC §7.1.
+    /// `$SHELL`, for [`crate::language::Language::None`].
     pub shell: Option<&'a str>,
-    /// `$DIRENV_DIR`, for the direnv wrapper. SPEC §7.3.
+    /// `$DIRENV_DIR`, for the direnv wrapper.
     pub direnv_dir: Option<&'a str>,
 }
 
-/// One command, ready to run. SPEC §7.3.
+/// One command, ready to run.
 pub struct Evaluation {
     /// Positional arguments after the script path.
     pub args: Vec<String>,
@@ -37,7 +37,7 @@ pub struct Evaluation {
     pub stdin: Option<Vec<String>>,
 }
 
-/// Writes the script and builds the invocation that runs it. SPEC §7.3.
+/// Writes the script and builds the invocation that runs it.
 ///
 /// `direnv` is tried before `nix`, and the first that applies wins.
 pub fn prepare(
@@ -74,7 +74,7 @@ pub fn prepare(
     })
 }
 
-/// Runs a command. SPEC §7.3, ENGINEERING §7.2.
+/// Runs a command.
 ///
 /// The decision tree is now just `is_bg`: detached if the heading ended in
 /// `&`, foreground otherwise. The terminal-spawning branch went with the GUI
@@ -100,7 +100,6 @@ pub fn evaluate<R: ProcessRunner>(
 }
 
 /// Runs a command and captures its stdout, for placeholder candidates.
-/// SPEC §5.6.
 pub fn evaluate_capture<R: ProcessRunner>(
     context: &Context<'_>,
     runner: &mut R,
@@ -112,7 +111,7 @@ pub fn evaluate_capture<R: ProcessRunner>(
 }
 
 /// Ignores SIGINT for as long as it is alive, so `^C` reaches only the
-/// child. SPEC §7.3.
+/// child.
 #[cfg(unix)]
 struct SigintGuard {
     id: Option<signal_hook::SigId>,

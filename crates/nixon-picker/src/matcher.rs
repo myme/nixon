@@ -1,4 +1,4 @@
-//! Fuzzy matching. ENGINEERING §2.1, §4.1.
+//! Fuzzy matching.
 //!
 //! Interactive matching runs on nucleo's background worker, so the UI thread
 //! never makes an O(n) pass over the candidates. The synchronous entry points
@@ -11,7 +11,7 @@ use nucleo_matcher::{Config, Matcher};
 
 use crate::candidate::Candidate;
 
-/// How a query is interpreted. ENGINEERING §7.1 decision 2.
+/// How a query is interpreted.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MatchOptions {
     /// Substring rather than fuzzy matching.

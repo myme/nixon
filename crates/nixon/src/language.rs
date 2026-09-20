@@ -1,5 +1,5 @@
 //! Script languages: how a code block's info string names them, what they are
-//! saved as, and what runs them. SPEC §7.1.
+//! saved as, and what runs them.
 
 use std::fmt;
 use std::path::Path;
@@ -29,7 +29,7 @@ pub enum Language {
 }
 
 impl Language {
-    /// The extension a script of this language is cached under. SPEC §7.2.
+    /// The extension a script of this language is cached under.
     pub const fn extension(&self) -> &'static str {
         match self {
             Self::Bash | Self::None => ".sh",

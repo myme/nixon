@@ -1,4 +1,4 @@
-//! `nixon eval`. SPEC §10.3.
+//! `nixon eval`.
 
 use std::path::PathBuf;
 
@@ -11,7 +11,7 @@ use crate::language::Language;
 use crate::placeholder::Placeholder;
 use crate::process::{ExitCode, ProcessRunner};
 
-/// What to evaluate and how. SPEC §10.3.
+/// What to evaluate and how.
 #[derive(Clone, Debug, Default)]
 pub struct EvalOpts {
     /// The source to run, given inline.
@@ -27,9 +27,9 @@ pub struct EvalOpts {
 }
 
 impl<P: Picker, R: ProcessRunner> App<P, R> {
-    /// Evaluates a one-off command. SPEC §10.3.
+    /// Evaluates a one-off command.
     pub fn eval(&mut self, opts: &EvalOpts) -> Result<ExitCode> {
-        // ENGINEERING §7.3: without --project, fall back to the current
+        // Without --project, fall back to the current
         // directory as `run` does, rather than v1's interactive picker.
         let project = if opts.select_project {
             self.pick_one_project(None)?

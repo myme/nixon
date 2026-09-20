@@ -1,10 +1,10 @@
-//! Wrapping a command in `nix-shell`. SPEC §7.3 step 2.
+//! Wrapping a command in `nix-shell`.
 
 use std::path::Path;
 
 use crate::fs::find_dominating_file;
 
-/// Nix files, in the order v1 looked for them. SPEC §7.3.
+/// Nix files, in the order v1 looked for them.
 const NIX_FILES: [&str; 2] = ["shell.nix", "default.nix"];
 
 /// Wraps `argv` in `nix-shell`, if there is a nix file at or above `cwd`.
@@ -13,8 +13,8 @@ const NIX_FILES: [&str; 2] = ["shell.nix", "default.nix"];
 /// `shell.nix` before `default.nix` is considered at all, so a `shell.nix`
 /// further up beats a closer `default.nix`. `flake.nix` is not supported.
 ///
-/// Each argument is shell-quoted, fixing SPEC §7.3's naive `"…"` wrap that
-/// broke on arguments containing spaces.
+/// Each argument is shell-quoted, fixing v1's naive `"…"` wrap that broke
+/// on arguments containing spaces.
 pub fn wrap(argv: &[String], cwd: &Path) -> Option<Vec<String>> {
     let nix_file = NIX_FILES
         .iter()

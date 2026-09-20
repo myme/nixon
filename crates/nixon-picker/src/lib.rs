@@ -1,7 +1,7 @@
 //! Generic fuzzy picker: terminal UI and matching.
 //!
 //! Knows nothing about commands, projects or markdown; nixon bridges its own
-//! types to [`Candidate`] in `nixon::select`. ENGINEERING §4.1.
+//! types to [`Candidate`] in `nixon::select`.
 
 // Tests assert on known-good values.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]

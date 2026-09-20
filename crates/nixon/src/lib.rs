@@ -1,4 +1,4 @@
-//! Everything SPEC.md describes: config, markdown, projects, commands and
+//! Everything nixon does: config, markdown, projects, commands and
 //! evaluation. The binary in `nixon-cli` is a thin shell over this crate.
 
 // Tests assert on known-good values, and placeholder syntax such as
@@ -34,7 +34,7 @@ pub mod select;
 
 use nixon_picker::matcher::MatchOptions;
 
-/// Turns the config's matching flags into the picker's. SPEC §8.3.
+/// Turns the config's matching flags into the picker's.
 pub fn matcher_options(config: &config::Config) -> MatchOptions {
     MatchOptions {
         exact: config.exact_match.unwrap_or(false),
@@ -43,10 +43,10 @@ pub fn matcher_options(config: &config::Config) -> MatchOptions {
     }
 }
 
-/// Runs nixon. Subcommand dispatch lands with SPEC §10.
+/// Runs nixon. Subcommand dispatch lands with
 #[expect(
     clippy::missing_const_for_fn,
-    reason = "const only because the body is still empty; drop this with SPEC §10"
+    reason = "const only because the body is still empty"
 )]
 pub fn run() -> ExitCode {
     ExitCode::SUCCESS

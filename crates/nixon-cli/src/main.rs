@@ -1,5 +1,5 @@
 //! The `nixon` binary. Argument parsing, diagnostics and process exit live
-//! here; everything else is in the `nixon` library. ENGINEERING §4.3.
+//! here; everything else is in the `nixon` library.
 
 // A binary has no external API, so `pub` on its private modules' items is
 // how they are shared between those modules, not an exported surface.
@@ -27,7 +27,7 @@ use nixon_picker::TuiPicker;
 use cli::{Cli, Commands, EvalArgs, Internal, ProjectArgs, RunArgs};
 
 fn main() -> ExitCode {
-    // Completion must answer before anything writes to stdout. SPEC §2.4.
+    // Completion must answer before anything writes to stdout.
     complete::maybe_complete();
 
     match run() {
@@ -39,7 +39,7 @@ fn main() -> ExitCode {
     }
 }
 
-/// Prints an error the way SPEC §10.8 wants: plain text, on stderr.
+/// Prints an error as plain text on stderr.
 fn report(err: &NixonError) {
     match err {
         // A parse error carries a position, so miette can show the source.
@@ -70,7 +70,7 @@ fn run() -> Result<i32> {
         .unwrap_or_else(|| dirs.global_config());
     let file_config = load::load_global(&config_path)?;
 
-    // SPEC §2.3: defaults, then the file, then the command line.
+    // Defaults, then the file, then the command line.
     let config = Config::defaults().merge(file_config).merge(cli_config);
 
     let env = Environment {
@@ -112,7 +112,7 @@ fn run_opts(args: RunArgs) -> RunOpts {
     }
 }
 
-/// `nixon foo bar` is `nixon run foo bar`. SPEC §2.2.
+/// `nixon foo bar` is `nixon run foo bar`.
 fn external_opts(args: Vec<String>) -> RunOpts {
     let mut args = args.into_iter();
     RunOpts {
@@ -148,7 +148,7 @@ fn eval_opts(args: EvalArgs) -> EvalOpts {
     }
 }
 
-/// Plain messages on stderr, no prefix or timestamp. SPEC §11.
+/// Plain messages on stderr, no prefix or timestamp.
 fn init_tracing(level: Option<LogLevel>) {
     use tracing_subscriber::filter::LevelFilter;
 

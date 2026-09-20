@@ -1,5 +1,5 @@
 //! Placeholders: a command referencing another command as a source of
-//! selectable values. SPEC §5.2.
+//! selectable values.
 
 pub mod grammar;
 
@@ -7,7 +7,7 @@ use std::fmt;
 
 pub use grammar::{ParseError, parse_one, scan_all};
 
-/// How a resolved placeholder reaches the command. SPEC §5.2.
+/// How a resolved placeholder reaches the command.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PlaceholderType {
     /// `${name}` — each selected line becomes a positional argument.
@@ -18,7 +18,7 @@ pub enum PlaceholderType {
     Stdin,
 }
 
-/// How the referenced command's output is turned into candidates. SPEC §5.2.
+/// How the referenced command's output is turned into candidates.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum PlaceholderFormat {
     /// Positional columns; `cols+h` drops the header row. Indices are 1-based.
@@ -40,7 +40,7 @@ pub enum PlaceholderFormat {
 /// A reference to another command, and how to select from its output.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Placeholder {
-    /// How the value reaches the command. SPEC §5.2 calls this `type_`.
+    /// How the value reaches the command.
     pub kind: PlaceholderType,
     /// Name of the command being referenced.
     pub name: String,
@@ -57,7 +57,7 @@ pub struct Placeholder {
 }
 
 impl Placeholder {
-    /// Builds a placeholder with SPEC §5.2's defaults.
+    /// Builds a placeholder with the grammar's defaults.
     pub fn new(kind: PlaceholderType, name: impl Into<String>) -> Self {
         Self {
             kind,
@@ -73,7 +73,7 @@ impl Placeholder {
     /// Whether candidates can be built from output a line at a time.
     ///
     /// Columns need every row before the widths are known, and JSON needs the
-    /// whole document, so those wait for the command to finish. SPEC §5.6.
+    /// whole document, so those wait for the command to finish.
     pub const fn can_stream(&self) -> bool {
         matches!(
             self.format,
@@ -82,7 +82,7 @@ impl Placeholder {
     }
 
     /// Builds an already-resolved placeholder, as overflow CLI args are.
-    /// SPEC §5.6.
+    ///
     pub fn with_value(kind: PlaceholderType, name: impl Into<String>, value: Vec<String>) -> Self {
         Self {
             value,

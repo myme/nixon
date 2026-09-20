@@ -1,9 +1,9 @@
-//! What the picker offers and what selecting it yields. ENGINEERING §4.1.
+//! What the picker offers and what selecting it yields.
 
 /// A selectable row.
 ///
 /// `display` is what the user sees and may carry ANSI escapes; `value` is
-/// what selection returns, with escapes stripped. SPEC §8.4.
+/// what selection returns, with escapes stripped.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Candidate {
     /// Text shown in the picker. May contain ANSI escapes.
@@ -25,7 +25,7 @@ impl Candidate {
 
     /// A candidate whose displayed text is also its value.
     ///
-    /// The value has ANSI escapes stripped, as SPEC §8.4 requires.
+    /// The value has ANSI escapes stripped: colour is for the eye only.
     pub fn identity(text: impl Into<String>) -> Self {
         let display = text.into();
         let value = strip_ansi(&display);
@@ -45,7 +45,7 @@ impl Candidate {
         strip_ansi(&self.display)
     }
 
-    /// A candidate shown as `display` but returning `value`. SPEC §8.2.
+    /// A candidate shown as `display` but returning `value`.
     pub fn with_title(display: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
             display: display.into(),
@@ -55,7 +55,7 @@ impl Candidate {
     }
 }
 
-/// Removes ANSI escape sequences from `text`. SPEC §8.4.
+/// Removes ANSI escape sequences from `text`.
 fn strip_ansi(text: &str) -> String {
     String::from_utf8(strip_ansi_escapes::strip(text)).unwrap_or_else(|_| text.to_owned())
 }

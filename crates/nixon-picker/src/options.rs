@@ -1,16 +1,16 @@
-//! How one pick is configured. ENGINEERING §4.1.
+//! How one pick is configured.
 
 use crossterm::event::KeyEvent;
 
 use crate::matcher::MatchOptions;
 use crate::selection::SelectionType;
 
-/// Everything that varies between picks. ENGINEERING §4.1.
+/// Everything that varies between picks.
 #[derive(Clone, Debug, Default)]
 pub struct PickerOptions {
     /// Shown above the list, e.g. `Select command [nixon] (/home/me/code)`.
     pub header: Option<String>,
-    /// Pre-filled query. SPEC §5.6: a CLI arg is a query, not a value.
+    /// Pre-filled query: a command-line argument is a query, not a value.
     pub initial_query: Option<String>,
     /// How the query is matched against candidates.
     pub matching: MatchOptions,
@@ -19,7 +19,7 @@ pub struct PickerOptions {
     /// Extra keys that confirm with a particular [`SelectionType`].
     pub expect: Vec<(KeyEvent, SelectionType)>,
     /// fzf's `-1`: a query matching exactly one row selects it without
-    /// drawing anything. SPEC §8.4.
+    /// drawing anything.
     pub select_one: bool,
 }
 

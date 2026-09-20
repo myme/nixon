@@ -1,4 +1,4 @@
-//! The script cache. SPEC §7.2.
+//! The script cache.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -8,7 +8,6 @@ use sha1::{Digest as _, Sha1};
 use crate::command::Command;
 
 /// Where a command's script is written: `<sha1-of-source>-<name><ext>`.
-/// SPEC §7.2.
 ///
 /// The name is only a label, so anything that would make it a path is
 /// flattened: a `bin_dirs` command is named after its file, and a separator
@@ -30,7 +29,7 @@ fn flatten(name: &str) -> String {
         .collect()
 }
 
-/// Writes a command's source to the cache and returns the path. SPEC §7.2.
+/// Writes a command's source to the cache and returns the path.
 ///
 /// The file is deliberately not made executable: the interpreter is always
 /// explicit, so a shebang in the source is ignored.
@@ -41,7 +40,7 @@ pub fn write_script(cache_dir: &Path, command: &Command) -> io::Result<PathBuf> 
     Ok(path)
 }
 
-/// Empties the cache, reporting each file. SPEC §7.2.
+/// Empties the cache, reporting each file.
 ///
 /// Reports `would remove <path>` when `dry_run`, `removed <path>` otherwise.
 /// Paths are sorted, where v1 used directory order; nothing depends on the

@@ -1,4 +1,4 @@
-//! Wrapping a command in an environment. SPEC §7.3 step 2.
+//! Wrapping a command in an environment.
 
 pub mod direnv;
 pub mod nix;
@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::config::Config;
 
-/// Applies direnv, then nix; the first that applies wins. SPEC §7.3.
+/// Applies direnv, then nix; the first that applies wins.
 ///
 /// A command with no working directory is never wrapped.
 pub fn maybe_wrap(

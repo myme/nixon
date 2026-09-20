@@ -38,8 +38,8 @@ in
     src = lib.sources.sourceFilesBySuffices ./.. [ ".toml" ];
   };
 
-  # --no-deps as ENGINEERING §3 specifies. Documenting dependencies as well
-  # raced on the shared target/doc tree and failed intermittently.
+  # --no-deps: documenting dependencies as well raced on the shared
+  # target/doc tree and failed intermittently.
   doc = craneLib.cargoDoc (
     commonArgs
     // {
@@ -112,7 +112,7 @@ in
   deadnix = runCheck "deadnix" [ pkgs.deadnix ] "deadnix --fail .";
   nixfmt = runCheck "nixfmt" [ pkgs.nixfmt ] "nixfmt --check .";
 
-  # Reported, not gated (ENGINEERING §1.1).
+  # Reported, not gated.
   coverage = craneLib.cargoLlvmCov (
     commonArgs
     // {

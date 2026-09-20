@@ -1,4 +1,4 @@
-//! Locating and reading config files. SPEC §3.1, ENGINEERING §7.3.
+//! Locating and reading config files.
 
 use std::path::{Path, PathBuf};
 
@@ -9,7 +9,7 @@ use crate::markdown;
 /// The local config filenames, in the order v1 searched for them.
 const LOCAL_NAMES: [&str; 2] = ["nixon.md", ".nixon.md"];
 
-/// Reads one config file. SPEC §3.1.
+/// Reads one config file.
 pub fn read(path: &Path) -> Result<Config, ConfigError> {
     let text = std::fs::read_to_string(path).map_err(|err| match err.kind() {
         std::io::ErrorKind::NotFound => ConfigError::NoSuchFile,
@@ -21,7 +21,7 @@ pub fn read(path: &Path) -> Result<Config, ConfigError> {
     markdown::parse_config_file(&path.to_string_lossy(), &text).map_err(ConfigError::Markdown)
 }
 
-/// Reads the global config, tolerating its absence. ENGINEERING §7.3.
+/// Reads the global config, tolerating its absence.
 ///
 /// v1 made a missing or empty global config a fatal error; v2 treats both as
 /// an empty config. Parse errors stay fatal.
@@ -33,19 +33,19 @@ pub fn load_global(path: &Path) -> Result<Config, ConfigError> {
     }
 }
 
-/// The local config file for a project, if any. SPEC §3.1.
+/// The local config file for a project, if any.
 ///
 /// v1 searched the whole ancestor chain for `nixon.md` before trying
 /// `.nixon.md` at all, so a `nixon.md` further up wins over a `.nixon.md`
-/// closer to the project. SPEC §3.1 describes this as a per-directory choice;
-/// the code is `firstOf (find_dominating_file path) [...]`, which is not.
+/// closer to the project. It reads like a per-directory choice and is not:
+/// v1's `firstOf (find_dominating_file path) [...]` searches per filename.
 pub fn find_local_file(start: &Path) -> Option<PathBuf> {
     LOCAL_NAMES
         .iter()
         .find_map(|name| find_dominating_file(start, name))
 }
 
-/// Loads the local config for a project. SPEC §3.1.
+/// Loads the local config for a project.
 ///
 /// A missing or empty local config is simply absent; a parse error is fatal.
 pub fn find_local(start: &Path) -> Result<Option<Config>, ConfigError> {

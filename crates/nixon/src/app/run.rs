@@ -1,4 +1,4 @@
-//! `nixon run`. SPEC §10.1.
+//! `nixon run`.
 
 use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection};
 
@@ -11,7 +11,7 @@ use crate::project::Project;
 use crate::select;
 
 impl<P: Picker, R: ProcessRunner> App<P, R> {
-    /// Selects a command in the current project and acts on it. SPEC §10.1.
+    /// Selects a command in the current project and acts on it.
     pub fn run(&mut self, opts: &RunOpts) -> Result<ExitCode> {
         let project = self.current_project();
         if opts.list {
@@ -20,7 +20,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         self.find_and_handle_cmd(&project, opts)
     }
 
-    /// Prints matching command names. SPEC §10.1.
+    /// Prints matching command names.
     ///
     /// Hidden commands are included here, unlike in the picker, and no
     /// matches prints `No commands.` on stderr and still exits 0 — the shell
@@ -54,10 +54,10 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         Ok(0)
     }
 
-    /// Picks a command, then hands it to [`App::handle_cmd`]. SPEC §10.1.
+    /// Picks a command, then hands it to [`App::handle_cmd`].
     ///
     /// Hidden `_commands` are excluded from the picker but remain available
-    /// to placeholders. SPEC §5.5.
+    /// to placeholders.
     pub fn find_and_handle_cmd(&mut self, project: &Project, opts: &RunOpts) -> Result<ExitCode> {
         let commands = self.commands_for(project)?;
         let visible: Vec<Command> = commands
@@ -71,7 +71,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         self.handle_cmd(project, selection, opts)
     }
 
-    /// Runs a command selection through the picker. SPEC §8.4.
+    /// Runs a command selection through the picker.
     pub fn pick_command(
         &mut self,
         project: &Project,

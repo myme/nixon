@@ -1,4 +1,4 @@
-//! Shell completion. SPEC §2.4, ENGINEERING §2.1.
+//! Shell completion.
 //!
 //! `clap_complete`'s `CompleteEnv` re-invokes the binary at Tab time, which
 //! is what v1's optparse-applicative completer did.
@@ -17,14 +17,14 @@ use nixon_picker::FilterPicker;
 
 use crate::cli::Cli;
 
-/// Answers a completion request and exits, if this is one. SPEC §2.4.
+/// Answers a completion request and exits, if this is one.
 ///
 /// Must run before anything writes to stdout.
 pub fn maybe_complete() {
     clap_complete::CompleteEnv::with_factory(Cli::command).complete();
 }
 
-/// Command names in the project the completion was requested from. SPEC §2.4.
+/// Command names in the project the completion was requested from.
 ///
 /// Completion runs in a fresh process with no state, so this rebuilds just
 /// enough config to answer, and answers nothing rather than failing.
@@ -45,7 +45,7 @@ pub fn command_names(current: &OsStr) -> Vec<CompletionCandidate> {
     )
 }
 
-/// Names of the projects discovery finds. SPEC §2.4.
+/// Names of the projects discovery finds.
 pub fn project_names(current: &OsStr) -> Vec<CompletionCandidate> {
     let Some(app) = completion_app() else {
         return Vec::new();
@@ -71,7 +71,7 @@ fn candidates(names: impl Iterator<Item = String>, current: &OsStr) -> Vec<Compl
 ///
 /// `-C` and `-p` on the completion line are honoured by re-parsing what the
 /// shell passed, so `nixon -C other.md run <TAB>` completes against that
-/// file. SPEC §2.4.
+/// file.
 fn completion_app() -> Option<App<FilterPicker, RealRunner>> {
     let dirs = Dirs::from_env().ok()?;
     let cli = partial_cli();

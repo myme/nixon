@@ -1,4 +1,4 @@
-//! Drawing the picker. A pure function of [`App`]. ENGINEERING §4.1, §7.2.
+//! Drawing the picker. A pure function of [`App`].
 
 use ansi_to_tui::IntoText as _;
 use ratatui::Frame;
@@ -68,7 +68,7 @@ pub fn render(app: &mut App, frame: &mut Frame<'_>) {
     frame.set_cursor_position((x, query_row.y));
 }
 
-/// Draws the query line and the match counts. ENGINEERING §7.2.
+/// Draws the query line and the match counts.
 ///
 /// The counts read `matched/total`, with the number of marked rows in
 /// parentheses when the picker is in multi mode, as fzf shows them.
@@ -160,7 +160,7 @@ fn render_list(app: &mut App, frame: &mut Frame<'_>, area: Rect) {
     }
 }
 
-/// The style matched characters are drawn in, as fzf does. ENGINEERING §7.2.
+/// The style matched characters are drawn in, as fzf does.
 fn highlight() -> Style {
     Style::default()
         .fg(Color::Cyan)

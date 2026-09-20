@@ -1,4 +1,4 @@
-//! Git worktree discovery. ENGINEERING §7.6.
+//! Git worktree discovery.
 //!
 //! Worktrees live inside bare repositories or outside `project_dirs`, so
 //! marker-based discovery misses them. They are enumerated by reading git's
@@ -7,12 +7,11 @@
 use std::path::{Path, PathBuf};
 
 /// Whether `dir` is a git directory: a working tree or a bare repository.
-/// ENGINEERING §7.6.
 pub fn is_git_dir(dir: &Path) -> bool {
     dir.join(".git").exists() || is_bare_repo(dir)
 }
 
-/// Whether `dir` is a bare repository. ENGINEERING §7.6.
+/// Whether `dir` is a bare repository.
 ///
 /// The layout alone is not enough — a `.git` directory has it too — so the
 /// config must also say `bare = true`.
@@ -34,7 +33,7 @@ fn declares_bare(config: &str) -> bool {
     })
 }
 
-/// The git directory holding a repository's metadata. ENGINEERING §7.6.
+/// The git directory holding a repository's metadata.
 ///
 /// `<dir>/.git` for a working tree, `<dir>` itself for a bare repository. A
 /// `.git` *file* points elsewhere with a `gitdir:` line, which is how a
@@ -67,7 +66,7 @@ fn read_gitdir_pointer(file: &Path) -> Option<PathBuf> {
     Some(resolved)
 }
 
-/// Every worktree registered with the repository at `dir`. ENGINEERING §7.6.
+/// Every worktree registered with the repository at `dir`.
 ///
 /// Reads `<gitdir>/worktrees/<name>/gitdir`, each of which holds the path of
 /// that worktree's own `.git` file; its parent is the worktree root. Entries

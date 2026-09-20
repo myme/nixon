@@ -1,4 +1,4 @@
-//! Typed errors and their exit codes. ENGINEERING §6, §7.2.
+//! Typed errors and their exit codes.
 
 use crate::config::ConfigError;
 use crate::markdown::MarkdownError;
@@ -7,10 +7,10 @@ use crate::placeholder::ParseError;
 /// The result of anything that can fail in nixon.
 pub type Result<T> = std::result::Result<T, NixonError>;
 
-/// Exit code for a cancelled selection. ENGINEERING §7.2.
+/// Exit code for a cancelled selection.
 pub const CANCELED: i32 = 130;
 
-/// Everything that can go wrong. SPEC §10.8.
+/// Everything that can go wrong.
 #[derive(Debug, thiserror::Error)]
 pub enum NixonError {
     /// A config file could not be read or parsed.
@@ -25,7 +25,7 @@ pub enum NixonError {
     #[error(transparent)]
     Placeholder(#[from] ParseError),
 
-    /// A language with no interpreter. SPEC §7.1.
+    /// A language with no interpreter.
     #[error("No interpreter for {language}")]
     NoInterpreter {
         /// The language as written in the info string.
@@ -34,7 +34,7 @@ pub enum NixonError {
 
     /// A placeholder referenced a command that does not exist.
     ///
-    /// SPEC §5.6 has v1 calling `error` here; v2 reports it.
+    /// v1 called `error` here; v2 reports it.
     #[error("Invalid argument: {name}")]
     UnknownCommand {
         /// The name the placeholder referenced.
@@ -42,7 +42,7 @@ pub enum NixonError {
     },
 
     /// A `| json` placeholder's command produced output that is not a JSON
-    /// array of candidates. SPEC §5.6; v1 panicked.
+    /// array of candidates. v1 panicked.
     #[error("Invalid JSON candidates from {name}: {source}")]
     InvalidJson {
         /// The command that produced the output.
@@ -58,16 +58,16 @@ pub enum NixonError {
         name: String,
     },
 
-    /// Nothing was selected. SPEC §10.7.
+    /// Nothing was selected.
     #[error("{0}")]
     NothingSelected(String),
 
-    /// A selection was cancelled. Exits 130. ENGINEERING §7.2.
+    /// A selection was cancelled. Exits 130.
     #[error("Selection canceled.")]
     Canceled,
 
     /// An interactive selection was needed without a terminal.
-    /// ENGINEERING §7.2.
+    ///
     #[error("interactive selection needs a terminal")]
     NoTerminal,
 
@@ -89,7 +89,7 @@ impl From<std::io::Error> for NixonError {
 }
 
 impl NixonError {
-    /// The process exit code for this error. SPEC §10.8, ENGINEERING §7.2.
+    /// The process exit code for this error.
     pub const fn exit_code(&self) -> i32 {
         match self {
             Self::Canceled => CANCELED,

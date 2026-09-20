@@ -1,4 +1,4 @@
-//! Bridges nixon's types to the picker. SPEC §8.4, ENGINEERING §4.2.
+//! Bridges nixon's types to the picker.
 //!
 //! The only module that names the picker; nothing else in this crate does.
 
@@ -12,12 +12,12 @@ use crate::matcher_options;
 use crate::project::Project;
 use std::path::Path;
 
-/// Builds picker candidates from plain lines, as SPEC §5.6's `Lines` does.
+/// Builds picker candidates from plain lines, as a `lines` placeholder does.
 pub fn line_candidates(lines: &[String]) -> Vec<Candidate> {
     lines.iter().map(Candidate::identity).collect()
 }
 
-/// Candidates for command selection. SPEC §8.4.
+/// Candidates for command selection.
 ///
 /// The text is `show_command_with_description`, and the value is the command
 /// name, which is what maps back to the command. The description is dimmed
@@ -54,7 +54,7 @@ const CODE: &str = "\u{1b}[2;36m";
 /// Ends the dimmed run.
 const RESET: &str = "\u{1b}[0m";
 
-/// Options for command selection. SPEC §8.4.
+/// Options for command selection.
 ///
 /// Header is `"<prompt> [<project name>] (<project dir>)"`, candidates keep
 /// discovery order, and the three expect keys confirm with their own type.
@@ -77,14 +77,14 @@ pub fn command_options(
         select_one: true,
         ..PickerOptions::default()
     }
-    // Matching filters; discovery order (by name) is the ranking. SPEC §8.4.
+    // Matching filters; discovery order (by name) is the ranking.
     .no_sort();
 
     options.expect = expect_keys();
     options
 }
 
-/// Candidates for project selection: `~`-collapsed paths, sorted. SPEC §8.4.
+/// Candidates for project selection: `~`-collapsed paths, sorted.
 pub fn project_candidates(projects: &[Project], home: &Path) -> Vec<Candidate> {
     let mut candidates: Vec<Candidate> = projects
         .iter()
@@ -106,7 +106,7 @@ pub fn project_candidates(projects: &[Project], home: &Path) -> Vec<Candidate> {
     candidates
 }
 
-/// Options for project selection. SPEC §8.4.
+/// Options for project selection.
 pub fn project_options(config: &Config, query: Option<&str>, multi: bool) -> PickerOptions {
     PickerOptions {
         header: Some("Select project".to_owned()),
@@ -118,7 +118,7 @@ pub fn project_options(config: &Config, query: Option<&str>, multi: bool) -> Pic
     }
 }
 
-/// `Alt-Enter` edits, `F1` shows, `F2` visits. SPEC §8.4, ENGINEERING §7.2.
+/// `Alt-Enter` edits, `F1` shows, `F2` visits.
 fn expect_keys() -> Vec<(KeyEvent, SelectionType)> {
     vec![
         (

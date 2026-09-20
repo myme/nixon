@@ -1,4 +1,4 @@
-//! Wrapping a command in `direnv exec`. SPEC §7.3 step 2.
+//! Wrapping a command in `direnv exec`.
 
 use std::path::Path;
 
@@ -7,7 +7,7 @@ use crate::fs::find_dominating_file;
 /// Wraps `argv` for direnv, or reports that direnv does not apply.
 ///
 /// Returns `Some(argv)` unchanged when direnv is already active for `cwd`,
-/// which is what stops the nix wrapper being tried as well. SPEC §7.3.
+/// which is what stops the nix wrapper being tried as well.
 pub fn wrap(argv: &[String], cwd: &Path, direnv_dir: Option<&str>) -> Option<Vec<String>> {
     if is_active(cwd, direnv_dir) {
         return Some(argv.to_vec());
@@ -23,7 +23,7 @@ pub fn wrap(argv: &[String], cwd: &Path, direnv_dir: Option<&str>) -> Option<Vec
     Some(wrapped)
 }
 
-/// Whether `$DIRENV_DIR` already covers `cwd`. SPEC §7.3.
+/// Whether `$DIRENV_DIR` already covers `cwd`.
 ///
 /// direnv prefixes the path with `-`, which v1 dropped by discarding
 /// everything before the first `/`.
