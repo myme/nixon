@@ -159,6 +159,10 @@ fn short_circuit_app(app: &App) -> Option<Selection<Candidate>> {
 }
 
 /// Non-interactive matching, for `--list` and `| list`. SPEC §8.4.
+///
+/// Returns every candidate that matched, in ranked order, so callers read
+/// their `value` — the same field an interactive pick hands back. It never
+/// touches the terminal and never returns [`Selection::Canceled`].
 #[derive(Debug, Default)]
 pub struct FilterPicker;
 

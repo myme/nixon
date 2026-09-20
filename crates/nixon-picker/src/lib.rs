@@ -19,6 +19,7 @@ pub mod textbuf;
 pub mod ui;
 
 pub use candidate::Candidate;
+pub use filter::filter;
 pub use options::PickerOptions;
 pub use picker::{FilterPicker, Picker, TuiPicker};
 pub use selection::{Selection, SelectionType};

@@ -123,10 +123,15 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             initial_query: query.map(ToOwned::to_owned),
             multi: placeholder.multiple,
             select_one: true,
+            matching: crate::matcher_options(self.context.config),
             ..PickerOptions::default()
         };
 
-        let selection = if placeholder.can_stream() && !placeholder.list {
+        // `| filter` narrows the candidates before anything is shown, so the
+        // command needs to have finished: a filtered placeholder buffers.
+        let streams = placeholder.can_stream() && !placeholder.list && placeholder.filter.is_none();
+
+        let selection = if streams {
             // Line-oriented formats are fed to the picker as the command
             // produces them, so it opens without waiting for the command.
             let mut stream = self.stream_candidates(&command, &evaluation, &placeholder.format)?;
@@ -137,7 +142,11 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             // Columns need every row before the widths are known and JSON
             // needs the whole document, so those stay buffered.
             let captured = evaluate_capture(self.context, self.runner, &command, &evaluation)?;
-            let candidates = candidates_for(&placeholder.format, &captured, &placeholder.name)?;
+            let mut candidates = candidates_for(&placeholder.format, &captured, &placeholder.name)?;
+
+            if let Some(query) = &placeholder.filter {
+                candidates = nixon_picker::filter(query, &candidates, options.matching);
+            }
 
             // `| list` prints matches instead of asking, whatever picker is
             // configured. SPEC §5.6.
@@ -384,6 +393,28 @@ mod tests {
         ) -> std::io::Result<nixon_picker::Selection<Candidate>> {
             Err(std::io::Error::other("no terminal"))
         }
+    }
+
+    #[test]
+    fn a_filter_modifier_narrows_the_candidates_before_selection() {
+        let harness = Harness::new(vec![command("files", "ls\n", Vec::new())]);
+        let mut placeholder = arg("files");
+        placeholder.filter = Some("rs$".to_owned());
+        let outer = command("edit", "vim\n", vec![placeholder]);
+
+        let mut picker = ScriptedPicker::new(vec![selected(&["src/main.rs"])]);
+        let mut runner = FakeRunner::new().with_output(&["src/main.rs", "README.md"]);
+
+        harness
+            .resolve(&outer, &[], &mut picker, &mut runner)
+            .unwrap();
+
+        let offered: Vec<String> = picker.calls[0]
+            .1
+            .iter()
+            .map(|candidate| candidate.value.clone())
+            .collect();
+        assert_eq!(offered, ["src/main.rs"]);
     }
 
     #[test]

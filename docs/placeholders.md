@@ -72,9 +72,12 @@ With no format modifier, each output line is one candidate.
 | `\| json` | Parse the whole output as a JSON array of candidates. |
 | `\| multi` | Allow selecting several candidates. |
 | `\| list` | Take every matching candidate without showing a picker. |
+| `\| filter "text"` | Narrow the candidates with this query before selecting. |
 
-`| filter "text"` parses and is accepted, but has no effect. It was dead in v1
-too; it is kept so existing configuration still loads.
+The filter's query is an ordinary picker query, operators and all, so
+`| filter "!test"` drops anything containing `test`. A filtered placeholder
+waits for its command to finish rather than streaming, since the narrowing
+happens before anything is shown.
 
 Only one format modifier is allowed; a second is an error. Field and column
 numbers are a comma-separated list of digits — `1,3`, not `1-3`. They are kept
@@ -108,9 +111,10 @@ the command receives.
 ## Streaming
 
 Plain lines and `fields` produce candidates as the referenced command writes
-them, so the picker opens immediately and fills as output arrives. `cols` and
-`json` wait for the command to finish, because column widths and a JSON
-document are only known once all of it is there.
+them, so the picker opens immediately and fills as output arrives. `cols`,
+`json`, `filter` and `list` wait for the command to finish, because column
+widths, a JSON document and a narrowed list are only known once all of it is
+there.
 
 Cancelling the picker kills the referenced command's whole process group, not
 just the interpreter.
