@@ -1174,7 +1174,9 @@ v2 should print without quotes.
 
 1. Project: if `--project` → interactive selection (no query); else
    `findProject(…, Some("."))` → cwd's project or interactive fallback.
-   Errors as in §10.2.
+   Errors as in §10.2. QUIRK: outside a recognised project this needs a
+   TTY and configured projects; v2 falls back to the cwd like `run`
+   (ENGINEERING §7.3).
 2. Source: inline `command` text (language default `Bash`) or `--file`
    contents (language from extension, §7.1), overridable by `--language`.
 3. Build `Command { name: "", source, placeholders (from CLI), pwd:

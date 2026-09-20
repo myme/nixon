@@ -144,7 +144,7 @@ All of these run in CI; the first four also run locally via `bacon`/`nixon.md`.
 | `taplo fmt --check` | `Cargo.toml` / `*.toml` formatting | |
 | [`cargo mutants`](https://crates.io/crates/cargo-mutants) 27.1 | mutation testing | Nightly/weekly job, not per-PR. Scope to `markdown/`, `placeholder/`, `format/`, `config/` — the pure modules where a mutant slipping through means the parser spec is under-tested |
 | `cargo hack --feature-powerset` | only if we grow optional features | Skip initially |
-| Miri | only for `unsafe` | Expect a single `unsafe` (`pre_exec`/`setsid`); workspace `unsafe_code = "deny"`, `#![allow(unsafe_code)]` in `process.rs` only |
+| Miri | only if `unsafe` ever appears | Currently none: `Command::process_group(0)` detaches safely. Workspace `unsafe_code = "deny"` with no exceptions |
 
 Not needed: `cargo-semver-checks` (we don't publish a library API), `cargo-vet` (overkill for a personal tool; `cargo-deny` sources/licence policy is enough).
 
@@ -152,7 +152,7 @@ Not needed: `cargo-semver-checks` (we don't publish a library API), `cargo-vet` 
 
 ```toml
 [workspace.lints.rust]
-unsafe_code = "deny"            # process.rs opts out with #![allow(unsafe_code)]; forbid can't be overridden
+unsafe_code = "deny"            # no exceptions so far: process_group(0) detaches without unsafe
 missing_docs = "warn"
 unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
@@ -293,8 +293,7 @@ src/
 │   ├── mod.rs        # evaluate(): mode decision tree (§7.3)
 │   ├── cache.rs      # script cache + gc (§7.2)
 │   └── wrap/{direnv.rs, nix.rs}
-├── process.rs        # `trait ProcessRunner { run, run_capture, spawn_detached }` + RealRunner;
-│                     # the only module with allow(unsafe_code)
+├── process.rs        # `trait ProcessRunner { run, run_capture, spawn_detached }` + RealRunner (no unsafe)
 ├── select.rs         # bridges nixon types ↔ nixon-picker: command_candidates(), project_candidates()
 ├── app/
 │   ├── mod.rs        # `struct App<P: Picker, R: ProcessRunner>` { config, picker, runner } — no backend field
@@ -469,6 +468,7 @@ The `Nixon.hs` global-options row in SPEC §2.1 therefore shrinks to:
 | §2.1 | "Terminal emultor" | Moot (flag removed). |
 | §8.1 | Backend picked by whether stdin is a TTY | Moot — no backends. |
 | §5.5 | `bin_dirs` offered every entry (non-executables, subdirectories, recursive contents) as commands | Only regular files with an execute bit, non-recursive. |
+| §10.3 | `eval` outside a recognised project opens the interactive project picker (needs a TTY; fails with no projects configured) | `eval` uses `find_in_project_or_default(cwd)` like `run`, so `nixon eval 'echo hi'` works anywhere; `--project` still opens the picker. |
 
 ### 7.4 Quirks kept on purpose (do not "fix")
 
