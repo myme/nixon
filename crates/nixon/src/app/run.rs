@@ -1,6 +1,6 @@
 //! `nixon run`.
 
-use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection};
+use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection, SelectionType};
 
 use super::{App, RunOpts};
 use crate::command::Command;
@@ -60,6 +60,15 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     /// to placeholders.
     pub fn find_and_handle_cmd(&mut self, project: &Project, opts: &RunOpts) -> Result<ExitCode> {
         let commands = self.commands_for(project)?;
+
+        // A name given in full is an answer, hidden or not: `nixon run
+        // _packages` means that command, and it is not in the picker to be
+        // chosen from.
+        if let Some(command) = exact(&commands, opts.command.as_deref()) {
+            let selection = Selection::selected(SelectionType::Default, vec![command]);
+            return self.handle_cmd(project, selection, opts);
+        }
+
         let visible: Vec<Command> = commands
             .iter()
             .filter(|command| !command.is_hidden)
@@ -79,6 +88,12 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         prompt: &str,
         query: Option<&str>,
     ) -> Result<Selection<Command>> {
+        // A name that matches one of these exactly needs no picker, even
+        // when it is also a fuzzy match for others.
+        if let Some(command) = exact(commands, query) {
+            return Ok(Selection::selected(SelectionType::Default, vec![command]));
+        }
+
         let config = self.config_for(project)?;
         let options = select::command_options(&config, project, prompt, query);
         let candidates = select::command_candidates(commands);
@@ -110,4 +125,13 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             }
         }
     }
+}
+
+/// The command whose name is exactly `query`.
+fn exact(commands: &[Command], query: Option<&str>) -> Option<Command> {
+    let query = query?;
+    commands
+        .iter()
+        .find(|command| command.name == query)
+        .cloned()
 }

@@ -698,3 +698,79 @@ fn a_command_can_run_the_nixon_binary_it_was_started_by() {
         .success()
         .stdout(contains("nixon "));
 }
+
+const AMBIGUOUS_MD: &str = "\
+# `link`
+
+```bash
+echo ran-link
+```
+
+# `link-all`
+
+```bash
+echo ran-link-all
+```
+
+# `_packages`
+
+```bash
+echo ran-packages
+```
+";
+
+/// An exact name runs without a picker even though it also fuzzy-matches
+/// `link-all`, and so without a terminal.
+#[test]
+#[cfg(unix)]
+fn an_exact_command_name_runs_without_a_terminal() {
+    let fixture = Fixture::with_config(AMBIGUOUS_MD);
+    let nixon = assert_cmd::cargo::cargo_bin("nixon");
+
+    let mut cmd = Command::new("setsid");
+    cmd.arg("--wait").arg(nixon).arg("link");
+    fixture.apply(&mut cmd);
+
+    cmd.write_stdin("").assert().success().stdout("ran-link\n");
+}
+
+/// A hidden command is not offered by the picker, so naming it is the only
+/// way to run it — and it must work.
+#[test]
+fn a_hidden_command_runs_when_named_in_full() {
+    Fixture::with_config(AMBIGUOUS_MD)
+        .nixon()
+        .arg("_packages")
+        .assert()
+        .success()
+        .stdout("ran-packages\n");
+}
+
+/// A project given as a path runs a command in it with no discovery.
+#[test]
+fn a_project_path_runs_a_command_in_that_directory() {
+    let fixture = Fixture::with_config("# `where`\n\n```bash\necho \"$nixon_project_path\"\n```\n");
+    let project = fixture.temp.child("project");
+
+    fixture
+        .nixon()
+        .args(["project", &project.path().to_string_lossy(), "where"])
+        .assert()
+        .success()
+        .stdout(format!(
+            "{}\n",
+            project.path().canonicalize().unwrap().display()
+        ));
+}
+
+/// A path that is not there names itself in the error.
+#[test]
+fn a_project_path_that_does_not_exist_is_reported() {
+    Fixture::new()
+        .nixon()
+        .args(["project", "/nowhere/at/all", "hello"])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(contains("no such project: /nowhere/at/all"));
+}
