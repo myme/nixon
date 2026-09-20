@@ -1,6 +1,10 @@
-//! Fuzzy matching over candidates. ENGINEERING §2.1, §4.1.
+//! Fuzzy matching. ENGINEERING §2.1, §4.1.
+//!
+//! Interactive matching runs on nucleo's background worker, so the UI thread
+//! never makes an O(n) pass over the candidates. The synchronous entry points
+//! here are for the non-interactive paths and for tests.
 
-use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher};
 
 use crate::candidate::Candidate;
@@ -26,6 +30,36 @@ impl Default for MatchOptions {
     }
 }
 
+impl MatchOptions {
+    /// How nucleo should treat case.
+    pub const fn case_matching(self) -> CaseMatching {
+        if self.ignore_case {
+            CaseMatching::Ignore
+        } else {
+            CaseMatching::Respect
+        }
+    }
+
+    /// Substring or fuzzy.
+    pub const fn atom_kind(self) -> AtomKind {
+        if self.exact {
+            AtomKind::Substring
+        } else {
+            AtomKind::Fuzzy
+        }
+    }
+
+    /// The pattern for a query.
+    pub fn pattern(self, query: &str) -> Pattern {
+        Pattern::new(
+            query,
+            self.case_matching(),
+            Normalization::Smart,
+            self.atom_kind(),
+        )
+    }
+}
+
 /// A candidate that matched, with its score and which characters matched.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Match {
@@ -33,14 +67,14 @@ pub struct Match {
     pub index: usize,
     /// Higher is a better match.
     pub score: u32,
-    /// Character positions in the candidate's display text that matched.
+    /// Character positions in the candidate's visible text that matched.
     pub indices: Vec<u32>,
 }
 
-/// Matches `query` against `candidates`, by their displayed text.
+/// Matches `query` against `candidates`, synchronously.
 ///
-/// An empty query matches everything, in the candidates' own order. When
-/// `sort` is set, matches are ranked by score, ties keeping input order.
+/// Used by the non-interactive paths, where the whole list is wanted at once
+/// and there is no UI to keep responsive.
 pub fn matches(query: &str, candidates: &[Candidate], opts: MatchOptions) -> Vec<Match> {
     if query.is_empty() {
         return candidates
@@ -54,17 +88,7 @@ pub fn matches(query: &str, candidates: &[Candidate], opts: MatchOptions) -> Vec
     }
 
     let mut matcher = Matcher::new(Config::DEFAULT);
-    let case = if opts.ignore_case {
-        CaseMatching::Ignore
-    } else {
-        CaseMatching::Respect
-    };
-    let kind = if opts.exact {
-        nucleo_matcher::pattern::AtomKind::Substring
-    } else {
-        nucleo_matcher::pattern::AtomKind::Fuzzy
-    };
-    let pattern = Pattern::new(query, case, Normalization::Smart, kind);
+    let pattern = opts.pattern(query);
 
     let mut found: Vec<Match> = candidates
         .iter()
@@ -73,18 +97,11 @@ pub fn matches(query: &str, candidates: &[Candidate], opts: MatchOptions) -> Vec
             let plain = candidate.plain();
             let mut buf = Vec::new();
             let haystack = nucleo_matcher::Utf32Str::new(&plain, &mut buf);
-            let mut indices = Vec::new();
-            pattern
-                .indices(haystack, &mut matcher, &mut indices)
-                .map(|score| {
-                    indices.sort_unstable();
-                    indices.dedup();
-                    Match {
-                        index,
-                        score,
-                        indices: std::mem::take(&mut indices),
-                    }
-                })
+            pattern.score(haystack, &mut matcher).map(|score| Match {
+                index,
+                score,
+                indices: Vec::new(),
+            })
         })
         .collect();
 
@@ -95,10 +112,24 @@ pub fn matches(query: &str, candidates: &[Candidate], opts: MatchOptions) -> Vec
     found
 }
 
+/// The characters of `text` that `query` matched, for highlighting.
+///
+/// Computed per visible row rather than for every match: a screenful is a few
+/// dozen rows whatever the candidate count.
+pub fn match_indices(matcher: &mut Matcher, pattern: &Pattern, text: &str, out: &mut Vec<u32>) {
+    out.clear();
+    let mut buf = Vec::new();
+    let haystack = nucleo_matcher::Utf32Str::new(text, &mut buf);
+    pattern.indices(haystack, matcher, out);
+    out.sort_unstable();
+    out.dedup();
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MatchOptions, matches};
+    use super::{Match, MatchOptions, match_indices, matches};
     use crate::candidate::Candidate;
+    use nucleo_matcher::{Config, Matcher};
 
     fn candidates(items: &[&str]) -> Vec<Candidate> {
         items.iter().map(|s| Candidate::identity(*s)).collect()
@@ -165,5 +196,28 @@ mod tests {
     #[test]
     fn nothing_matches_a_query_with_no_hits() {
         assert!(matched("zzz", &["one", "two"], MatchOptions::default()).is_empty());
+    }
+
+    #[test]
+    fn match_indices_point_at_the_matched_characters() {
+        let mut matcher = Matcher::new(Config::DEFAULT);
+        let pattern = MatchOptions::default().pattern("gf");
+        let mut out = Vec::new();
+        match_indices(&mut matcher, &pattern, "git-files", &mut out);
+        assert_eq!(out, [0, 4]);
+    }
+
+    #[test]
+    fn match_indices_are_empty_when_nothing_matches() {
+        let mut matcher = Matcher::new(Config::DEFAULT);
+        let pattern = MatchOptions::default().pattern("zzz");
+        let mut out = vec![9];
+        match_indices(&mut matcher, &pattern, "git-files", &mut out);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn a_default_match_carries_no_indices() {
+        assert!(Match::default().indices.is_empty());
     }
 }

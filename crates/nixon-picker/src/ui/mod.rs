@@ -6,29 +6,49 @@ pub mod render;
 pub use render::render;
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::time::Duration;
 
 use crossterm::event::KeyEvent;
+use nucleo::{Config, Nucleo};
+use nucleo_matcher::Matcher;
 
 use crate::candidate::Candidate;
-use crate::matcher::{Match, matches};
+use crate::matcher::match_indices;
 use crate::options::PickerOptions;
 use crate::selection::{Selection, SelectionType};
 use crate::textbuf::TextBuffer;
 use keymap::{Action, action_for};
 
-/// The picker's whole state. Pure: no I/O, no terminal. ENGINEERING §4.1.
+/// One visible row, ready to draw. ENGINEERING §4.1.
+///
+/// Built for the handful of rows on screen, never for the whole list.
+pub struct Row {
+    /// The candidate to draw.
+    pub candidate: Candidate,
+    /// Character positions of the query's matches in its visible text.
+    pub indices: Vec<u32>,
+    /// Whether the user has marked it.
+    pub marked: bool,
+    /// Whether the cursor is on it.
+    pub is_cursor: bool,
+}
+
+/// The picker's state. ENGINEERING §4.1.
+///
+/// Matching runs on nucleo's background worker: the UI thread reparses the
+/// pattern on a keystroke and reads a snapshot per frame, and never makes a
+/// pass over the candidates itself.
 pub struct App {
-    /// Every candidate offered.
-    pub candidates: Vec<Candidate>,
+    nucleo: Nucleo<Candidate>,
+    matcher: Matcher,
     /// The query line, with its own cursor. ENGINEERING §7.2.
     pub query: TextBuffer,
-    /// The matches, in display order, each with the characters it matched.
-    pub matched: Vec<Match>,
-    /// Index into `matched`.
+    /// Index into the current matches.
     pub cursor: usize,
-    /// Indices into `candidates` the user has marked.
-    pub marked: BTreeSet<usize>,
-    /// First visible row of `matched`.
+    /// Matched-item indices the user has marked.
+    pub marked: BTreeSet<u32>,
+    /// First visible row.
     pub offset: usize,
     /// How many rows the list can show.
     pub height: usize,
@@ -40,10 +60,29 @@ pub struct App {
 impl App {
     /// Builds the initial state, applying any pre-filled query.
     pub fn new(candidates: Vec<Candidate>, options: PickerOptions) -> Self {
+        let app = Self::empty(options);
+        let injector = app.nucleo.injector();
+        for candidate in candidates {
+            // The matched text is what the user sees, never the escapes.
+            let plain = candidate.plain();
+            injector.push(candidate, |_, columns| columns[0] = plain.as_str().into());
+        }
+        let mut app = app;
+        app.reparse(true);
+        app.tick_until_settled();
+        app
+    }
+
+    /// An empty picker that candidates can be streamed into.
+    ///
+    /// Lets the picker open before the command producing its candidates has
+    /// finished.
+    pub fn empty(options: PickerOptions) -> Self {
+        let nucleo = Nucleo::new(Config::DEFAULT, Arc::new(|| {}), None, 1);
         let mut app = Self {
-            candidates,
+            nucleo,
+            matcher: Matcher::new(nucleo_matcher::Config::DEFAULT),
             query: TextBuffer::new(options.initial_query.as_deref().unwrap_or_default()),
-            matched: Vec::new(),
             cursor: 0,
             marked: BTreeSet::new(),
             offset: 0,
@@ -51,8 +90,35 @@ impl App {
             outcome: None,
             options,
         };
-        app.recompute();
+        app.reparse(true);
         app
+    }
+
+    /// A handle for pushing candidates in as they arrive.
+    pub fn injector(&self) -> nucleo::Injector<Candidate> {
+        self.nucleo.injector()
+    }
+
+    /// Lets the matcher make progress; called once per frame.
+    pub fn tick(&mut self) {
+        self.nucleo.tick(10);
+        self.clamp();
+    }
+
+    /// Runs the matcher to completion. For the non-streaming path and tests.
+    pub fn tick_until_settled(&mut self) {
+        self.settle(Duration::from_secs(5));
+    }
+
+    /// Lets the matcher work for at most `budget`, then returns.
+    ///
+    /// A keystroke gives it a frame's worth; whatever is left finishes on
+    /// later frames, so the UI thread is never blocked by the candidate
+    /// count.
+    fn settle(&mut self, budget: Duration) {
+        let deadline = std::time::Instant::now() + budget;
+        while self.nucleo.tick(1).running && std::time::Instant::now() < deadline {}
+        self.clamp();
     }
 
     /// The header shown above the query.
@@ -65,6 +131,16 @@ impl App {
         self.options.multi
     }
 
+    /// How many candidates matched the query.
+    pub fn matched_count(&self) -> u32 {
+        self.nucleo.snapshot().matched_item_count()
+    }
+
+    /// How many candidates there are in total.
+    pub fn total_count(&self) -> u32 {
+        self.nucleo.snapshot().item_count()
+    }
+
     /// Tells the state machine how many rows fit, so it can scroll.
     pub fn set_height(&mut self, height: usize) {
         self.height = height.max(1);
@@ -72,19 +148,51 @@ impl App {
     }
 
     /// The candidate under the cursor.
-    pub fn current(&self) -> Option<&Candidate> {
-        self.matched
-            .get(self.cursor)
-            .and_then(|m| self.candidates.get(m.index))
+    pub fn current(&self) -> Option<Candidate> {
+        let snapshot = self.nucleo.snapshot();
+        let at = u32::try_from(self.cursor).ok()?;
+        snapshot.get_matched_item(at).map(|item| item.data.clone())
     }
 
-    /// The rows currently visible, each with its match. ENGINEERING §7.2.
-    pub fn visible(&self) -> impl Iterator<Item = (&Match, &Candidate)> {
-        self.matched
-            .iter()
-            .skip(self.offset)
-            .take(self.height)
-            .filter_map(|m| self.candidates.get(m.index).map(|c| (m, c)))
+    /// The rows currently on screen, with their match positions.
+    ///
+    /// Only the visible window is built, and match indices are computed only
+    /// for those rows, so the cost per frame is the screen size rather than
+    /// the candidate count.
+    pub fn rows(&mut self) -> Vec<Row> {
+        let pattern = self.options.matching.pattern(&self.query.text());
+        let snapshot = self.nucleo.snapshot();
+
+        let from = u32::try_from(self.offset).unwrap_or(u32::MAX);
+        let to = from
+            .saturating_add(u32::try_from(self.height).unwrap_or(u32::MAX))
+            .min(snapshot.matched_item_count());
+        if from >= to {
+            return Vec::new();
+        }
+
+        let cursor = u32::try_from(self.cursor).unwrap_or(u32::MAX);
+        let mut indices = Vec::new();
+        snapshot
+            .matched_items(from..to)
+            .enumerate()
+            .map(|(row, item)| {
+                let candidate = item.data.clone();
+                match_indices(
+                    &mut self.matcher,
+                    &pattern,
+                    &candidate.plain(),
+                    &mut indices,
+                );
+                let at = from + u32::try_from(row).unwrap_or(0);
+                Row {
+                    candidate,
+                    indices: indices.clone(),
+                    marked: self.marked.contains(&at),
+                    is_cursor: at == cursor,
+                }
+            })
+            .collect()
     }
 
     /// Whether the pick has finished.
@@ -101,7 +209,13 @@ impl App {
                 // Only re-match when the text actually changed; a cursor move
                 // must not disturb the selection.
                 if self.query.text() != before {
-                    self.recompute();
+                    let appended = self.query.text().starts_with(&before);
+                    self.reparse(!appended);
+                    self.cursor = 0;
+                    self.offset = 0;
+                    self.marked.clear();
+                    // A frame's worth of matching, no more.
+                    self.settle(Duration::from_millis(10));
                 }
             }
             Action::MoveUp => self.move_cursor(-1),
@@ -115,31 +229,43 @@ impl App {
         }
     }
 
-    /// Re-runs the query, keeping the cursor in range.
-    fn recompute(&mut self) {
-        self.matched = matches(&self.query.text(), &self.candidates, self.options.matching);
-        self.cursor = self.cursor.min(self.matched.len().saturating_sub(1));
+    /// Hands the query to the background matcher.
+    fn reparse(&mut self, rescore: bool) {
+        let opts = self.options.matching;
+        self.nucleo.pattern.reparse(
+            0,
+            &self.query.text(),
+            opts.case_matching(),
+            Normalization(),
+            !rescore,
+        );
+    }
+
+    fn clamp(&mut self) {
+        let matched = self.matched_count() as usize;
+        self.cursor = self.cursor.min(matched.saturating_sub(1));
+        self.scroll_into_view();
+    }
+
+    fn move_cursor(&mut self, delta: isize) {
+        let matched = self.matched_count() as usize;
+        if matched == 0 {
+            return;
+        }
+        let last = matched - 1;
+        self.cursor = if delta < 0 {
+            self.cursor.saturating_sub(1)
+        } else {
+            (self.cursor + 1).min(last)
+        };
         self.scroll_into_view();
     }
 
     /// Moves a screenful. ENGINEERING §7.2.
     fn page(&mut self, direction: isize) {
-        let page = self.height.max(1);
-        for _ in 0..page {
+        for _ in 0..self.height.max(1) {
             self.move_cursor(direction);
         }
-    }
-
-    fn move_cursor(&mut self, delta: isize) {
-        if self.matched.is_empty() {
-            return;
-        }
-        let last = self.matched.len() - 1;
-        self.cursor = match delta {
-            d if d < 0 => self.cursor.saturating_sub(1),
-            _ => (self.cursor + 1).min(last),
-        };
-        self.scroll_into_view();
     }
 
     fn scroll_into_view(&mut self) {
@@ -148,17 +274,19 @@ impl App {
         } else if self.cursor >= self.offset + self.height {
             self.offset = self.cursor + 1 - self.height;
         }
-        let max_offset = self.matched.len().saturating_sub(self.height);
-        self.offset = self.offset.min(max_offset);
+        let matched = self.matched_count() as usize;
+        self.offset = self.offset.min(matched.saturating_sub(self.height));
     }
 
     fn toggle_mark(&mut self) {
         if !self.options.multi {
             return;
         }
-        if let Some(index) = self.matched.get(self.cursor).map(|m| m.index) {
-            if !self.marked.insert(index) {
-                self.marked.remove(&index);
+        if let Ok(at) = u32::try_from(self.cursor)
+            && at < self.matched_count()
+        {
+            if !self.marked.insert(at) {
+                self.marked.remove(&at);
             }
             self.move_cursor(1);
         }
@@ -167,15 +295,22 @@ impl App {
     /// Marked rows if any, else the row under the cursor. SPEC §8.2.
     fn confirm(&mut self, kind: SelectionType) {
         let items: Vec<Candidate> = if self.marked.is_empty() {
-            self.current().cloned().into_iter().collect()
+            self.current().into_iter().collect()
         } else {
+            let snapshot = self.nucleo.snapshot();
             self.marked
                 .iter()
-                .filter_map(|index| self.candidates.get(*index).cloned())
+                .filter_map(|at| snapshot.get_matched_item(*at).map(|item| item.data.clone()))
                 .collect()
         };
         self.outcome = Some(Selection::selected(kind, items));
     }
+}
+
+/// nucleo's normalization setting, spelled once.
+#[expect(non_snake_case, reason = "reads as the enum variant it stands for")]
+const fn Normalization() -> nucleo::pattern::Normalization {
+    nucleo::pattern::Normalization::Smart
 }
 
 #[cfg(test)]
@@ -201,10 +336,12 @@ mod tests {
 
     fn press(app: &mut App, code: KeyCode) {
         app.handle(KeyEvent::new(code, KeyModifiers::NONE));
+        app.tick_until_settled();
     }
 
     fn ctrl(app: &mut App, c: char) {
         app.handle(KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL));
+        app.tick_until_settled();
     }
 
     fn type_query(app: &mut App, text: &str) {
@@ -217,11 +354,19 @@ mod tests {
         selection.items().iter().map(|c| c.value.clone()).collect()
     }
 
+    fn shown(app: &mut App) -> Vec<String> {
+        app.rows()
+            .into_iter()
+            .map(|row| row.candidate.value)
+            .collect()
+    }
+
     #[test]
     fn everything_matches_an_empty_query() {
         let app = app(&["one", "two", "three"]);
-        assert_eq!(app.matched.len(), 3);
-        assert_eq!(app.current().map(|c| c.value.as_str()), Some("one"));
+        assert_eq!(app.matched_count(), 3);
+        assert_eq!(app.total_count(), 3);
+        assert_eq!(app.current().map(|c| c.value), Some("one".to_owned()));
     }
 
     #[test]
@@ -230,26 +375,26 @@ mod tests {
             candidates(&["git-files", "deploy"]),
             PickerOptions::default().query("git"),
         );
-        assert_eq!(app.matched.len(), 1);
-        assert_eq!(app.current().map(|c| c.value.as_str()), Some("git-files"));
+        assert_eq!(app.matched_count(), 1);
+        assert_eq!(app.current().map(|c| c.value), Some("git-files".to_owned()));
     }
 
     #[test]
     fn typing_narrows_the_list() {
         let mut app = app(&["git-files", "rg-files", "deploy"]);
         type_query(&mut app, "dep");
-        assert_eq!(app.matched.len(), 1);
-        assert_eq!(app.current().map(|c| c.value.as_str()), Some("deploy"));
+        assert_eq!(app.matched_count(), 1);
+        assert_eq!(app.current().map(|c| c.value), Some("deploy".to_owned()));
     }
 
     #[test]
     fn backspace_widens_it_again() {
         let mut app = app(&["one", "two"]);
         type_query(&mut app, "on");
-        assert_eq!(app.matched.len(), 1);
+        assert_eq!(app.matched_count(), 1);
         press(&mut app, KeyCode::Backspace);
         press(&mut app, KeyCode::Backspace);
-        assert_eq!(app.matched.len(), 2);
+        assert_eq!(app.matched_count(), 2);
     }
 
     #[test]
@@ -258,7 +403,7 @@ mod tests {
         type_query(&mut app, "one");
         ctrl(&mut app, 'u');
         assert!(app.query.is_empty());
-        assert_eq!(app.matched.len(), 2);
+        assert_eq!(app.matched_count(), 2);
     }
 
     #[test]
@@ -300,24 +445,6 @@ mod tests {
     }
 
     #[test]
-    fn page_keys_move_a_screenful() {
-        let mut app = app(&["a", "b", "c", "d", "e", "f"]);
-        app.set_height(2);
-        press(&mut app, KeyCode::PageDown);
-        assert_eq!(app.cursor, 2);
-        press(&mut app, KeyCode::PageUp);
-        assert_eq!(app.cursor, 0);
-    }
-
-    #[test]
-    fn matched_characters_are_recorded_for_highlighting() {
-        let mut app = app(&["git-files"]);
-        type_query(&mut app, "gf");
-        assert_eq!(app.matched.len(), 1);
-        assert!(!app.matched[0].indices.is_empty());
-    }
-
-    #[test]
     fn the_cursor_clamps_at_both_ends() {
         let mut app = app(&["one", "two", "three"]);
         press(&mut app, KeyCode::Up);
@@ -329,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn the_cursor_stays_in_range_when_the_list_shrinks() {
+    fn the_cursor_returns_to_the_top_when_the_query_changes() {
         let mut app = app(&["alpha", "beta", "gamma"]);
         press(&mut app, KeyCode::Down);
         press(&mut app, KeyCode::Down);
@@ -339,11 +466,21 @@ mod tests {
     }
 
     #[test]
+    fn page_keys_move_a_screenful() {
+        let mut app = app(&["a", "b", "c", "d", "e", "f"]);
+        app.set_height(2);
+        press(&mut app, KeyCode::PageDown);
+        assert_eq!(app.cursor, 2);
+        press(&mut app, KeyCode::PageUp);
+        assert_eq!(app.cursor, 0);
+    }
+
+    #[test]
     fn enter_confirms_the_row_under_the_cursor() {
         let mut app = app(&["one", "two"]);
         press(&mut app, KeyCode::Down);
         press(&mut app, KeyCode::Enter);
-        let outcome = app.outcome.unwrap();
+        let outcome = app.outcome.clone().unwrap();
         assert!(matches!(
             outcome,
             Selection::Selected {
@@ -363,34 +500,28 @@ mod tests {
     }
 
     #[test]
-    fn escape_cancels() {
-        let mut app = app(&["one"]);
-        press(&mut app, KeyCode::Esc);
-        assert_eq!(app.outcome, Some(Selection::Canceled));
+    fn escape_and_control_c_cancel() {
+        let mut escaped = app(&["one"]);
+        press(&mut escaped, KeyCode::Esc);
+        assert_eq!(escaped.outcome, Some(Selection::Canceled));
+
+        let mut interrupted = app(&["one"]);
+        ctrl(&mut interrupted, 'c');
+        assert_eq!(interrupted.outcome, Some(Selection::Canceled));
     }
 
     #[test]
-    fn control_c_cancels() {
-        let mut app = app(&["one"]);
-        ctrl(&mut app, 'c');
-        assert_eq!(app.outcome, Some(Selection::Canceled));
-    }
-
-    #[test]
-    fn alt_enter_confirms_as_edit() {
-        let mut app = app(&["one"]);
-        app.handle(KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT));
+    fn alt_enter_f1_and_f2_confirm_with_their_own_type() {
+        let mut edit = app(&["one"]);
+        edit.handle(KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT));
         assert!(matches!(
-            app.outcome,
+            edit.outcome,
             Some(Selection::Selected {
                 kind: SelectionType::Edit,
                 ..
             })
         ));
-    }
 
-    #[test]
-    fn f1_shows_and_f2_visits() {
         let mut show = app(&["one"]);
         press(&mut show, KeyCode::F(1));
         assert!(matches!(
@@ -443,7 +574,7 @@ mod tests {
         press(&mut app, KeyCode::Tab);
         press(&mut app, KeyCode::Tab);
         press(&mut app, KeyCode::Enter);
-        assert_eq!(values(&app.outcome.unwrap()), ["one", "two"]);
+        assert_eq!(values(&app.outcome.clone().unwrap()), ["one", "two"]);
     }
 
     #[test]
@@ -464,11 +595,10 @@ mod tests {
     }
 
     #[test]
-    fn only_the_visible_window_is_returned() {
+    fn only_the_visible_window_is_built() {
         let mut app = app(&["a", "b", "c", "d", "e"]);
         app.set_height(2);
-        let shown: Vec<&str> = app.visible().map(|(_, c)| c.value.as_str()).collect();
-        assert_eq!(shown, ["a", "b"]);
+        assert_eq!(shown(&mut app), ["a", "b"]);
     }
 
     #[test]
@@ -479,5 +609,53 @@ mod tests {
         assert!(!app.is_done());
         press(&mut app, KeyCode::Enter);
         assert!(app.is_done());
+    }
+
+    #[test]
+    fn matched_characters_are_recorded_for_the_visible_rows() {
+        let mut app = app(&["git-files"]);
+        type_query(&mut app, "gf");
+        let rows = app.rows();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].indices, [0, 4]);
+    }
+
+    #[test]
+    fn candidates_can_be_streamed_in_after_the_picker_opens() {
+        let mut app = App::empty(PickerOptions::default());
+        assert_eq!(app.total_count(), 0);
+
+        let injector = app.injector();
+        for value in ["one", "two", "three"] {
+            let candidate = Candidate::identity(value);
+            let plain = candidate.plain();
+            injector.push(candidate, |_, columns| columns[0] = plain.as_str().into());
+        }
+
+        app.tick_until_settled();
+        assert_eq!(app.total_count(), 3);
+        assert_eq!(app.matched_count(), 3);
+    }
+
+    /// Guards the fix for the 95k-candidate slowdown: a keystroke must not
+    /// cost a pass over the candidates. ENGINEERING §2.1.
+    #[test]
+    fn a_keystroke_stays_within_a_frame_on_a_large_list() {
+        let items: Vec<Candidate> = (0..200_000)
+            .map(|i| Candidate::identity(format!("src/module{}/file_{i}.rs", i % 97)))
+            .collect();
+        let mut app = App::new(items, PickerOptions::default());
+        app.set_height(40);
+
+        for c in "file_12".chars() {
+            let start = std::time::Instant::now();
+            app.handle(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+            let _ = app.rows();
+            let elapsed = start.elapsed();
+            assert!(
+                elapsed < std::time::Duration::from_millis(50),
+                "a keystroke took {elapsed:?}; matching must stay off the UI thread"
+            );
+        }
     }
 }

@@ -39,10 +39,12 @@ impl Picker for TuiPicker {
         let mut guard = TerminalGuard::new()?;
 
         while !app.is_done() {
+            // Let the background matcher make progress, then draw what it has.
+            app.tick();
             let terminal = guard.terminal();
             terminal.draw(|frame| {
                 app.set_height(list_height(frame.area().height, options));
-                render(&app, frame);
+                render(&mut app, frame);
             })?;
             if let Event::Key(key) = event::read()?
                 && key.kind == event::KeyEventKind::Press

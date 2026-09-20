@@ -8,7 +8,6 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::Paragraph;
 
 use super::App;
-use crate::matcher::Match;
 
 /// The prompt before the query.
 const PROMPT: &str = "> ";
@@ -28,7 +27,7 @@ const POINTER_FG: Color = Color::Indexed(168);
 const MARKER_FG: Color = Color::Indexed(114);
 
 /// Draws the picker. Pure in `app`, so it snapshot-tests under `TestBackend`.
-pub fn render(app: &App, frame: &mut Frame<'_>) {
+pub fn render(app: &mut App, frame: &mut Frame<'_>) {
     let area = frame.area();
     let has_header = app.header().is_some();
     let constraints = if has_header {
@@ -74,15 +73,17 @@ pub fn render(app: &App, frame: &mut Frame<'_>) {
 /// The counts read `matched/total`, with the number of marked rows in
 /// parentheses when the picker is in multi mode, as fzf shows them.
 fn render_query(app: &App, frame: &mut Frame<'_>, area: Rect) {
+    // Straight from the matcher's snapshot, so it is correct while the
+    // candidates are still streaming in.
     let counts = if app.multi() && !app.marked.is_empty() {
         format!(
             "{}/{} ({})",
-            app.matched.len(),
-            app.candidates.len(),
+            app.matched_count(),
+            app.total_count(),
             app.marked.len()
         )
     } else {
-        format!("{}/{}", app.matched.len(), app.candidates.len())
+        format!("{}/{}", app.matched_count(), app.total_count())
     };
 
     frame.render_widget(
@@ -108,29 +109,29 @@ fn render_query(app: &App, frame: &mut Frame<'_>, area: Rect) {
 }
 
 /// Draws the candidate rows, ANSI preserved and matches highlighted.
-fn render_list(app: &App, frame: &mut Frame<'_>, area: Rect) {
-    let lines: Vec<Line<'_>> = app
-        .visible()
-        .enumerate()
-        .map(|(row, (matched, candidate))| {
-            let is_cursor = app.offset + row == app.cursor;
+fn render_list(app: &mut App, frame: &mut Frame<'_>, area: Rect) {
+    let multi = app.multi();
+    let rows = app.rows();
+    let lines: Vec<Line<'_>> = rows
+        .iter()
+        .map(|row| {
             // Margin: the pointer for the current row, then the marker
             // column when marking is possible. Blank margins keep the text
             // aligned so it never shifts as the cursor moves.
-            let mut spans = vec![if is_cursor {
+            let mut spans = vec![if row.is_cursor {
                 Span::styled(POINTER, Style::default().fg(POINTER_FG))
             } else {
                 Span::raw(BLANK)
             }];
-            if app.multi() {
-                spans.push(if app.marked.contains(&matched.index) {
+            if multi {
+                spans.push(if row.marked {
                     Span::styled(MARKER, Style::default().fg(MARKER_FG))
                 } else {
                     Span::raw(BLANK)
                 });
             }
             spans.push(Span::raw(" "));
-            spans.extend(display_spans(&candidate.display, matched));
+            spans.extend(display_spans(&row.candidate.display, &row.indices));
 
             Line::from(spans)
         })
@@ -142,10 +143,10 @@ fn render_list(app: &App, frame: &mut Frame<'_>, area: Rect) {
     // A per-line style loses wherever a span carries its own background — an
     // ANSI-coloured segment, a highlighted match, the dimmed description —
     // and stops where the text does instead of covering the row.
-    let row = app.cursor.saturating_sub(app.offset);
-    if let Ok(offset) = u16::try_from(row)
+    let at = app.cursor.saturating_sub(app.offset);
+    if let Ok(offset) = u16::try_from(at)
         && offset < area.height
-        && app.current().is_some()
+        && rows.iter().any(|row| row.is_cursor)
     {
         let line = Rect {
             y: area.y + offset,
@@ -170,13 +171,12 @@ fn highlight() -> Style {
 /// The ANSI text is exploded to one styled character per position so the
 /// highlight can be layered on without discarding the original style, then
 /// regrouped into as few spans as possible.
-fn display_spans(display: &str, matched: &Match) -> Vec<Span<'static>> {
+fn display_spans(display: &str, indices: &[u32]) -> Vec<Span<'static>> {
     let styled = styled_chars(display);
     let mut out: Vec<Span<'static>> = Vec::new();
 
     for (position, (c, base)) in styled.into_iter().enumerate() {
-        let style = if matched
-            .indices
+        let style = if indices
             .binary_search(&u32::try_from(position).unwrap_or(u32::MAX))
             .is_ok()
         {
@@ -320,7 +320,7 @@ mod tests {
         }
         let backend = TestBackend::new(80, 20);
         let mut terminal = Terminal::new(backend).unwrap();
-        terminal.draw(|frame| render(&app, frame)).unwrap();
+        terminal.draw(|frame| render(&mut app, frame)).unwrap();
         insta::assert_snapshot!(format!("{}", terminal.backend()));
     }
 
