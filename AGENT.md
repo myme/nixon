@@ -1,17 +1,117 @@
-# Nixon v2 — working rules
+# Nixon — working rules
 
-Rust rewrite of nixon. The Haskell sources are the reference, not the target.
+Project environment and command launcher, in Rust. Three crates:
+`nixon-picker` (generic fuzzy picker), `nixon` (everything the tool does),
+`nixon-cli` (the binary).
 
-## The two documents
+## Architecture
 
-- `SPEC.md` — **what** v2 must do. A checklist of v1 behaviours, each MUST /
-  SHOULD / QUIRK.
-- `ENGINEERING.md` — **how** we build it: toolchain, crates, layout, tests.
-- `ENGINEERING.md §7 Decisions wins wherever the two conflict.` The backend
-  concept and the `-b`/`-t`/`-T` flags are gone; SPEC text describing them is
-  historical.
-- Cite the checklist in doc comments: `/// SPEC §5.3`. That traceability is
-  how we know what is still unported.
+Dependencies point one way: `nixon-cli` → `nixon` → `nixon-picker`.
+
+- `nixon-picker` knows nothing about commands, projects or markdown. Only
+  `nixon::select` names it; no other module in `nixon` may.
+- `Picker` is the only seam to the terminal, `ProcessRunner` the only seam to
+  subprocesses. `App<P: Picker, R: ProcessRunner>` is generic over both, which
+  is what lets the whole subcommand layer run in tests with fakes.
+- `output.rs` is the only module that writes to stdout.
+- Pass `cwd` explicitly. Never `set_current_dir`: it is process-global and
+  makes tests order-dependent.
+- `config/yaml.rs` is the only place serde-saphyr is imported, so the YAML
+  crate can be swapped in one file.
+- Pure modules — `config`, `markdown`, `placeholder`, `format`, `language`,
+  `command` — do no I/O and read no environment. Anything they need is a
+  parameter (`$SHELL`, `$HOME`, `$DIRENV_DIR`, XDG paths).
+
+## Lints and tooling
+
+Everything runs through nix: `nix develop` for the shell, `nix flake check`
+for the gates. Nothing is `cargo install`ed; nothing runs in CI that
+`nix flake check` does not.
+
+- Lint levels live in `[workspace.lints]`, not on the command line, so the
+  IDE and CI agree. They are `warn` there and the clippy check runs
+  `-D warnings`, so a warning is a failed build.
+- `unsafe_code`, with no exceptions anywhere. There is no `unsafe` block in
+  the workspace. Detaching uses `Command::process_group(0)`, which is safe;
+  do not reach for `fork`.
+- `print_stdout`/`print_stderr` are lints so stdout stays data and human
+  output goes through `tracing`. `output.rs` writes through a locked handle,
+  which the lint does not catch — that is the convention, keep it there.
+- `unwrap_used`/`expect_used`/`panic` apply outside tests; each crate allows
+  them under `cfg(test)`.
+- Prefer `#[expect(lint, reason = "…")]` over `#[allow]`: it fails once the
+  suppression stops being needed.
+
+## Tests
+
+Four layers: unit and property next to the code, `insta` snapshots for picker
+frames and rendered errors, component tests driving `App` with `ScriptedPicker`
+and `FakeRunner`, functional tests against the built binary, plus PTY tests for
+the real event loop.
+
+Fixture rules, each learned from a failure:
+
+- crane's source filter keeps only what cargo needs to **build**. Test
+  fixtures must be added to `keep` in `nix/package.nix` — `.snap` and
+  `README.md` are there — or the nix checks see a different tree than
+  `cargo test` does, and pass locally while failing under nix.
+- Fixtures for anything that walks **up** the filesystem must not use real
+  marker names like `.git`: an ancestor of the temp dir may match. Derive the
+  marker from the temp directory's own name.
+- PTY tests assert on post-exit stdout, exit codes and side effects (a fake
+  `$EDITOR` that records argv), never on screen content: ratatui interleaves
+  cursor escapes between characters, so matching drawn text is a coin flip.
+- `-1` fires on the **empty** query too, so a fixture with one candidate runs
+  it before any key arrives. Interactive fixtures need at least two.
+- `cargo doc` runs `--no-deps`; documenting dependencies raced on the shared
+  `target/doc` and failed intermittently.
+- `cargo-shear` runs inside crane's vendored registry: a sandboxed build has
+  no network for `cargo metadata` to reach crates.io.
+- The 200k-candidate timing test is a **regression guard, not a target**. It
+  runs unoptimised beside the other checks; the threshold is wide on purpose.
+
+## Picker facts
+
+- Matching runs on the candidate's **visible** text, ANSI stripped. Matching
+  the raw text let a query match an escape sequence and put the highlight
+  indices out of step with the rendered characters.
+- Marks are keyed by a candidate `id` assigned on injection, not by row
+  position, so they survive a query change. nucleo exposes no stable id for a
+  matched row, which is why `Candidate` carries one.
+- Matching runs on nucleo's background worker. The UI thread must never make
+  a pass over the candidates: that cost ~180ms per keystroke at 200k.
+- Only the visible window is built per frame, and match indices are computed
+  for those rows only.
+- The kitty keyboard protocol is an improvement, not a requirement: the legacy
+  encoding carries the whole keymap, and both spellings of a key reach us as
+  the same `KeyCode`.
+- Cancelling signals the child's **process group**. The child is an
+  interpreter; the work is its children, and killing only the interpreter
+  leaves them holding the stdout pipe.
+
+## Behaviour that constrains changes
+
+- No backend concept. There is one picker; `-b`, `-t` and `-T` do not exist.
+- Exit codes: the child's status is propagated; a cancelled selection is 130.
+- `-1` auto-select is decided **once**, on the query the picker opened with.
+  The terminal is taken lazily so it can still apply without one.
+- `Lines` and `Fields` placeholders stream as the command produces them;
+  `Columns` and `JSON` are buffered, because widths and the whole document
+  are needed before a candidate exists.
+- Config merge: `Option` fields take the right-hand value when set; path and
+  type lists concatenate; **commands concatenate right-first**, so local
+  commands shadow global ones in first-match lookups.
+- Local config: the whole ancestor chain is searched for `nixon.md` before
+  `.nixon.md` is tried anywhere, so a farther `nixon.md` beats a nearer
+  `.nixon.md`.
+- `--list` with no matches prints to stderr and exits **0**. The shell widgets
+  depend on it.
+- Hidden `_commands` are excluded from the run picker but available to
+  placeholders, `--list`, `edit` and `new`.
+- Script cache: `$XDG_CACHE_HOME/nixon/<sha1-of-source>-<name><ext>`. Scripts
+  are never made executable; the interpreter is always explicit, so a shebang
+  is ignored.
+- A missing or empty global config is not an error. A parse error is.
 
 ## Prose
 
@@ -30,25 +130,12 @@ Rust rewrite of nixon. The Haskell sources are the reference, not the target.
 - PR and issue bodies are not hard-wrapped: one line per paragraph and per
   bullet.
 
-## Tooling
+## History
 
-Everything runs through nix — `nix develop` for the shell, `nix flake check`
-for the gates. Nothing is `cargo install`ed; nothing runs in CI that
-`nix flake check` does not (ENGINEERING §1.1, §3).
+The planning documents — `SPEC.md` (a checklist of v1 behaviour),
+`ENGINEERING.md` (how v2 was built) and `PARITY.md` (the two reconciled) —
+were removed in PLANNING_REMOVAL_HASH. Read them with
+`git show PLANNING_REMOVAL_HASH^:SPEC.md`.
 
-- `cargo fmt` and `taplo fmt` clean.
-- `cargo clippy --all-targets -- -D warnings`; lint levels live in
-  `[workspace.lints]`, not on the command line.
-- `cargo nextest run` for tests.
-- Tests at every layer: unit and property next to the code, `insta` snapshots
-  for picker frames and errors, component tests driving `App` with fakes,
-  functional tests against the real binary (ENGINEERING §5). Port the Haskell
-  suite verbatim first — it is the de-facto grammar spec.
-
-## Hard rules
-
-- **Stdout is data.** `--list`, `--select`, `--insert`, `inspect`, `gc` and
-  `Show` write there and nothing else does; `output.rs` is the only module
-  that prints. Everything for humans goes to stderr, including the TUI.
-- No `unwrap`, `expect` or `panic!` on user input. Typed errors, miette at the
-  binary edge. Cancelling a selection is exit 130, not an error.
+The v1 Haskell implementation was removed in `2a84de2`; read it with
+`git show 2a84de2^:src/Nixon/<Module>.hs`.
