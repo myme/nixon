@@ -259,15 +259,28 @@ Counts are at the bottom.
 
 ## Known gaps
 
-Nothing in SPEC is **missing**. One ENGINEERING requirement is outstanding:
+Nothing in SPEC is **missing**, and no ENGINEERING requirement is
+outstanding. Candidate streaming, the one gap this file used to record, is
+done — see **v2 additions** below.
 
-- **Candidate streaming.** The picker does not yet open before the command
-  producing its candidates finishes. `App::empty()` and `App::injector()`
-  exist and are tested (`candidates_can_be_streamed_in_after_the_picker_opens`),
-  but `resolve.rs` still runs the command to completion because
-  `ProcessRunner` returns captured bytes rather than a stream. Scheduled as
-  **Step I**. Interactive performance is unaffected: matching is already off
-  the UI thread (`a_keystroke_stays_within_a_frame_on_a_large_list`).
+## v2 additions
+
+Behaviour v1 never had. Not SPEC items, so they are not in the counts.
+
+| Addition | Status |
+|---|---|
+| Line-oriented placeholder candidates stream in as the command produces them, so the picker fills rather than waiting | done (`a_lines_placeholder_streams_its_candidates`, `the_picker_is_interactive_before_a_slow_command_finishes`, `a_real_child_streams_its_lines_as_they_arrive`) |
+| Columns and JSON stay buffered — widths and the whole document are needed before a candidate exists | done (`a_columns_placeholder_stays_buffered`, `a_json_placeholder_stays_buffered`, `a_list_placeholder_stays_buffered`) |
+| Cancelling kills the command's whole process group, not just the interpreter | done (`cancelling_kills_a_still_running_candidate_command`, `killing_a_streamed_child_stops_it`) |
+| `-1` still applies to a streaming list: the terminal is taken lazily and nothing is drawn while a unique match is still possible | done (`a_placeholder_with_a_unique_match_resolves_without_a_terminal`, `a_unique_query_runs_without_a_terminal`) |
+| Git worktrees are discovered, including those outside `project_dirs` | done (`worktrees_are_found_even_outside_the_source_dirs`, `a_repository_lists_its_worktrees`) |
+| Bare repositories are recognised and contribute their worktrees | done (`a_bare_repository_is_a_git_dir`, `a_bare_repository_contributes_its_worktrees`, `a_bare_repository_lists_its_worktrees`) |
+| A `.git` path marker is satisfied by a bare repository, so `test: [".git"]` needs no change | done (`a_bare_repository_is_a_git_dir`, `the_bare_layout_alone_is_not_enough`) |
+| Stale worktree entries are skipped and duplicates are not offered twice | done (`a_stale_worktree_is_not_offered`, `a_worktree_already_under_the_source_dirs_is_not_duplicated`) |
+| Worktrees carry the types of their own directory | done (`a_worktree_carries_the_types_of_its_own_directory`) |
+| `git_worktrees: false` turns discovery off | done (`worktree_discovery_can_be_turned_off`) |
+| The picker's readline keymap, cursor, match highlighting and fzf-style row styling | done (`the_editor_shares_the_query_lines_bindings`, `the_current_row_gets_a_subtle_background_not_reverse_video`, `matched_characters_are_highlighted`, `the_cursor_sits_after_the_prompt_and_the_query`) |
+| Matching runs off the UI thread, so a large candidate list stays responsive | done (`a_keystroke_stays_within_a_frame_on_a_large_list`) |
 
 ## Counts
 
@@ -281,4 +294,4 @@ Nothing in SPEC is **missing**. One ENGINEERING requirement is outstanding:
 
 167 rows covering SPEC's 174 `- [ ]` items; a few SPEC bullets that are
 sub-points of one behaviour (the location expectations, the §5.3 test
-vectors, the `parseHeaderArgs` cases) are one row each. 553 tests.
+vectors, the `parseHeaderArgs` cases) are one row each. 590 tests.
