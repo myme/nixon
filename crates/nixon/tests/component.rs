@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
+use nixon::app::new::NewOpts;
+use nixon::app::project::ProjectOpts;
 use nixon::app::{App, Environment, RunOpts};
 use nixon::config::Config;
 use nixon::error::NixonError;
@@ -457,4 +459,32 @@ echo \"$@\"
 
     app.run(&RunOpts::default()).unwrap();
     assert_eq!(app.runner.calls[0].0, RunKind::Captured);
+}
+
+/// Cancelling is cancelling wherever it happens; outside `run` it used to
+/// come back as a message and exit 1.
+#[test]
+fn cancelling_project_edit_or_new_exits_130() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let canceled = || ScriptedPicker::new(vec![Selection::Canceled]);
+
+    let errors = [
+        fixture
+            .app(canceled(), FakeRunner::new())
+            .project(&ProjectOpts::default())
+            .unwrap_err(),
+        fixture
+            .app(canceled(), FakeRunner::new())
+            .edit(None)
+            .unwrap_err(),
+        fixture
+            .app(canceled(), FakeRunner::new())
+            .new_command(&NewOpts::default())
+            .unwrap_err(),
+    ];
+
+    for err in errors {
+        assert!(matches!(err, NixonError::Canceled), "got {err:?}");
+        assert_eq!(err.exit_code(), 130);
+    }
 }

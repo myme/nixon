@@ -21,17 +21,16 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
                     "No command selected.".to_owned(),
                 ));
             }
-            Selection::Canceled => {
-                return Err(NixonError::NothingSelected(
-                    "Command selection canceled.".to_owned(),
-                ));
-            }
+            Selection::Canceled => return Err(NixonError::Canceled),
             Selection::Selected { items, .. } if items.len() > 1 => {
                 return Err(NixonError::NothingSelected(
                     "Multiple commands selected.".to_owned(),
                 ));
             }
-            Selection::Selected { items, .. } => items.into_iter().next().unwrap_or_default(),
+            Selection::Selected { items, .. } => items
+                .into_iter()
+                .next()
+                .ok_or_else(|| NixonError::NothingSelected("No command selected.".to_owned()))?,
         };
 
         self.visit_cmd(&command)?;

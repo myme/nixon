@@ -110,9 +110,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             Selection::Empty => Err(NixonError::NothingSelected(
                 "No project selected.".to_owned(),
             )),
-            Selection::Canceled => Err(NixonError::NothingSelected(
-                "Project selection canceled.".to_owned(),
-            )),
+            Selection::Canceled => Err(NixonError::Canceled),
             Selection::Selected { kind, items } => {
                 let chosen = items
                     .into_iter()
