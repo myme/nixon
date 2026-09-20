@@ -3,6 +3,7 @@
 use comrak::nodes::{AstNode, NodeValue};
 
 use super::header::{HeaderArgs, parse_header_args};
+use crate::command::{DescSpan, Description};
 use crate::language::Language;
 
 /// One flattened markdown node. SPEC §4.2.
@@ -28,8 +29,8 @@ pub enum Node {
         /// The block's contents, including its trailing newline.
         text: String,
     },
-    /// A paragraph's text.
-    Paragraph(String),
+    /// A paragraph, with its inline code kept apart.
+    Paragraph(Description),
     /// Closes a container; carries the line after the container's last.
     End {
         /// One past the container's last line.
@@ -91,7 +92,7 @@ pub fn extract<'a>(node: &'a AstNode<'a>) -> Vec<Node> {
         }
         NodeValue::Paragraph => {
             let children: Vec<_> = node.children().collect();
-            vec![Node::Paragraph(get_text(&children))]
+            vec![Node::Paragraph(description(&children))]
         }
         _ => {
             let mut nodes: Vec<Node> = node.children().flat_map(extract).collect();
@@ -103,24 +104,45 @@ pub fn extract<'a>(node: &'a AstNode<'a>) -> Vec<Node> {
     }
 }
 
-/// Concatenates the text of a node list, one space between every node. SPEC §4.2.
+/// The text of a node list, concatenated as written. SPEC §4.2.
+///
+/// v1 joined the pieces with a space, which put two spaces either side of
+/// every inline code span. That was reproduced on purpose and is visible in
+/// `--list`, so it is gone.
 fn get_text<'a>(nodes: &[&'a AstNode<'a>]) -> String {
-    let Some((node, rest)) = nodes.split_first() else {
-        return String::new();
-    };
-    let children: Vec<_> = node.children().collect();
-    let parts = [own_text(node), get_text(&children), get_text(rest)];
-    parts.join(" ").trim().to_owned()
+    description(nodes).plain()
+}
+
+/// A node list as description spans, inline code kept apart. SPEC §4.5.
+fn description<'a>(nodes: &[&'a AstNode<'a>]) -> Description {
+    let mut spans = Vec::new();
+    collect(nodes, &mut spans);
+    Description::new(spans)
+}
+
+fn collect<'a>(nodes: &[&'a AstNode<'a>], out: &mut Vec<DescSpan>) {
+    for node in nodes {
+        if let NodeValue::Code(code) = &node.data.borrow().value {
+            out.push(DescSpan::Code(code.literal.clone()));
+            continue;
+        }
+        if let Some(text) = own_text(node) {
+            out.push(DescSpan::Text(text));
+        }
+        let children: Vec<_> = node.children().collect();
+        collect(&children, out);
+    }
 }
 
 /// The text a single node contributes; containers contribute nothing.
-fn own_text<'a>(node: &'a AstNode<'a>) -> String {
+fn own_text<'a>(node: &'a AstNode<'a>) -> Option<String> {
     match &node.data.borrow().value {
-        NodeValue::Text(text) => text.to_string(),
-        NodeValue::HtmlInline(html) => html.clone(),
-        NodeValue::HtmlBlock(block) => block.literal.clone(),
-        NodeValue::Code(code) => code.literal.clone(),
-        NodeValue::CodeBlock(block) => block.literal.clone(),
-        _ => String::new(),
+        NodeValue::Text(text) => Some(text.to_string()),
+        NodeValue::HtmlInline(html) => Some(html.clone()),
+        NodeValue::HtmlBlock(block) => Some(block.literal.clone()),
+        NodeValue::CodeBlock(block) => Some(block.literal.clone()),
+        // A wrapped line is one space, not a join of two words.
+        NodeValue::SoftBreak | NodeValue::LineBreak => Some(" ".to_owned()),
+        _ => None,
     }
 }

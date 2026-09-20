@@ -17,6 +17,9 @@ echo "Hello, World!"
 The first paragraph between the heading and the fence is the description, shown
 beside the name in the picker. Anything else between them is skipped.
 
+Inline code in a description keeps its own colour in the picker. Everything
+nixon writes to stdout, `--list` included, is the plain text.
+
 ## Names
 
 The name is the first word of the heading text. Everything after it is scanned

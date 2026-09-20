@@ -5,7 +5,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use nixon_picker::{Candidate, PickerOptions, SelectionType};
 
-use crate::command::Command;
+use crate::command::{Command, DescSpan, Description};
 use crate::config::Config;
 use crate::fs::implode_home;
 use crate::matcher_options;
@@ -29,15 +29,28 @@ pub fn command_candidates(commands: &[Command]) -> Vec<Candidate> {
         .map(|command| {
             let display = command.desc.as_ref().map_or_else(
                 || command.name.clone(),
-                |desc| format!("{}{DIM} - {desc}{RESET}", command.name),
+                |desc| format!("{}{DIM} - {}{RESET}", command.name, styled(desc)),
             );
             Candidate::with_title(display, command.name.clone())
         })
         .collect()
 }
 
+/// A description with its inline code picked out of the dimmed prose.
+fn styled(desc: &Description) -> String {
+    desc.spans
+        .iter()
+        .map(|span| match span {
+            DescSpan::Text(text) => text.clone(),
+            DescSpan::Code(code) => format!("{CODE}{code}{DIM}"),
+        })
+        .collect()
+}
+
 /// Dims the secondary half of a candidate.
 const DIM: &str = "\u{1b}[2m";
+/// Inline code within a description; still dim, but a colour of its own.
+const CODE: &str = "\u{1b}[2;36m";
 /// Ends the dimmed run.
 const RESET: &str = "\u{1b}[0m";
 
@@ -130,16 +143,39 @@ mod tests {
     use super::{
         command_candidates, command_options, line_candidates, project_candidates, project_options,
     };
-    use crate::command::Command;
+    use crate::command::{Command, DescSpan, Description};
     use crate::config::Config;
     use crate::project::{Project, ProjectType};
 
     fn command(name: &str, desc: Option<&str>) -> Command {
         Command {
             name: name.to_owned(),
-            desc: desc.map(ToOwned::to_owned),
+            desc: desc.map(Description::text),
             ..Command::default()
         }
+    }
+
+    #[test]
+    fn inline_code_in_a_description_gets_its_own_colour() {
+        let described = Command {
+            name: "build".to_owned(),
+            desc: Some(Description::new([
+                DescSpan::Text("Run ".to_owned()),
+                DescSpan::Code("cargo build".to_owned()),
+                DescSpan::Text(".".to_owned()),
+            ])),
+            ..Command::default()
+        };
+        let candidates = command_candidates(std::slice::from_ref(&described));
+
+        // The visible text is what matching and stdout see: no markers, and
+        // no spaces around the code span.
+        assert_eq!(candidates[0].plain(), "build - Run cargo build.");
+        assert!(
+            candidates[0].display.contains("\u{1b}[2;36mcargo build"),
+            "the code span was not styled: {:?}",
+            candidates[0].display
+        );
     }
 
     fn project(path: &str) -> Project {

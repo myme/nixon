@@ -60,7 +60,7 @@ mod tests {
     use rstest::rstest;
 
     use super::{parse, parse_config_file};
-    use crate::command::{Command, CommandLocation};
+    use crate::command::{Command, CommandLocation, DescSpan, Description};
     use crate::language::Language;
     use crate::placeholder::{Placeholder, PlaceholderFormat, PlaceholderType};
 
@@ -207,10 +207,50 @@ mod tests {
         ]);
         assert_eq!(parsed[0].name, "hello");
         assert_eq!(parsed[0].lang, Language::Bash);
-        assert_eq!(parsed[0].desc.as_deref(), Some("Command description."));
+        assert_eq!(
+            parsed[0].desc.as_ref().map(Description::plain).as_deref(),
+            Some("Command description.")
+        );
         assert_eq!(parsed[0].source, "echo Hello World\n");
         assert!(parsed[0].placeholders.is_empty());
         assert!(parsed[0].is_bg);
+    }
+
+    /// v1 joined inline nodes with a space, so a description with code in it
+    /// read `Run   cargo build  .` in `--list`.
+    #[test]
+    fn inline_code_does_not_add_spaces_around_itself() {
+        let parsed = commands(&[
+            "# `build`",
+            "",
+            "Run `cargo build` for the workspace.",
+            "",
+            "```bash",
+            "cargo build",
+            "```",
+        ]);
+
+        let desc = parsed[0].desc.as_ref().unwrap();
+        assert_eq!(desc.plain(), "Run cargo build for the workspace.");
+        assert_eq!(
+            desc.spans,
+            [
+                DescSpan::Text("Run ".to_owned()),
+                DescSpan::Code("cargo build".to_owned()),
+                DescSpan::Text(" for the workspace.".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_heading_with_inline_code_and_attributes_reads_cleanly() {
+        let parsed = parse(
+            FILE,
+            &md(&["# `hello` {type=\"git\"}", "", "```bash", "echo hi", "```"]),
+        )
+        .unwrap();
+        assert_eq!(parsed.commands[0].name, "hello");
+        assert_eq!(parsed.commands[0].project_types, ["git"]);
     }
 
     #[test]
@@ -523,7 +563,10 @@ mod tests {
             "```",
         ]);
         assert_eq!(parsed[0].name, "hello");
-        assert_eq!(parsed[0].desc.as_deref(), Some("Command description."));
+        assert_eq!(
+            parsed[0].desc.as_ref().map(Description::plain).as_deref(),
+            Some("Command description.")
+        );
         assert_eq!(parsed[0].source, "echo Hello World\n");
     }
 

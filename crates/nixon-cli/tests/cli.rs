@@ -583,3 +583,17 @@ fn a_query_operator_narrows_the_project_selection() {
         .success()
         .stdout(format!("{}\n", src.child("gaia").path().display()));
 }
+
+/// The picker colours inline code in a description; `--list` is data and
+/// must be plain, with no markers and no inserted spaces.
+#[test]
+fn list_output_is_plain_text() {
+    Fixture::with_config(
+        "# `build`\n\nRun `cargo build` for the workspace.\n\n```bash\ncargo build\n```\n",
+    )
+    .nixon()
+    .args(["run", "-l"])
+    .assert()
+    .success()
+    .stdout("build - Run cargo build for the workspace.\n");
+}

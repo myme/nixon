@@ -2,7 +2,7 @@
 
 use super::MarkdownError;
 use super::extract::Node;
-use crate::command::{Command, parse_command_name};
+use crate::command::{Command, Description, parse_command_name};
 use crate::placeholder::scan_all;
 
 /// Parses one command, returning it and the nodes it did not consume.
@@ -17,14 +17,14 @@ pub fn parse_command<'n>(
     project_types: Vec<String>,
     nodes: &'n [Node],
 ) -> Result<(Command, &'n [Node]), MarkdownError> {
-    let mut desc: Option<String> = None;
+    let mut desc: Option<Description> = None;
     let mut rest = nodes;
 
     loop {
         match rest.first() {
-            Some(Node::Paragraph(text)) => {
+            Some(Node::Paragraph(paragraph)) => {
                 if desc.is_none() {
-                    desc = Some(text.trim().to_owned());
+                    desc = Some(paragraph.clone());
                 }
                 rest = &rest[1..];
             }

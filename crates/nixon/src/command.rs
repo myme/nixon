@@ -19,13 +19,84 @@ pub struct CommandLocation {
     pub level: usize,
 }
 
+/// A piece of a description, as it was written. SPEC §4.5.
+///
+/// Kept apart so the picker can style inline code; everything on stdout uses
+/// [`Description::plain`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DescSpan {
+    /// Ordinary prose.
+    Text(String),
+    /// An inline code span, without its backticks.
+    Code(String),
+}
+
+impl DescSpan {
+    /// The characters this span contributes.
+    pub fn text(&self) -> &str {
+        match self {
+            Self::Text(text) | Self::Code(text) => text,
+        }
+    }
+}
+
+/// A command's description. SPEC §4.5.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Description {
+    /// The pieces, in order, with adjacent prose already merged.
+    pub spans: Vec<DescSpan>,
+}
+
+impl Description {
+    /// Builds a description, merging adjacent prose and trimming the ends.
+    pub fn new(spans: impl IntoIterator<Item = DescSpan>) -> Self {
+        let mut merged: Vec<DescSpan> = Vec::new();
+        for span in spans {
+            match (merged.last_mut(), &span) {
+                (Some(DescSpan::Text(last)), DescSpan::Text(text)) => last.push_str(text),
+                _ => merged.push(span),
+            }
+        }
+
+        if let Some(DescSpan::Text(first)) = merged.first_mut() {
+            *first = first.trim_start().to_owned();
+        }
+        if let Some(DescSpan::Text(last)) = merged.last_mut() {
+            *last = last.trim_end().to_owned();
+        }
+        merged.retain(|span| !matches!(span, DescSpan::Text(text) if text.is_empty()));
+        Self { spans: merged }
+    }
+
+    /// A description of plain prose.
+    pub fn text(text: impl Into<String>) -> Self {
+        Self::new([DescSpan::Text(text.into())])
+    }
+
+    /// The description as characters, which is what stdout carries.
+    pub fn plain(&self) -> String {
+        self.spans.iter().map(DescSpan::text).collect()
+    }
+
+    /// Whether there is nothing to show.
+    pub fn is_empty(&self) -> bool {
+        self.spans.is_empty()
+    }
+}
+
+impl fmt::Display for Description {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.plain())
+    }
+}
+
 /// A runnable command. SPEC §5.1.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Command {
     /// The name selected by, and referenced by placeholders.
     pub name: String,
     /// First paragraph after the heading, if any.
-    pub desc: Option<String>,
+    pub desc: Option<Description>,
     /// Language of the source block.
     pub lang: Language,
     /// Project types this applies to; empty means every project.
