@@ -25,3 +25,14 @@ wildcards = "deny"
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+# Transitive dependencies of comrak. Both licences are permissive; they are
+# listed per-crate rather than added to the allow-list above so the policy in
+# ENGINEERING §6 keeps meaning what it says.
+[[licenses.exceptions]]
+name = "fmt2io"
+allow = ["MITNFA"]
+
+[[licenses.exceptions]]
+name = "finl_unicode"
+allow = ["Unicode-DFS-2016"]
