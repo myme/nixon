@@ -17,6 +17,7 @@ use std::process::ExitCode;
 
 pub mod command;
 pub mod config;
+pub mod discover;
 pub mod format;
 pub mod fs;
 pub mod language;
