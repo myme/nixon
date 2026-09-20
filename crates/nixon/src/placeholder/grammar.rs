@@ -247,6 +247,15 @@ mod tests {
         );
     }
 
+    /// SPEC §5.3 QUIRK: the pipe needs no surrounding spaces.
+    #[rstest]
+    #[case("${a|multi}")]
+    #[case("${a | multi}")]
+    #[case("${a   |   multi}")]
+    fn a_pipe_modifier_needs_no_spaces(#[case] input: &str) {
+        assert_eq!(parse_one(input).map(|p| p.multiple), Ok(true));
+    }
+
     #[test]
     fn modifiers_combine() {
         let parsed = parse_one("<{files | cols+h 1,2 | filter \"src\" | list | multi}").unwrap();

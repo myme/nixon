@@ -1,13 +1,17 @@
 { pkgs, craneLib }:
 
 let
-  # crane's cargo filter drops .snap files, which would leave insta with no
-  # stored snapshots in the sandbox and make every snapshot test "new".
+  # crane's cargo filter keeps only what cargo needs to build. Test fixtures
+  # have to be added back or the checks see a different tree than `cargo
+  # test` does: .snap files, or insta finds no stored snapshot and every
+  # snapshot test is "new", and README.md, which a test reads to prove the
+  # documented --help has not drifted. ENGINEERING §1.1.
+  keep = path: builtins.match ".*(\\.snap|/README\\.md)$" path != null;
+
   src = pkgs.lib.cleanSourceWith {
     src = ./..;
     name = "source";
-    filter =
-      path: type: (builtins.match ".*\\.snap$" path != null) || (craneLib.filterCargoSources path type);
+    filter = path: type: (keep path) || (craneLib.filterCargoSources path type);
   };
 
   commonArgs = {
