@@ -15,7 +15,7 @@ use nixon::fs::Dirs;
 use nixon::process::RealRunner;
 use nixon_picker::FilterPicker;
 
-use crate::cli::Cli;
+use crate::cli::{Cli, Commands};
 
 /// Answers a completion request and exits, if this is one.
 ///
@@ -43,6 +43,48 @@ pub fn command_names(current: &OsStr) -> Vec<CompletionCandidate> {
             .map(|command| command.name),
         current,
     )
+}
+
+/// The option tokens of the command already named on the line.
+///
+/// `--no-<name>` is offered alongside each token, since that is how an
+/// option is turned off.
+pub fn option_tokens(current: &OsStr) -> Vec<CompletionCandidate> {
+    let Some(name) = named_command() else {
+        return Vec::new();
+    };
+    let Some(app) = completion_app() else {
+        return Vec::new();
+    };
+    let project = app.current_project();
+    let Ok(config) = app.config_for(&project) else {
+        return Vec::new();
+    };
+
+    let Some(command) = find_project_commands(&config, &project)
+        .into_iter()
+        .find(|command| command.name == name)
+    else {
+        return Vec::new();
+    };
+
+    candidates(
+        command
+            .options
+            .iter()
+            .flat_map(|option| [option.token.clone(), format!("--no-{}", option.name)]),
+        current,
+    )
+}
+
+/// The command `run` or `project` was given on the line being completed.
+fn named_command() -> Option<String> {
+    match partial_cli()?.command? {
+        Commands::Run(args) => args.command,
+        Commands::Project(args) => args.command,
+        Commands::External(args) => args.into_iter().next(),
+        _ => None,
+    }
 }
 
 /// Names of the projects discovery finds.

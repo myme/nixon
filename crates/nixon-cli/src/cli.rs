@@ -174,7 +174,12 @@ pub struct RunArgs {
     /// Command to run.
     #[arg(add = clap_complete::ArgValueCompleter::new(crate::complete::command_names))]
     pub command: Option<String>,
-    /// Arguments to the command.
+    /// Arguments to the command: option tokens, and queries for its
+    /// placeholders.
+    #[arg(
+        allow_hyphen_values = true,
+        add = clap_complete::ArgValueCompleter::new(crate::complete::option_tokens)
+    )]
     pub args: Vec<String>,
     /// Select a command and output its source.
     #[arg(short = 'i', long)]
@@ -200,7 +205,12 @@ pub struct ProjectArgs {
     /// Command to run in it.
     #[arg(add = clap_complete::ArgValueCompleter::new(crate::complete::command_names))]
     pub command: Option<String>,
-    /// Arguments to the command.
+    /// Arguments to the command: option tokens, and queries for its
+    /// placeholders.
+    #[arg(
+        allow_hyphen_values = true,
+        add = clap_complete::ArgValueCompleter::new(crate::complete::option_tokens)
+    )]
     pub args: Vec<String>,
     /// Select a project command and output its source.
     #[arg(short = 'i', long)]

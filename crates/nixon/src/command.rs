@@ -122,6 +122,31 @@ pub enum ArgSpec {
     Option(usize),
 }
 
+/// What the command line said about a command's options.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Overrides {
+    /// Per option, `Some` when the command line named it.
+    pub set: Vec<Option<bool>>,
+    /// The arguments that were not option tokens.
+    pub queries: Vec<String>,
+}
+
+impl Overrides {
+    /// The option state these overrides imply, over `defaults`.
+    pub fn apply(&self, defaults: &[bool]) -> Vec<bool> {
+        defaults
+            .iter()
+            .enumerate()
+            .map(|(index, default)| self.set.get(index).copied().flatten().unwrap_or(*default))
+            .collect()
+    }
+
+    /// Whether the command line settled every option.
+    pub fn is_complete(&self) -> bool {
+        !self.set.is_empty() && self.set.iter().all(Option::is_some)
+    }
+}
+
 /// Wraps placeholders as arguments, for callers that have no options.
 pub fn arg_specs(placeholders: Vec<Placeholder>) -> Vec<ArgSpec> {
     placeholders.into_iter().map(ArgSpec::Placeholder).collect()
@@ -177,6 +202,32 @@ impl Command {
     /// Every option at its declared default.
     pub fn default_options(&self) -> Vec<bool> {
         self.options.iter().map(|option| option.default).collect()
+    }
+
+    /// Splits command-line arguments into option overrides and queries.
+    ///
+    /// A word equal to an option's token turns it on and `--no-<name>` turns
+    /// it off; everything else stays a placeholder query, so an unknown
+    /// `--x` searches rather than failing.
+    pub fn split_args(&self, args: &[String]) -> Overrides {
+        let mut overrides = Overrides {
+            set: vec![None; self.options.len()],
+            queries: Vec::new(),
+        };
+
+        for arg in args {
+            if let Some(index) = self.options.iter().position(|o| &o.token == arg) {
+                overrides.set[index] = Some(true);
+            } else if let Some(name) = arg.strip_prefix("--no-")
+                && let Some(index) = self.options.iter().position(|o| o.name == name)
+            {
+                overrides.set[index] = Some(false);
+            } else {
+                overrides.queries.push(arg.clone());
+            }
+        }
+
+        overrides
     }
 
     /// The option with this name, if the command declares one.
@@ -284,7 +335,7 @@ pub(crate) fn option_name(token: &str) -> Option<String> {
 mod tests {
     use rstest::rstest;
 
-    use super::{ArgSpec, parse_command_name};
+    use super::{ArgSpec, Command, parse_command_name};
     use crate::placeholder::{ParseError, Placeholder, PlaceholderFormat, PlaceholderType};
 
     fn arg(name: &str) -> Placeholder {
@@ -451,6 +502,63 @@ mod tests {
     fn an_options_env_var_replaces_dashes() {
         let (_, _, options) = parse_command_name("cmd --no-cache").unwrap();
         assert_eq!(options[0].env_var(), "nixon_opt_no_cache");
+    }
+
+    fn options_of(heading: &str) -> Command {
+        let (name, args, options) = parse_command_name(heading).unwrap();
+        Command {
+            name,
+            args,
+            options,
+            ..Command::default()
+        }
+    }
+
+    fn words(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn a_matching_token_sets_an_option_and_the_rest_stay_queries() {
+        let command = options_of("remove --force ${worktree}");
+        let split = command.split_args(&words(&["--force", "main"]));
+
+        assert_eq!(split.set, [Some(true)]);
+        assert_eq!(split.queries, ["main"]);
+        assert_eq!(split.apply(&command.default_options()), [true]);
+    }
+
+    #[test]
+    fn a_no_prefixed_token_turns_an_option_off() {
+        let mut command = options_of("remove --force");
+        command.options[0].default = true;
+
+        let split = command.split_args(&words(&["--no-force"]));
+        assert_eq!(split.set, [Some(false)]);
+        assert_eq!(split.apply(&command.default_options()), [false]);
+    }
+
+    #[test]
+    fn an_unknown_dashed_word_stays_a_query() {
+        let command = options_of("remove --force");
+        let split = command.split_args(&words(&["--quiet", "-x"]));
+
+        assert_eq!(split.set, [None]);
+        assert_eq!(split.queries, ["--quiet", "-x"]);
+    }
+
+    #[test]
+    fn a_command_line_that_names_every_option_is_complete() {
+        let command = options_of("build --release --no-cache");
+        assert!(!command.split_args(&words(&["--release"])).is_complete());
+        assert!(
+            command
+                .split_args(&words(&["--release", "--no-no-cache"]))
+                .is_complete()
+        );
+        // A command with no options is never "complete"; there is nothing
+        // for the prompt to ask about either way.
+        assert!(!options_of("plain").split_args(&[]).is_complete());
     }
 
     #[test]

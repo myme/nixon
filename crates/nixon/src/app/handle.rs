@@ -83,6 +83,11 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         let cache = self.dirs.cache_dir();
         let header = command.show();
 
+        // A word matching an option's token settles it; the rest stay
+        // placeholder queries.
+        let overrides = command.split_args(args);
+        let on = overrides.apply(&command.default_options());
+
         let resolved = {
             let context = context(&self.env, &config, &cache);
             let mut resolver = Resolver {
@@ -93,7 +98,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
                 runner: &mut self.runner,
                 header,
             };
-            resolver.resolve_env(command, args)?
+            resolver.resolve_with(command, &overrides.queries, &on)?
         };
 
         let context = context(&self.env, &config, &cache);

@@ -597,3 +597,40 @@ fn list_output_is_plain_text() {
     .success()
     .stdout("build - Run cargo build for the workspace.\n");
 }
+
+const OPTIONS_MD: &str = "\
+# `show --force -v`
+
+Shows what it was given.
+
+- `--force`: off — the dangerous one
+- `-v`: on
+
+```bash
+echo \"args: $*\"
+echo \"force=$nixon_opt_force verbose=$nixon_opt_v\"
+```
+";
+
+/// Option tokens on the command line settle the options, and land in argv
+/// where the heading put them.
+#[test]
+fn option_tokens_on_the_command_line_reach_argv_and_the_environment() {
+    Fixture::with_config(OPTIONS_MD)
+        .nixon()
+        .args(["show", "--force", "-v"])
+        .assert()
+        .success()
+        .stdout("args: --force -v\nforce=1 verbose=1\n");
+}
+
+/// `--no-<name>` turns an option off, whatever its default says.
+#[test]
+fn no_prefixed_tokens_turn_options_off() {
+    Fixture::with_config(OPTIONS_MD)
+        .nixon()
+        .args(["show", "--no-force", "--no-v"])
+        .assert()
+        .success()
+        .stdout("args: \nforce= verbose=\n");
+}
