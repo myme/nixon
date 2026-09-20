@@ -5,7 +5,7 @@ use std::fmt;
 use std::path::Path;
 
 /// A command's language, as named by a markdown code block's info string.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Language {
     /// `sh`, `bash`.
     Bash,
@@ -24,6 +24,7 @@ pub enum Language {
     /// An info string nixon does not know; it has no interpreter.
     Unknown(String),
     /// No info string at all; runs under `$SHELL`.
+    #[default]
     None,
 }
 
