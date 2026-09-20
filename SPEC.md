@@ -1063,14 +1063,21 @@ as a library, never from config. v2 names the placeholder discriminant
 - [ ] MUST: Each source dir is expanded with **wordexp** (`~`, `$VAR`;
       command substitution disabled). Expansion failure → that entry
       contributes nothing. Wildcards (`~/src/*`) therefore work.
-- [ ] MUST: For each expanded candidate that is a directory: if it's a
-      project (`find_project`) → yield it; **else** recurse into its
-      children with `max_depth - 1`. `max_depth < 0` → `[]`.
+- [ ] MUST: For each expanded candidate that is a directory: yield it if it
+      is a project (`find_project`) **and, regardless, recurse into its
+      children** with `max_depth - 1`. (`project <|> subprojects` on
+      turtle's `Shell` is stream concatenation, not choice; the Haskell doc
+      comment saying "for each source directory *not* a project" is wrong.)
+      `max_depth < 0` → `[]`.
 - [ ] MUST: Called with `max_depth = 1` → source dirs themselves (depth 1)
       and their immediate children (depth 0) are considered; grandchildren
       are not.
-- [ ] MUST: A source dir that is itself a project yields only itself (its
-      children are not scanned).
+- [ ] MUST: A source dir that is itself a project yields itself **and** any
+      child projects (e.g. `~/src` being a git repo with vendored repos
+      inside lists both). Tested in v2.
+- [ ] MUST: `$VAR` expansion of an undefined variable yields the empty
+      string (wordexp without `WRDE_UNDEF`); v2 uses shellexpand's no-error
+      context for the same result.
 - [ ] MUST: Results sorted by full path (`sort_projects`) in
       `getSortedProjects`. No dedupe.
 - [ ] SHOULD: Hidden directories are not excluded (`ls` lists dotfiles).

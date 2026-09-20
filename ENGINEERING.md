@@ -360,6 +360,10 @@ Conventions:
   `.git/`, `nixon.md`, `bin/` etc. — no shared mutable temp dirs.
 - Never rely on `$HOME`, `$EDITOR`, `$SHELL` of the host: tests set them
   explicitly via `Command::env_clear()` + `.env(...)`.
+- Anything that walks **up** the filesystem (project detection, dominating
+  files) must not use real marker names like `.git` in fixtures: an ancestor
+  of the temp dir may match (this host has a stray `/tmp/.git`). Derive the
+  marker name from the temp directory itself.
 - PTY tests are tagged `#[ignore = "pty"]`-style via nextest filter
   (`.config/nextest.toml` profile) so they can be excluded on constrained
   runners but run in CI.
