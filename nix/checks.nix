@@ -38,10 +38,13 @@ in
     src = lib.sources.sourceFilesBySuffices ./.. [ ".toml" ];
   };
 
+  # --no-deps as ENGINEERING §3 specifies. Documenting dependencies as well
+  # raced on the shared target/doc tree and failed intermittently.
   doc = craneLib.cargoDoc (
     commonArgs
     // {
       inherit cargoArtifacts;
+      cargoDocExtraArgs = "--no-deps";
       env.RUSTDOCFLAGS = "-D warnings";
     }
   );
