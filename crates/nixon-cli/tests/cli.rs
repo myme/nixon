@@ -146,7 +146,7 @@ fn bare_arguments_are_the_run_subcommand() {
 }
 
 #[test]
-fn a_child_exit_code_is_the_processs_exit_code() {
+fn a_child_exit_code_becomes_the_process_exit_code() {
     Fixture::new()
         .nixon()
         .args(["run", "boom"])
