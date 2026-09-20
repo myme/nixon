@@ -138,9 +138,14 @@ fn confirm(prompt: &str) -> Result<bool> {
 /// A copy truncates first, so an interrupted write leaves half a config
 /// file. A sibling plus a rename never does, and starting the sibling from
 /// the original's mode keeps the file's permissions.
+///
+/// The rename lands on the resolved path: renaming onto a symlink replaces
+/// the link with a regular file and leaves the real file untouched, which is
+/// exactly wrong for a `nixon.md` symlinked out of a dotfiles repository.
 fn replace(path: &Path, source: &Path) -> Result<()> {
     use std::io::Write as _;
 
+    let path = &std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     let mut temp = tempfile::Builder::new().prefix(".nixon").tempfile_in(dir)?;
     temp.write_all(&std::fs::read(source)?)?;

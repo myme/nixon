@@ -634,3 +634,39 @@ fn no_prefixed_tokens_turn_options_off() {
         .success()
         .stdout("args: \nforce= verbose=\n");
 }
+
+/// A `nixon.md` symlinked out of a dotfiles repository must stay a symlink,
+/// and the file it points at must be the one that changes.
+#[test]
+#[cfg(unix)]
+fn new_writes_through_a_symlinked_config() {
+    let fixture = Fixture::with_config(ONE_COMMAND_MD);
+    let real = fixture.temp.child("elsewhere/nixon.md");
+    real.write_str(ONE_COMMAND_MD).unwrap();
+
+    let link = fixture.temp.child("project/nixon.md");
+    std::fs::remove_file(link.path()).unwrap();
+    std::os::unix::fs::symlink(real.path(), link.path()).unwrap();
+
+    fixture
+        .nixon()
+        .args(["new", "-n", "spliced"])
+        .env("EDITOR", "true")
+        .write_stdin("y\n")
+        .assert()
+        .success();
+
+    assert!(
+        std::fs::symlink_metadata(link.path())
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "the symlink was replaced by a regular file"
+    );
+    assert!(
+        std::fs::read_to_string(real.path())
+            .unwrap()
+            .contains("`spliced`"),
+        "the file behind the link was not updated"
+    );
+}
