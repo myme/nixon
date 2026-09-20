@@ -25,10 +25,26 @@ let
     // {
       inherit cargoArtifacts;
 
-      # TODO: install the rewritten shell widgets and completion loaders here
-      # once they exist (ENGINEERING §7.2). The v1 widgets are incompatible.
+      # The widgets are v2's: no -b/-T, which no longer parse. Completion is
+      # clap_complete's CompleteEnv, so the loaders are `eval`'d snippets
+      # rather than generated files (ENGINEERING §2.1).
       postInstall = ''
-        mkdir -p $out/share/nixon
+        install -Dm444 -t $out/share/nixon \
+          ${../extra}/nixon-widget.bash \
+          ${../extra}/nixon-widget.zsh \
+          ${../extra}/nixon-widget.fish
+
+        mkdir -p $out/share/bash-completion/completions
+        echo 'source <(COMPLETE=bash nixon)' \
+          > $out/share/bash-completion/completions/nixon
+
+        mkdir -p $out/share/zsh/site-functions
+        echo 'source <(COMPLETE=zsh nixon)' \
+          > $out/share/zsh/site-functions/_nixon
+
+        mkdir -p $out/share/fish/vendor_completions.d
+        echo 'COMPLETE=fish nixon | source' \
+          > $out/share/fish/vendor_completions.d/nixon.fish
       '';
 
       meta = {

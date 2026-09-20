@@ -20,5 +20,11 @@ nixon-picker.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
+[dev-dependencies]
+assert_cmd.workspace = true
+assert_fs.workspace = true
+insta.workspace = true
+predicates.workspace = true
+
 [lints]
 workspace = true
