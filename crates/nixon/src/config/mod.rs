@@ -1,5 +1,6 @@
 //! The effective configuration and how its sources combine. SPEC §3.
 
+pub mod load;
 pub mod schema;
 pub mod yaml;
 
@@ -35,6 +36,9 @@ pub enum ConfigError {
     /// The markdown, JSON or YAML could not be parsed.
     #[error("{0}")]
     ParseError(String),
+    /// A markdown config file failed to parse, with its position.
+    #[error("{0}")]
+    Markdown(#[from] crate::markdown::MarkdownError),
 }
 
 /// The effective configuration. SPEC §3.2.
