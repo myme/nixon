@@ -329,8 +329,10 @@ single spaces and stripping. Emphasis/links contribute only their text.
 - [ ] MUST: Heading text for name purposes is the concatenation of all text
       + inline code, e.g. `# \`hello\` {type="git"}` → text
       `hello {type="git"}`.
-- [ ] QUIRK: `getText` inserts a space between every node, so
-      `` # `hello`world `` → `hello world`. Irrelevant in practice.
+- [ ] QUIRK: `getText` joins `[own text, children, siblings]` with single
+      spaces and only strips the ends, so internal runs of two spaces occur:
+      `` # `hello` {type="git"} `` → `hello  {type="git"}`. Invisible
+      downstream (name is trimmed, first word taken). v2 reproduces it.
 
 ### 4.3 Heading attribute syntax (`parseHeaderArgs`, `Markdown.hs:120-140`)
 
@@ -363,58 +365,44 @@ letters  := letter+
 
 ### 4.4 Command / config state machine (`parse`, `Markdown.hs:172-223`)
 
-State: `headerLevel: usize` (starts 0), `projectTypes: Vec<String>` (starts
-empty), `lastPos: PosInfo` (file, line, level).
+**v2 model (implemented):** walk the flattened nodes with a **stack of
+`(level, types)` frames**, one per open heading. On any `Head(level, …)`,
+pop every frame with `frame.level >= level`, then push
+`(level, kwargs["type"])`. A command's project types are the concatenation
+of the `type` kwargs of every frame on the stack, innermost first. This
+gives: sibling headings don't inherit from each other; nested headings
+inherit from all ancestors; and — the v1 bug fixed — `type` on a
+*non-command* section heading applies to the commands beneath it.
 
-Walk nodes in order:
+Then per node:
 
-1. `End(pos)` → close the pending command's location using
-   `addLocation(lastPos, PosInfo{pos, headerLevel})` (§4.6). Continue.
-2. `Head(level, …)` with `level < state.headerLevel` → reset state to
-   `S { headerLevel: level, projectTypes: [], lastPos }` and re-process the
-   same node. ("Going back up or to next sibling" — clears inherited project
-   types.)
-3. `Head` with `config` in args → `parseConfig(rest)` (must be followed
-   immediately by a `Source`). Error if a config already exists.
-4. `Head` with `command` in args →
-   - `pt = kwargs["type"] ++ state.projectTypes`
-   - `isBg = "bg" in args`
-   - `parseCommand(pos, name, pt, rest)` (§4.5). On success:
-     - `cmd.isBg = isBg`
-     - close previous command's location (`addLocation`)
-     - new state: `headerLevel = level`,
-       `projectTypes = kwargs["type"] ++ parentTypes` where `parentTypes` is
-       `[]` if `level == state.headerLevel` (sibling) else
-       `state.projectTypes` (child inherits),
-       `lastPos = this heading's pos`.
-     - push command.
-5. Any other `Head` (not command, not config) → close the previous
-   command's location with this heading's position; **state is not
-   otherwise updated** (`go st (cfg, cmds) rest`) — in particular, a
-   non-command heading with `{type="git"}` is handled by rule 2 only if its
-   level is *lower* than the current level... see quirk below.
-6. `Source` with `config` in attrs → parse as config block. Error on
-   duplicate.
-7. Anything else (`Paragraph`, `Source` not attached to a command) → skip.
+- `Head` with `config` in args → `parseConfig(rest)`: the very next node must
+  be a `Source`, else `Expecting config source after header`. A second
+  config anywhere → `Found multiple configuration blocks`.
+- `Head` with `command` in args → `parseCommand` (§4.5) with the stack's
+  types and `isBg = "bg" in args`; record the heading's position for the
+  location (§4.6).
+- `Source` with `config` in attrs → config block, same duplicate rule.
+- `End`/next `Head` → closes the previous command's location.
+- Everything else is skipped.
 
-- [ ] MUST: Commands are returned in document order (`reverse` of the
-      accumulated list).
+**v1 behaviour, for reference:** v1 kept a single `(headerLevel,
+projectTypes, lastPos)` state. Rule "level < headerLevel → reset types and
+reprocess" existed only to clear inherited types; command headings updated
+the state (`types = own ++ parent`, parent = `[]` if same level), but
+**non-command headings did not touch it**, which is why section-level
+`type="…"` was silently ignored (verified against the binary). The stack
+subsumes the reset rule and every ported test passes unchanged.
+
+- [ ] MUST: Commands are returned in document order.
 - [ ] MUST (verified against the binary): `type="…"` on a **command**
-      heading applies to that command, and to command headings nested
-      **under** it (deeper level) until a heading of the same or higher level
-      is reached. E.g. `### \`sub-parent\` {type="git"}` → `#### \`sub-child\``
-      gives both commands type `git`.
-- [ ] BUG (verified): `type="…"` on a **non-command** section heading
-      (`## Git stuff {type="git"}` → `### \`git-files\``) is **ignored** —
-      rule 5 does not update the state, so `git-files` ends up with no
-      types and is offered in every project. The README documents this as
-      working. v2 MUST implement it: any heading's `type` kwargs apply to all
-      commands nested beneath it until a sibling/ancestor heading, and there
-      must be a test for it.
+      heading applies to that command and to command headings nested under
+      it until a heading of the same or higher level.
+- [ ] MUST (v2 fix of a verified v1 BUG): `type="…"` on a non-command
+      section heading (`## Git stuff {type="git"}` → `### \`git-files\``)
+      applies to the commands beneath it. Tested.
 - [ ] MUST: Header level gaps are fine (`##` then `####` are both top-level
       commands; test "can bump header level gaps").
-- [ ] MUST: A command heading nested under another command heading inherits
-      the parent's types (rule 4 `parentTypes`).
 
 ### 4.5 Command parsing (`parseCommand`, `Markdown.hs:265-292`)
 
@@ -480,6 +468,9 @@ level:      heading level of the command heading
 ```
 
 - [ ] MUST: Only set once per command (first `addLocation` wins).
+- Note: the Haskell defaults (`start_line = -1`, `end_line = -1`) apply only
+  when a node has no position, which cannot happen for the document root;
+  v2 uses `usize` with saturating subtraction and never observes them.
 - [ ] MUST: Test expectations:
   - Single command at lines 1–4 (`# foo`, fence, body, fence) →
     `Loc("some-file.md", 1, 4, 1)` (document `End` is line 5 → end 4).
@@ -566,8 +557,8 @@ colon-modifiers := ':' ( fields 'm'? | 'm' fields? )   -- Fields + multiple, eit
 
 - [ ] MUST: EnvVar naming: if alias is empty (`={git-files}`) the env var
       name is the command name with `-` → `_` (`git_files`). If an alias is
-      given (`FILES={git-files}`) it's used verbatim (also with `-`→`_`
-      applied, harmless).
+      given (`FILES={git-files}`) it's used verbatim (the alias grammar is
+      `[A-Za-z0-9_]*`, so it can never contain `-`).
 - [ ] MUST: Setting a format twice (`| cols 1 | fields 2`) → error
       `Placeholder format already set`. (Only checked in `parseFields`, so
       `| json | fields 1` also errors, but `| fields 1 | json` silently
@@ -759,7 +750,7 @@ colon-modifiers := ':' ( fields 'm'? | 'm' fields? )   -- Fields + multiple, eit
 | Python | `python` | `.py` | `.py` | `python3` |
 | YAML | `yaml` | – | `.yaml` | `yq -r .` |
 | None | `` (empty) | – | `.sh` | `$SHELL` if set, else `bash` |
-| Unknown(s) | anything else | any other ext / no ext → `Unknown("")` | `.txt` | **none** → fatal `No interpreter for <s>` |
+| Unknown(s) | anything else | any other ext `x` → `Unknown("x")`; no ext → `Unknown("")` | `.txt` | **none** → fatal `No interpreter for <s>` |
 
 - [ ] MUST: `Display` of a language is the lowercase name; `Unknown(s)` →
       `s`; `None` → `""`. Used in `new` template (```` ```bash ````).
@@ -1020,6 +1011,10 @@ project_path = dir / name
 ProjectType { id: String, markers: Vec<ProjectMarker>, description: String }
 ProjectMarker = Path(p) | File(p) | Dir(p) | Or(Vec<Marker>) | Func(fn)
 ```
+
+v2 omits `Func`: it was only constructible by Haskell code embedding nixon
+as a library, never from config. v2 names the placeholder discriminant
+`kind` rather than `type_`.
 
 ### 9.2 Type detection (`find_project_types`, `test_marker`)
 
