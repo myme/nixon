@@ -8,5 +8,9 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[dependencies]
+crossterm.workspace = true
+nucleo-matcher.workspace = true
+
 [lints]
 workspace = true
