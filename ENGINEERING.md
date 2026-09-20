@@ -519,8 +519,11 @@ discovery misses them.
   and `config` has `bare = true`). For marker matching, a `.git` path marker
   is satisfied by a bare repository too, so `test: [".git"]` classifies bare
   repos as `git` projects without new config.
-- For every discovered git dir, enumerate its worktrees **without invoking
-  `git`**: read `<gitdir>/worktrees/<name>/gitdir` (gitdir = `dir/.git`, or
+- The worktree scan walks the expanded `project_dirs` **independently** of
+  project-type discovery (same depth-1 shape), looking for git dirs rather
+  than projects — so a bare repo's worktrees are found even when no `.git`
+  marker is configured. For every git dir found, enumerate its worktrees
+  **without invoking `git`**: read `<gitdir>/worktrees/<name>/gitdir` (gitdir = `dir/.git`, or
   `dir` for bare; follow a `.git` file's `gitdir:` pointer for the main
   repo's gitdir if needed). Each file holds the path of the worktree's `.git`
   file; its parent is the worktree root. Skip entries whose path no longer
