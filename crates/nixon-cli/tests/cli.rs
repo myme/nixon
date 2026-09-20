@@ -382,8 +382,10 @@ fn new_leaves_the_file_alone_when_declined() {
     assert_eq!(before, after);
 }
 
+/// The prompt is for a person, so it belongs on stderr with the picker;
+/// stdout is data.
 #[test]
-fn new_asks_before_writing() {
+fn new_asks_before_writing_on_stderr() {
     Fixture::with_config(ONE_COMMAND_MD)
         .nixon()
         .args(["new", "-n", "spliced"])
@@ -391,7 +393,40 @@ fn new_asks_before_writing() {
         .write_stdin("n\n")
         .assert()
         .success()
-        .stdout(contains("Update ").and(contains("? [y/N]")));
+        .stdout(contains("? [y/N]").not())
+        .stderr(contains("Update ").and(contains("? [y/N]")));
+}
+
+/// Writing the file must not change what it is: a copy over the original
+/// keeps the mode, but so must a rename.
+#[test]
+#[cfg(unix)]
+fn new_keeps_the_config_files_permissions() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let fixture = Fixture::with_config(ONE_COMMAND_MD);
+    let config = fixture.temp.child("project/nixon.md");
+    std::fs::set_permissions(config.path(), std::fs::Permissions::from_mode(0o640)).unwrap();
+
+    fixture
+        .nixon()
+        .args(["new", "-n", "spliced"])
+        .env("EDITOR", "true")
+        .write_stdin("y\n")
+        .assert()
+        .success();
+
+    let mode = std::fs::metadata(config.path())
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o777, 0o640, "the file's mode changed");
+    assert!(
+        std::fs::read_to_string(config.path())
+            .unwrap()
+            .contains("`spliced`"),
+        "the update did not land"
+    );
 }
 
 /// `docs/cli.md` opens with `nixon --help`; this keeps that block honest.

@@ -1,5 +1,7 @@
 //! `nixon new`. SPEC §10.4.
 
+use std::path::Path;
+
 use nixon_picker::{Picker, Selection};
 
 use super::App;
@@ -103,7 +105,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
 
         let path = location.file_path.clone();
         if confirm(&format!("Update {}? [y/N] ", path.display()))? {
-            std::fs::copy(temp.path(), &path)?;
+            replace(&path, temp.path())?;
             tracing::info!("Updating {}…", path.display());
         } else {
             tracing::info!("Update canceled.");
@@ -113,44 +115,83 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     }
 }
 
-/// Asks on stdout and reads the answer from stdin. SPEC §10.4.
+/// Asks on stderr and reads the answer from stdin. SPEC §10.4.
 ///
-/// Only a bare `y` or `Y` accepts; anything else, including end of input,
-/// leaves the file alone.
+/// The prompt is for a person, so it goes where the picker goes; stdout
+/// carries data. Only a bare `y` or `Y` accepts; anything else, including
+/// end of input, leaves the file alone.
 fn confirm(prompt: &str) -> Result<bool> {
-    use std::io::BufRead as _;
+    use std::io::{BufRead as _, Write as _};
 
-    crate::output::raw(prompt)?;
-    std::io::Write::flush(&mut std::io::stdout())?;
+    let mut err = std::io::stderr().lock();
+    err.write_all(prompt.as_bytes())?;
+    err.flush()?;
+    drop(err);
 
     let mut answer = String::new();
     std::io::stdin().lock().read_line(&mut answer)?;
     Ok(matches!(answer.trim(), "y" | "Y"))
 }
 
+/// Puts `source`'s contents in `path`, atomically and in place.
+///
+/// A copy truncates first, so an interrupted write leaves half a config
+/// file. A sibling plus a rename never does, and starting the sibling from
+/// the original's mode keeps the file's permissions.
+fn replace(path: &Path, source: &Path) -> Result<()> {
+    use std::io::Write as _;
+
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut temp = tempfile::Builder::new().prefix(".nixon").tempfile_in(dir)?;
+    temp.write_all(&std::fs::read(source)?)?;
+    temp.flush()?;
+
+    #[cfg(unix)]
+    if let Ok(meta) = std::fs::metadata(path) {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mode = meta.permissions().mode();
+        let _ = temp
+            .as_file()
+            .set_permissions(std::fs::Permissions::from_mode(mode));
+    }
+
+    temp.persist(path).map_err(|err| err.error)?;
+    Ok(())
+}
+
 /// Inserts the template after `end_line`. SPEC §10.4.
+///
+/// Lines keep their terminators, so a file with CRLF endings or without a
+/// final newline comes back as it went in, everywhere but the new section.
 fn splice(original: &str, end_line: usize, level: usize, opts: &NewOpts) -> String {
-    let lines: Vec<&str> = original.lines().collect();
+    let lines: Vec<&str> = original.split_inclusive('\n').collect();
     let (before, after) = lines.split_at(end_line.min(lines.len()));
 
-    let template = format!(
-        "{} `{}`\n\n{}\n\n```{}\n{}\n```\n",
-        "#".repeat(level.max(1)),
-        opts.name,
-        opts.desc,
-        opts.lang,
-        opts.src
-    );
+    // The new section follows whatever the file already uses.
+    let nl = if original.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let template = [
+        format!("{} `{}`", "#".repeat(level.max(1)), opts.name),
+        String::new(),
+        opts.desc.clone(),
+        String::new(),
+        format!("```{}", opts.lang),
+        opts.src.clone(),
+        "```".to_owned(),
+        String::new(),
+    ]
+    .join(nl);
 
-    let mut out = before.join("\n");
-    if !out.is_empty() {
-        out.push('\n');
+    let mut out: String = before.concat();
+    // The section has to start on a line of its own.
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push_str(nl);
     }
     out.push_str(&template);
-    if !after.is_empty() {
-        out.push_str(&after.join("\n"));
-        out.push('\n');
-    }
+    out.push_str(&after.concat());
     out
 }
 
@@ -173,6 +214,31 @@ mod tests {
         assert!(spliced.starts_with("# `foo`\n"));
         assert!(spliced.contains("# `bar`\n\nDoes bar\n\n```bash\necho bar\n```\n"));
         assert!(spliced.trim_end().ends_with("# `baz`"));
+    }
+
+    #[test]
+    fn crlf_endings_and_a_missing_final_newline_survive() {
+        let original = "# `foo`\r\n\r\n```bash\r\necho foo\r\n```\r\n\r\n# `baz`";
+        let spliced = splice(original, 5, 1, &NewOpts::default());
+
+        assert!(
+            !spliced.contains("\n\n") || spliced.contains("\r\n"),
+            "line endings were rewritten: {spliced:?}"
+        );
+        assert_eq!(
+            spliced.matches('\n').count(),
+            spliced.matches("\r\n").count()
+        );
+        assert!(spliced.ends_with("# `baz`"), "a final newline was added");
+    }
+
+    #[test]
+    fn the_original_bytes_outside_the_new_section_are_untouched() {
+        let original = "# `foo`\n\n```bash\necho foo\n```\n\n# `baz`";
+        let spliced = splice(original, 5, 1, &NewOpts::default());
+
+        assert!(spliced.starts_with("# `foo`\n\n```bash\necho foo\n```\n"));
+        assert!(spliced.ends_with("\n\n# `baz`"));
     }
 
     #[test]
