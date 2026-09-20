@@ -10,9 +10,12 @@ pub mod candidate;
 pub mod filter;
 pub mod matcher;
 pub mod options;
+pub mod picker;
 pub mod selection;
+pub mod terminal;
 pub mod ui;
 
 pub use candidate::Candidate;
 pub use options::PickerOptions;
+pub use picker::{FilterPicker, Picker, TuiPicker};
 pub use selection::{Selection, SelectionType};

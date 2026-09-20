@@ -3,6 +3,8 @@
 pub mod keymap;
 pub mod render;
 
+pub use render::render;
+
 use std::collections::BTreeSet;
 
 use crossterm::event::KeyEvent;

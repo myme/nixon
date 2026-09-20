@@ -14,6 +14,9 @@ crossterm.workspace = true
 nucleo-matcher.workspace = true
 ratatui.workspace = true
 
+[features]
+test-util = []
+
 [dev-dependencies]
 insta.workspace = true
 rstest.workspace = true
