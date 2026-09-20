@@ -130,9 +130,9 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             // Line-oriented formats are fed to the picker as the command
             // produces them, so it opens without waiting for the command.
             let mut stream = self.stream_candidates(&command, &evaluation, &placeholder.format)?;
-            let selection = self.picker.pick_stream(&options, &mut stream)?;
-            stream.cancel();
-            selection
+            // Dropping the stream stops the command, on this path and on
+            // the error path alike.
+            self.picker.pick_stream(&options, &mut stream)?
         } else {
             // Columns need every row before the widths are known and JSON
             // needs the whole document, so those stay buffered.
@@ -279,7 +279,9 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use nixon_picker::picker::ScriptedPicker;
-    use nixon_picker::{Candidate, Selection, SelectionType};
+    use nixon_picker::{
+        Candidate, CandidateStream, Picker, PickerOptions, Selection, SelectionType,
+    };
 
     use super::{Resolved, Resolver, zip_args};
     use crate::command::Command;
@@ -331,7 +333,7 @@ mod tests {
             &self,
             outer: &Command,
             args: &[String],
-            picker: &mut ScriptedPicker,
+            picker: &mut impl Picker,
             runner: &mut FakeRunner,
         ) -> crate::error::Result<Resolved> {
             let context = Context {
@@ -355,6 +357,46 @@ mod tests {
 
     fn arg(name: &str) -> Placeholder {
         Placeholder::new(PlaceholderType::Arg, name)
+    }
+
+    /// A picker that cannot take the terminal, as happens with no TTY.
+    struct FailingPicker;
+
+    impl Picker for FailingPicker {
+        fn pick(
+            &mut self,
+            _: &PickerOptions,
+            _: Vec<Candidate>,
+        ) -> std::io::Result<nixon_picker::Selection<Candidate>> {
+            Err(std::io::Error::other("no terminal"))
+        }
+
+        fn pick_stream(
+            &mut self,
+            _: &PickerOptions,
+            _: &mut CandidateStream,
+        ) -> std::io::Result<nixon_picker::Selection<Candidate>> {
+            Err(std::io::Error::other("no terminal"))
+        }
+    }
+
+    #[test]
+    fn a_failed_pick_still_kills_the_streaming_command() {
+        let harness = Harness::new(vec![command("files", "ls\n", Vec::new())]);
+        let outer = command("edit", "vim\n", vec![arg("files")]);
+
+        let mut picker = FailingPicker;
+        let mut runner = FakeRunner::new().with_output(&["one", "two"]);
+
+        assert!(
+            harness
+                .resolve(&outer, &[], &mut picker, &mut runner)
+                .is_err()
+        );
+        assert!(
+            runner.was_killed(),
+            "the candidate command was left running after the pick failed"
+        );
     }
 
     #[test]

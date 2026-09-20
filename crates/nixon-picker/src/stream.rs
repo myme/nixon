@@ -80,6 +80,17 @@ impl CandidateStream {
     }
 }
 
+/// Stopping the producer is the stream's responsibility, not its caller's.
+///
+/// A pick that fails rather than returning a selection used to leave the
+/// command feeding it running — and since it leads its own process group, it
+/// outlived nixon.
+impl Drop for CandidateStream {
+    fn drop(&mut self) {
+        self.cancel();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -128,6 +139,23 @@ mod tests {
         let collected: Vec<String> = stream.collect().into_iter().map(|c| c.value).collect();
         assert_eq!(collected, ["one", "two", "three"]);
         assert!(stream.is_finished());
+    }
+
+    #[test]
+    fn dropping_a_stream_stops_its_producer() {
+        let stopped = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&stopped);
+        let (_sender, receiver) = std::sync::mpsc::channel();
+
+        drop(CandidateStream::new(
+            receiver,
+            Box::new(move || flag.store(true, Ordering::SeqCst)),
+        ));
+
+        assert!(
+            stopped.load(Ordering::SeqCst),
+            "the producer outlived the stream it was feeding"
+        );
     }
 
     #[test]
