@@ -454,6 +454,40 @@ mod tests {
         assert_eq!(highlighted, 3);
     }
 
+    /// A colour inside a candidate ends where the candidate ends it.
+    ///
+    /// `2m` only adds dim, so a description that returned to it after a code
+    /// span kept the code's foreground to the end of the line.
+    #[test]
+    fn a_colour_inside_a_candidate_does_not_run_to_the_end_of_the_line() {
+        // What `select.rs` builds for `build`, described as "Run `x` now".
+        let described = vec![Candidate::with_title(
+            "build\u{1b}[2m - Run \u{1b}[2;36mx\u{1b}[0m\u{1b}[2m now\u{1b}[0m",
+            "build",
+        )];
+        let mut app = App::new(described, PickerOptions::default());
+        insta::assert_snapshot!(draw(&mut app));
+
+        let styles = row_styles(&mut app, 1);
+        let rendered: String = styles.iter().map(|(c, _)| *c).collect();
+        let at = rendered.find(" now").unwrap();
+        let after: Vec<_> = styles[at..at + 4].to_vec();
+        assert!(
+            after.iter().all(|(_, fg)| *fg != Some(Color::Cyan)),
+            "the code colour bled into the prose after it: {after:?}"
+        );
+
+        // Without the reset — which is what the description used to emit —
+        // it does bleed, which is why the reset is there.
+        let bleeding = vec![Candidate::with_title(
+            "build\u{1b}[2m - Run \u{1b}[2;36mx\u{1b}[2m now\u{1b}[0m",
+            "build",
+        )];
+        let mut app = App::new(bleeding, PickerOptions::default());
+        let styles = row_styles(&mut app, 1);
+        assert_eq!(styles[at].1, Some(Color::Cyan));
+    }
+
     #[test]
     fn highlighting_keeps_the_candidates_own_colours() {
         let coloured = vec![Candidate::with_title(

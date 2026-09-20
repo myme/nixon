@@ -42,7 +42,9 @@ fn styled(desc: &Description) -> String {
         .iter()
         .map(|span| match span {
             DescSpan::Text(text) => text.clone(),
-            DescSpan::Code(code) => format!("{CODE}{code}{DIM}"),
+            // `2m` only adds dim: without a reset first, the code colour
+            // runs on into the prose after it.
+            DescSpan::Code(code) => format!("{CODE}{code}{RESET}{DIM}"),
         })
         .collect()
 }
@@ -175,6 +177,15 @@ mod tests {
         assert!(
             candidates[0].display.contains("\u{1b}[2;36mcargo build"),
             "the code span was not styled: {:?}",
+            candidates[0].display
+        );
+        // The prose after the code span goes back to plain dim, rather than
+        // inheriting the code colour to the end of the line.
+        assert!(
+            candidates[0]
+                .display
+                .contains("cargo build\u{1b}[0m\u{1b}[2m."),
+            "the code colour bled into the prose: {:?}",
             candidates[0].display
         );
     }
