@@ -1,7 +1,6 @@
 {
   pkgs,
   craneLib,
-  toolchain,
   nixon,
   commonArgs,
   cargoArtifacts,
@@ -58,15 +57,22 @@ in
 
   deny = craneLib.cargoDeny { inherit (commonArgs) src; };
 
-  # crane has no helper for these.
-  shear = runCheck "shear" [
-    toolchain
-    pkgs.cargo-shear
-  ] "cargo shear";
+  # crane has no cargo-shear helper, but it still needs the vendored registry:
+  # a sandboxed build has no network to reach crates.io with.
+  shear = craneLib.mkCargoDerivation (
+    commonArgs
+    // {
+      inherit cargoArtifacts;
+      pnameSuffix = "-shear";
+      buildPhaseCargoCommand = "cargo shear";
+      nativeBuildInputs = (commonArgs.nativeBuildInputs or [ ]) ++ [ pkgs.cargo-shear ];
+    }
+  );
+
   typos = runCheck "typos" [ pkgs.typos ] "typos";
   statix = runCheck "statix" [ pkgs.statix ] "statix check .";
   deadnix = runCheck "deadnix" [ pkgs.deadnix ] "deadnix --fail .";
-  nixfmt = runCheck "nixfmt" [ pkgs.nixfmt-rfc-style ] "nixfmt --check .";
+  nixfmt = runCheck "nixfmt" [ pkgs.nixfmt ] "nixfmt --check .";
 
   # Reported, not gated (ENGINEERING §1.1).
   coverage = craneLib.cargoLlvmCov (

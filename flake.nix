@@ -40,13 +40,13 @@
         };
 
         checks = import ./nix/checks.nix {
-          inherit pkgs craneLib toolchain;
+          inherit pkgs craneLib;
           inherit (package) nixon commonArgs cargoArtifacts;
         };
 
-        devShells.default = import ./nix/shell.nix { inherit pkgs craneLib toolchain; };
+        devShells.default = import ./nix/shell.nix { inherit pkgs craneLib; };
 
-        formatter = pkgs.nixfmt-rfc-style;
+        formatter = pkgs.nixfmt;
       }
     )
     // {
