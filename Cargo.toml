@@ -21,12 +21,15 @@ thiserror = "2"
 winnow = "1"
 
 comrak = "0.55"
+ansi-to-tui = "8"
 crossterm = "0.29"
 etcetera = "0.11"
 glob = "0.3"
 nucleo-matcher = "0.3"
+ratatui = "0.30"
 shellexpand = "3"
 assert_fs = "1"
+insta = "1"
 proptest = "1"
 rstest = { version = "0.27", default-features = false }
 

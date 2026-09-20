@@ -9,8 +9,14 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+ansi-to-tui.workspace = true
 crossterm.workspace = true
 nucleo-matcher.workspace = true
+ratatui.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+rstest.workspace = true
 
 [lints]
 workspace = true

@@ -11,6 +11,7 @@ pub mod filter;
 pub mod matcher;
 pub mod options;
 pub mod selection;
+pub mod ui;
 
 pub use candidate::Candidate;
 pub use options::PickerOptions;
