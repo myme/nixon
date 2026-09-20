@@ -2,8 +2,8 @@
 source: crates/nixon-picker/src/ui/render.rs
 expression: draw(&mut app)
 ---
-"> gb                                                                            "
-"> green branch                                                                  "
+"> gb                                                                         1/1"
+"▌ green branch                                                                  "
 "                                                                                "
 "                                                                                "
 "                                                                                "

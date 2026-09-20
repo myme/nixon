@@ -3,8 +3,8 @@ source: crates/nixon-picker/src/ui/render.rs
 expression: draw(&mut app)
 ---
 "Select command [nixon] (/home/me/code)                                          "
-">                                                                               "
-"> build - Build the workspace                                                   "
+">                                                                            9/9"
+"▌ build - Build the workspace                                                   "
 "  check - Everything CI runs                                                    "
 "  coverage - Build the HTML coverage report                                     "
 "  docs - Build and open the documentation                                       "

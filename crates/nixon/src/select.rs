@@ -20,13 +20,26 @@ pub fn line_candidates(lines: &[String]) -> Vec<Candidate> {
 /// Candidates for command selection. SPEC §8.4.
 ///
 /// The text is `show_command_with_description`, and the value is the command
-/// name, which is what maps back to the command.
+/// name, which is what maps back to the command. The description is dimmed
+/// so the name reads first; the picker renders the ANSI, and matching runs
+/// on the visible text either way.
 pub fn command_candidates(commands: &[Command]) -> Vec<Candidate> {
     commands
         .iter()
-        .map(|command| Candidate::with_title(command.to_string(), command.name.clone()))
+        .map(|command| {
+            let display = command.desc.as_ref().map_or_else(
+                || command.name.clone(),
+                |desc| format!("{}{DIM} - {desc}{RESET}", command.name),
+            );
+            Candidate::with_title(display, command.name.clone())
+        })
         .collect()
 }
+
+/// Dims the secondary half of a candidate.
+const DIM: &str = "\u{1b}[2m";
+/// Ends the dimmed run.
+const RESET: &str = "\u{1b}[0m";
 
 /// Options for command selection. SPEC §8.4.
 ///
@@ -64,13 +77,18 @@ pub fn project_candidates(projects: &[Project], home: &Path) -> Vec<Candidate> {
         .iter()
         .map(|project| {
             let path = project.path();
-            Candidate::with_title(
-                implode_home(&path, home).to_string_lossy().into_owned(),
-                path.to_string_lossy().into_owned(),
-            )
+            let shown = implode_home(&path, home);
+            let text = shown.to_string_lossy();
+            // The same text v1 listed, with the directory it sits in dimmed
+            // so the project's own name reads first.
+            let display = text.rfind('/').map_or_else(
+                || text.clone().into_owned(),
+                |at| format!("{DIM}{}{RESET}{}", &text[..=at], &text[at + 1..]),
+            );
+            Candidate::with_title(display, path.to_string_lossy().into_owned())
         })
         .collect();
-    candidates.sort_by(|a, b| a.display.cmp(&b.display));
+    candidates.sort_by_key(Candidate::plain);
     candidates.dedup_by(|a, b| a.value == b.value);
     candidates
 }
@@ -105,7 +123,7 @@ const fn key(code: KeyCode) -> KeyEvent {
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
     use nixon_picker::SelectionType;
 
@@ -142,9 +160,23 @@ mod tests {
             command("build", Some("Build the workspace")),
             command("run", None),
         ]);
-        assert_eq!(candidates[0].display, "build - Build the workspace");
+        assert_eq!(candidates[0].plain(), "build - Build the workspace");
         assert_eq!(candidates[0].value, "build");
         assert_eq!(candidates[1].display, "run");
+    }
+
+    #[test]
+    fn a_description_is_dimmed_but_still_matchable() {
+        let candidates = command_candidates(&[command("build", Some("Build the workspace"))]);
+        assert!(candidates[0].display.starts_with("build\u{1b}[2m"));
+        // Matching and highlighting run on the visible text.
+        assert_eq!(candidates[0].plain(), "build - Build the workspace");
+    }
+
+    #[test]
+    fn a_command_without_a_description_carries_no_escapes() {
+        let candidates = command_candidates(&[command("run", None)]);
+        assert!(!candidates[0].display.contains('\u{1b}'));
     }
 
     #[test]
@@ -192,8 +224,16 @@ mod tests {
     fn projects_show_a_collapsed_home_but_return_the_full_path() {
         let candidates =
             project_candidates(&[project("/home/me/code/nixon")], Path::new("/home/me"));
-        assert_eq!(candidates[0].display, "~/code/nixon");
+        assert_eq!(candidates[0].plain(), "~/code/nixon");
         assert_eq!(candidates[0].value, "/home/me/code/nixon");
+    }
+
+    #[test]
+    fn the_directory_a_project_sits_in_is_dimmed() {
+        let candidates =
+            project_candidates(&[project("/home/me/code/nixon")], Path::new("/home/me"));
+        assert!(candidates[0].display.starts_with("\u{1b}[2m~/code/"));
+        assert!(candidates[0].display.ends_with("nixon"));
     }
 
     #[test]
@@ -227,10 +267,7 @@ mod tests {
     #[test]
     fn a_path_outside_home_is_left_alone() {
         let candidates = project_candidates(&[project("/opt/thing")], Path::new("/home/me"));
-        assert_eq!(candidates[0].display, "/opt/thing");
-        assert_eq!(
-            candidates[0].value,
-            PathBuf::from("/opt/thing").to_string_lossy()
-        );
+        assert_eq!(candidates[0].plain(), "/opt/thing");
+        assert_eq!(candidates[0].value, "/opt/thing");
     }
 }

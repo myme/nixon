@@ -2,8 +2,8 @@
 source: crates/nixon-picker/src/ui/render.rs
 expression: draw(&mut app)
 ---
-"> co                                                                            "
-"> coverage - Build the HTML coverage report                                     "
+"> co                                                                         2/9"
+"▌ coverage - Build the HTML coverage report                                     "
 "  docs - Build and open the documentation                                       "
 "                                                                                "
 "                                                                                "

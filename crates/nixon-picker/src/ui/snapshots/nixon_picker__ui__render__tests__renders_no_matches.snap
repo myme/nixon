@@ -2,7 +2,7 @@
 source: crates/nixon-picker/src/ui/render.rs
 expression: draw(&mut app)
 ---
-"> zzz                                                                           "
+"> zzz                                                                        0/9"
 "                                                                                "
 "                                                                                "
 "                                                                                "

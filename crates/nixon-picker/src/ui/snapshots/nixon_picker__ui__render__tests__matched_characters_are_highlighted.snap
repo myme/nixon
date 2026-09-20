@@ -2,8 +2,8 @@
 source: crates/nixon-picker/src/ui/render.rs
 expression: draw(&mut app)
 ---
-"> bld                                                                           "
-"> build - Build the workspace                                                   "
+"> bld                                                                        1/9"
+"▌ build - Build the workspace                                                   "
 "                                                                                "
 "                                                                                "
 "                                                                                "

@@ -1,6 +1,6 @@
 //! `nixon run`. SPEC §10.1.
 
-use nixon_picker::{FilterPicker, Picker, PickerOptions, Selection};
+use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection};
 
 use super::{App, RunOpts};
 use crate::command::Command;
@@ -39,7 +39,8 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         let matched: Vec<String> = selection
             .items()
             .iter()
-            .map(|candidate| candidate.display.clone())
+            // The visible text: display may carry ANSI for the picker.
+            .map(Candidate::plain)
             .collect();
 
         if matched.is_empty() {

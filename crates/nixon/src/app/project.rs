@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use nixon_picker::{FilterPicker, Picker, PickerOptions, Selection, SelectionType};
+use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection, SelectionType};
 
 use super::{App, RunOpts};
 use crate::error::{NixonError, Result};
@@ -74,7 +74,8 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         let matched: Vec<String> = selection
             .items()
             .iter()
-            .map(|candidate| candidate.display.clone())
+            // The visible text: display may carry ANSI for the picker.
+            .map(Candidate::plain)
             .collect();
 
         if matched.is_empty() {

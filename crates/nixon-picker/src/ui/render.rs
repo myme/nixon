@@ -12,12 +12,20 @@ use crate::matcher::Match;
 
 /// The prompt before the query.
 const PROMPT: &str = "> ";
-/// Marks the row under the cursor.
-const CURSOR: &str = "> ";
-/// Indents rows that are not under the cursor.
-const NO_CURSOR: &str = "  ";
-/// Marks a row the user has marked for multi-select.
-const MARK: &str = "*";
+/// fzf's pointer glyph, in the margin of the current row.
+const POINTER: &str = "\u{258c}";
+/// fzf's marker glyph, for rows marked in multi-select.
+const MARKER: &str = "\u{258c}";
+/// Keeps unmarked rows aligned with marked ones.
+const BLANK: &str = " ";
+
+/// The current row's background: fzf's `bg+`, a gentle dark grey rather than
+/// reverse video, so it reads on a dark terminal without filling the row.
+const CURRENT_BG: Color = Color::Indexed(237);
+/// The pointer's colour, fzf's `pointer`.
+const POINTER_FG: Color = Color::Indexed(168);
+/// The marker's colour, fzf's `marker`, distinct from the pointer.
+const MARKER_FG: Color = Color::Indexed(114);
 
 /// Draws the picker. Pure in `app`, so it snapshot-tests under `TestBackend`.
 pub fn render(app: &App, frame: &mut Frame<'_>) {
@@ -50,10 +58,7 @@ pub fn render(app: &App, frame: &mut Frame<'_>) {
         (rows[0], rows[1])
     };
 
-    frame.render_widget(
-        Paragraph::new(Line::from(format!("{PROMPT}{}", app.query.text()))),
-        query_row,
-    );
+    render_query(app, frame, query_row);
     render_list(app, frame, list_row);
 
     // The terminal cursor sits in the query line, where typing happens.
@@ -64,6 +69,44 @@ pub fn render(app: &App, frame: &mut Frame<'_>) {
     frame.set_cursor_position((x, query_row.y));
 }
 
+/// Draws the query line and the match counts. ENGINEERING §7.2.
+///
+/// The counts read `matched/total`, with the number of marked rows in
+/// parentheses when the picker is in multi mode, as fzf shows them.
+fn render_query(app: &App, frame: &mut Frame<'_>, area: Rect) {
+    let counts = if app.multi() && !app.marked.is_empty() {
+        format!(
+            "{}/{} ({})",
+            app.matched.len(),
+            app.candidates.len(),
+            app.marked.len()
+        )
+    } else {
+        format!("{}/{}", app.matched.len(), app.candidates.len())
+    };
+
+    frame.render_widget(
+        Paragraph::new(Line::from(format!("{PROMPT}{}", app.query.text()))),
+        area,
+    );
+
+    let width = u16::try_from(counts.chars().count()).unwrap_or(u16::MAX);
+    if area.width > width {
+        let at = Rect {
+            x: area.x + area.width - width,
+            width,
+            ..area
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                counts,
+                Style::default().add_modifier(Modifier::DIM),
+            ))),
+            at,
+        );
+    }
+}
+
 /// Draws the candidate rows, ANSI preserved and matches highlighted.
 fn render_list(app: &App, frame: &mut Frame<'_>, area: Rect) {
     let lines: Vec<Line<'_>> = app
@@ -71,27 +114,48 @@ fn render_list(app: &App, frame: &mut Frame<'_>, area: Rect) {
         .enumerate()
         .map(|(row, (matched, candidate))| {
             let is_cursor = app.offset + row == app.cursor;
-            let mut spans = vec![Span::raw(if is_cursor { CURSOR } else { NO_CURSOR })];
+            // Margin: the pointer for the current row, then the marker
+            // column when marking is possible. Blank margins keep the text
+            // aligned so it never shifts as the cursor moves.
+            let mut spans = vec![if is_cursor {
+                Span::styled(POINTER, Style::default().fg(POINTER_FG))
+            } else {
+                Span::raw(BLANK)
+            }];
             if app.multi() {
-                spans.push(Span::raw(if app.marked.contains(&matched.index) {
-                    MARK
+                spans.push(if app.marked.contains(&matched.index) {
+                    Span::styled(MARKER, Style::default().fg(MARKER_FG))
                 } else {
-                    " "
-                }));
-                spans.push(Span::raw(" "));
+                    Span::raw(BLANK)
+                });
             }
+            spans.push(Span::raw(" "));
             spans.extend(display_spans(&candidate.display, matched));
 
-            let style = if is_cursor {
-                Style::default().add_modifier(Modifier::REVERSED)
-            } else {
-                Style::default()
-            };
-            Line::from(spans).style(style)
+            Line::from(spans)
         })
         .collect();
 
     frame.render_widget(Paragraph::new(Text::from(lines)), area);
+
+    // The current row's background goes on last, as one pass over its cells.
+    // A per-line style loses wherever a span carries its own background — an
+    // ANSI-coloured segment, a highlighted match, the dimmed description —
+    // and stops where the text does instead of covering the row.
+    let row = app.cursor.saturating_sub(app.offset);
+    if let Ok(offset) = u16::try_from(row)
+        && offset < area.height
+        && app.current().is_some()
+    {
+        let line = Rect {
+            y: area.y + offset,
+            height: 1,
+            ..area
+        };
+        frame
+            .buffer_mut()
+            .set_style(line, Style::default().bg(CURRENT_BG));
+    }
 }
 
 /// The style matched characters are drawn in, as fzf does. ENGINEERING §7.2.
@@ -130,6 +194,10 @@ fn display_spans(display: &str, matched: &Match) -> Vec<Span<'static>> {
 }
 
 /// One `(character, style)` per position, with ANSI escapes applied.
+///
+/// Backgrounds are dropped: a candidate colours its text, and keeping a
+/// `bg: Reset` from the parser would punch holes in the current row's
+/// highlight.
 fn styled_chars(display: &str) -> Vec<(char, Style)> {
     let Ok(text) = display.into_text() else {
         return display.chars().map(|c| (c, Style::default())).collect();
@@ -140,7 +208,13 @@ fn styled_chars(display: &str) -> Vec<(char, Style)> {
     line.spans
         .into_iter()
         .flat_map(|span| {
-            let style = span.style;
+            // Drop any background: a candidate colours its text, and a
+            // `bg: Reset` from the parser would punch holes in the current
+            // row's highlight.
+            let style = Style {
+                bg: None,
+                ..span.style
+            };
             span.content.chars().map(|c| (c, style)).collect::<Vec<_>>()
         })
         .collect()
@@ -151,7 +225,7 @@ mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use ratatui::style::Color;
+    use ratatui::style::{Color, Modifier};
 
     use super::render;
     use crate::candidate::Candidate;
@@ -311,9 +385,8 @@ mod tests {
 
         let rendered: String = styles.iter().map(|(c, _)| *c).collect();
         assert!(
-            rendered
-                .trim_end()
-                .starts_with("> build - Build the workspace")
+            rendered.contains("build - Build the workspace"),
+            "rendered was: {rendered}"
         );
 
         // Exactly three characters carry the highlight, one per query char.
@@ -346,6 +419,175 @@ mod tests {
         assert_eq!(by_colour(Color::Cyan), "gb");
         // ...and the rest of the ANSI-green word keeps its own colour.
         assert_eq!(by_colour(Color::Green), "reen");
+    }
+
+    /// `(character, modifiers)` for one rendered row.
+    fn row_modifiers(app: &mut App, row: u16) -> Vec<(char, Modifier)> {
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        app.set_height(17);
+        terminal.draw(|frame| render(app, frame)).unwrap();
+
+        let buffer = terminal.backend().buffer().clone();
+        (0..80)
+            .map(|x| {
+                let cell = &buffer[(x, row)];
+                (
+                    cell.symbol().chars().next().unwrap_or(' '),
+                    cell.style().add_modifier,
+                )
+            })
+            .collect()
+    }
+
+    /// `(character, background)` for one rendered row.
+    fn row_backgrounds(app: &mut App, row: u16) -> Vec<(char, Color)> {
+        let backend = TestBackend::new(80, 20);
+        let mut terminal = Terminal::new(backend).unwrap();
+        app.set_height(17);
+        terminal.draw(|frame| render(app, frame)).unwrap();
+
+        let buffer = terminal.backend().buffer().clone();
+        (0..80)
+            .map(|x| {
+                let cell = &buffer[(x, row)];
+                (
+                    cell.symbol().chars().next().unwrap_or(' '),
+                    cell.style().bg.unwrap_or(Color::Reset),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_current_row_gets_a_subtle_background_not_reverse_video() {
+        let mut app = App::new(commands(), PickerOptions::default());
+
+        let current = row_backgrounds(&mut app, 1);
+        assert!(
+            current.iter().all(|(_, bg)| *bg == Color::Indexed(237)),
+            "the whole current row should carry fzf's bg+"
+        );
+
+        let modifiers = row_modifiers(&mut app, 1);
+        assert!(
+            !modifiers
+                .iter()
+                .any(|(_, m)| m.contains(Modifier::REVERSED)),
+            "the current row must not use reverse video"
+        );
+    }
+
+    /// The background must survive every kind of styled span on the row.
+    #[test]
+    fn the_current_row_background_covers_ansi_highlight_and_dimmed_spans() {
+        // A green segment, a dimmed suffix, and a query that highlights.
+        let candidates = vec![Candidate::with_title(
+            "[32mgreen[0m build[2m - Build the workspace[0m",
+            "build",
+        )];
+        let mut app = App::new(candidates, PickerOptions::default());
+        type_query(&mut app, "bld");
+
+        let row = row_backgrounds(&mut app, 1);
+        let gaps: Vec<char> = row
+            .iter()
+            .filter(|(_, bg)| *bg != Color::Indexed(237))
+            .map(|(c, _)| *c)
+            .collect();
+        assert!(
+            gaps.is_empty(),
+            "these cells lost the row background: {gaps:?}"
+        );
+
+        // The styling underneath is still there.
+        let styles = row_styles(&mut app, 1);
+        assert!(styles.iter().any(|(_, fg)| *fg == Some(Color::Cyan)));
+        assert!(styles.iter().any(|(_, fg)| *fg == Some(Color::Green)));
+    }
+
+    #[test]
+    fn an_unselected_row_has_no_background() {
+        let mut app = App::new(commands(), PickerOptions::default());
+        let row = row_backgrounds(&mut app, 2);
+        assert!(row.iter().all(|(_, bg)| *bg == Color::Reset));
+    }
+
+    #[test]
+    fn the_current_row_carries_the_pointer_glyph_in_its_margin() {
+        let mut app = App::new(commands(), PickerOptions::default());
+
+        let current: Vec<(char, Option<Color>)> = row_styles(&mut app, 1);
+        assert_eq!(current[0].0, '\u{258c}');
+        assert_eq!(current[0].1, Some(Color::Indexed(168)));
+
+        // Other rows keep a blank margin so the text never shifts.
+        let other = row_styles(&mut app, 2);
+        assert_eq!(other[0].0, ' ');
+    }
+
+    #[test]
+    fn a_marked_row_carries_the_marker_glyph_in_a_second_colour() {
+        let mut app = App::new(commands(), PickerOptions::default().multi(true));
+        press(&mut app, KeyCode::Tab);
+
+        // Row 1 is now marked, and the cursor has moved on to row 2.
+        let marked = row_styles(&mut app, 1);
+        assert_eq!(marked[1].0, '\u{258c}');
+        assert_eq!(marked[1].1, Some(Color::Indexed(114)));
+
+        let unmarked = row_styles(&mut app, 3);
+        assert_eq!(unmarked[1].0, ' ');
+    }
+
+    #[test]
+    fn a_description_renders_dimmed_while_the_name_does_not() {
+        // The nixon side builds these; here the ANSI stands in for it.
+        let candidates = vec![Candidate::with_title(
+            "build\u{1b}[2m - Build the workspace\u{1b}[0m",
+            "build",
+        )];
+        let mut app = App::new(candidates, PickerOptions::default());
+        let row = row_modifiers(&mut app, 1);
+
+        let dimmed: String = row
+            .iter()
+            .filter(|(_, m)| m.contains(Modifier::DIM))
+            .map(|(c, _)| *c)
+            .collect();
+        assert_eq!(dimmed.trim_end(), " - Build the workspace");
+
+        let name: String = row[2..7].iter().map(|(c, _)| *c).collect();
+        assert_eq!(name, "build");
+        assert!(!row[2].1.contains(Modifier::DIM));
+    }
+
+    #[test]
+    fn the_counts_show_matches_over_total() {
+        let mut app = App::new(commands(), PickerOptions::default());
+        assert!(draw(&mut app).contains("9/9"));
+
+        type_query(&mut app, "co");
+        let drawn = draw(&mut app);
+        assert!(drawn.contains("2/9"), "drawn was: {drawn}");
+    }
+
+    #[test]
+    fn the_counts_include_the_marked_total_in_multi_mode() {
+        let mut app = App::new(commands(), PickerOptions::default().multi(true));
+        press(&mut app, KeyCode::Tab);
+        press(&mut app, KeyCode::Tab);
+        let drawn = draw(&mut app);
+        assert!(drawn.contains("9/9 (2)"), "drawn was: {drawn}");
+    }
+
+    #[test]
+    fn the_marked_count_is_absent_outside_multi_mode() {
+        let mut app = App::new(commands(), PickerOptions::default());
+        press(&mut app, KeyCode::Tab);
+        let drawn = draw(&mut app);
+        assert!(drawn.contains("9/9"), "drawn was: {drawn}");
+        assert!(!drawn.contains('('), "drawn was: {drawn}");
     }
 
     #[test]

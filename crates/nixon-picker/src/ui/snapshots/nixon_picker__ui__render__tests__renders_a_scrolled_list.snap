@@ -2,11 +2,11 @@
 source: crates/nixon-picker/src/ui/render.rs
 expression: "format!(\"{}\", terminal.backend())"
 ---
-">                                                                               "
+">                                                                            9/9"
 "  docs - Build and open the documentation                                       "
 "  fmt - Format Rust, TOML and Nix sources                                       "
 "  lint - Clippy with warnings denied                                            "
-"> run - Run nixon from the workspace                                            "
+"▌ run - Run nixon from the workspace                                            "
 "                                                                                "
 "                                                                                "
 "                                                                                "
