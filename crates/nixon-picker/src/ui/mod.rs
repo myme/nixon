@@ -246,12 +246,17 @@ impl App {
     /// Hands the query to the background matcher.
     fn reparse(&mut self, rescore: bool) {
         let opts = self.options.matching;
+        // The same query the non-interactive paths parse, so `--list` and
+        // the picker agree on what a term means.
+        let query = self.query.text();
         self.nucleo.pattern.reparse(
             0,
-            &self.query.text(),
+            &opts.query(&query),
             opts.case_matching(),
             Normalization(),
-            !rescore,
+            // The rewrite `exact` applies is not append-safe: typing a `$`
+            // turns `'foo` into `foo$`, which is not an extension of it.
+            !rescore && !opts.exact,
         );
     }
 

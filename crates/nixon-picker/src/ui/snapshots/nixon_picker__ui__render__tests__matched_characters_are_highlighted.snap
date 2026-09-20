@@ -2,10 +2,10 @@
 source: crates/nixon-picker/src/ui/render.rs
 expression: draw(&mut app)
 ---
-"> bld                                                                        1/9"
+"> bld                                                                        3/9"
 "▌ build - Build the workspace                                                   "
-"                                                                                "
-"                                                                                "
+"  docs - Build and open the documentation                                       "
+"  coverage - Build the HTML coverage report                                     "
 "                                                                                "
 "                                                                                "
 "                                                                                "

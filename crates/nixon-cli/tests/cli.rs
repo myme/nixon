@@ -554,3 +554,32 @@ echo staging
         .success()
         .stdout(contains("hello"));
 }
+
+/// fzf's extended syntax: `gaia$` is a suffix match, not a literal `$`.
+///
+/// The suffix narrows two projects to one, so `-1` selects it and no
+/// terminal is needed.
+#[test]
+fn a_query_operator_narrows_the_project_selection() {
+    let fixture = Fixture::new();
+    let src = fixture.temp.child("src");
+    for name in ["gaia", "gaia-old"] {
+        src.child(name).child(".git").create_dir_all().unwrap();
+    }
+
+    fixture
+        .temp
+        .child("config/nixon.md")
+        .write_str(&format!(
+            "```json config\n{{\"project_dirs\": [\"{}\"], \"project_types\": [{{\"name\": \"git\", \"test\": [\".git\"], \"desc\": \"Git\"}}]}}\n```\n",
+            src.path().display()
+        ))
+        .unwrap();
+
+    fixture
+        .nixon()
+        .args(["project", "gaia$", "-s"])
+        .assert()
+        .success()
+        .stdout(format!("{}\n", src.child("gaia").path().display()));
+}

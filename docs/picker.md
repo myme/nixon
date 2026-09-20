@@ -65,8 +65,33 @@ inserts a newline.
 Matching is fuzzy by default, and ranks the way fzf does: by score, then by the
 length of the text matched, then by the order candidates arrived.
 
-- `exact_match` (or `-e`) matches substrings instead of fuzzily.
-- `ignore_case` (or `-i`) matches without regard to case.
+A query is a set of terms separated by spaces, and a candidate has to satisfy
+all of them. Each term may carry one of fzf's operators:
+
+| Term | Matches |
+|---|---|
+| `foo` | Fuzzily: the characters in order, anywhere. |
+| `'foo` | The literal substring `foo`. |
+| `^foo` | Candidates starting with `foo`. |
+| `foo$` | Candidates ending with `foo`. |
+| `!foo` | Candidates **not** containing `foo`. |
+
+`!` combines with the others: `!^foo` and `!foo$` both work. A space, or an
+operator meant literally, is escaped with a backslash: `foo\ bar`, `\^foo`.
+
+`a | b` for alternatives is the one part of fzf's syntax that is missing; the
+matcher does not implement it.
+
+By default, case is handled the way fzf handles it: a query in lower case
+ignores case, and a query with a capital in it does not.
+
+- `exact_match` (or `-e`) makes a plain term a substring match rather than a
+  fuzzy one. `'foo` then means the opposite — match it fuzzily.
+- `ignore_case` (or `-i`) ignores case whatever the query looks like.
+
+A term that uses `^`, `$` or `'` and contains a capital letter matches nothing,
+because the matcher compares the whole candidate rather than the anchored part
+when case is significant. Add `-i`, or keep such terms in lower case.
 
 Candidates may carry colour; matching always runs on the visible text, so a
 query never matches an escape sequence and the highlights line up with what you

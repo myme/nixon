@@ -368,14 +368,16 @@ mod tests {
         type_query(&mut app, "bld");
         insta::assert_snapshot!(draw(&mut app));
 
-        // Row 1 is the only match, `build - Build the workspace`.
+        // Row 1 is `build - Build the workspace`. Smart case matches the
+        // capital `B` of the description, which starts a word and so scores
+        // higher than the lowercase one in the name.
         let styles = row_styles(&mut app, 1);
         let highlighted: String = styles
             .iter()
             .filter(|(_, fg)| *fg == Some(Color::Cyan))
             .map(|(c, _)| *c)
             .collect();
-        assert_eq!(highlighted, "bld");
+        assert_eq!(highlighted, "Bld");
     }
 
     #[test]
