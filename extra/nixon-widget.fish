@@ -7,7 +7,8 @@
 # Source this from ~/.config/fish/config.fish.
 
 function nixon-insert-selection
-    commandline -i (nixon run -s | string join ' ')
+    # Escaped per item: a selection may hold spaces or shell characters.
+    commandline -i (nixon run -s | string escape | string join ' ')
     commandline -f repaint
 end
 
@@ -17,7 +18,7 @@ function nixon-insert-command
 end
 
 function nixon-insert-project
-    commandline -i (nixon project -s)
+    commandline -i (nixon project -s | string escape)
     commandline -f repaint
 end
 

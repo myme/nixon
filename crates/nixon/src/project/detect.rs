@@ -77,7 +77,9 @@ pub fn find_in_project_or_default(ptypes: &[ProjectType], path: &Path) -> Projec
 
 /// Sorts projects by full path. SPEC §9.6.
 pub fn sort_projects(projects: &mut [Project]) {
-    projects.sort_by_key(Project::path);
+    // Cached: `path` joins, so a plain `sort_by_key` allocates twice per
+    // comparison.
+    projects.sort_by_cached_key(Project::path);
 }
 
 /// Renders projects for `project --inspect`. SPEC §9.7.

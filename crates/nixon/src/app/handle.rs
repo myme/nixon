@@ -29,8 +29,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
                 ));
             }
             Selection::Canceled => return Err(NixonError::Canceled),
-            Selection::Selected { mut items, .. } if items.len() > 1 => {
-                items.clear();
+            Selection::Selected { items, .. } if items.len() > 1 => {
                 return Err(NixonError::NothingSelected(
                     "Multiple commands selected.".to_owned(),
                 ));
