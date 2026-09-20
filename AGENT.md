@@ -125,6 +125,8 @@ Fixture rules, each learned from a failure:
 
 - Commit often: every logical or structural cut, every feature added. Many
   small commits beat one big one.
+- Stage by explicit path: `git add <path>…`, never `git add -A`, `git add .`
+  or `commit -a`. Anything else in the worktree is the user's.
 - Subject: imperative, says what changed. Body: hard-wrapped at ~72 columns,
   says why. No changelog-style bullet dumps.
 - PR and issue bodies are not hard-wrapped: one line per paragraph and per
