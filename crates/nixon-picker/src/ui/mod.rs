@@ -15,7 +15,7 @@ use nucleo_matcher::Matcher;
 
 use crate::candidate::Candidate;
 use crate::matcher::match_indices;
-use crate::options::PickerOptions;
+use crate::options::{PickerOption, PickerOptions};
 use crate::selection::{Selection, SelectionType};
 use crate::textbuf::TextBuffer;
 use keymap::{Action, action_for};
@@ -58,6 +58,8 @@ pub struct App {
     pub height: usize,
     /// Set once the pick is over.
     pub outcome: Option<Selection<Candidate>>,
+    /// Which toggle the options row is on, when the row has focus.
+    pub option_focus: Option<usize>,
     options: PickerOptions,
     next_id: u32,
 }
@@ -90,6 +92,7 @@ impl App {
             offset: 0,
             height: 10,
             outcome: None,
+            option_focus: None,
             options,
         };
         app.reparse(true);
@@ -209,8 +212,92 @@ impl App {
         self.outcome.is_some()
     }
 
+    /// The toggles shown below the query, in declaration order.
+    pub fn option_row(&self) -> &[PickerOption] {
+        &self.options.options
+    }
+
+    /// Each toggle's state, which is what the caller reads back.
+    pub fn option_state(&self) -> Vec<bool> {
+        self.options
+            .options
+            .iter()
+            .map(|option| option.on)
+            .collect()
+    }
+
+    /// Flips one toggle.
+    pub fn toggle_option(&mut self, index: usize) {
+        if let Some(option) = self.options.options.get_mut(index) {
+            option.on = !option.on;
+        }
+    }
+
+    /// Moves focus between the query line and the options row.
+    pub const fn toggle_option_focus(&mut self) {
+        if self.options.options.is_empty() {
+            return;
+        }
+        self.option_focus = match self.option_focus {
+            Some(_) => None,
+            None => Some(0),
+        };
+    }
+
+    /// Moves along the options row, stopping at either end.
+    fn move_option(&mut self, delta: isize) {
+        let Some(at) = self.option_focus else { return };
+        let last = self.options.options.len().saturating_sub(1);
+        let next = if delta < 0 {
+            at.saturating_sub(1)
+        } else {
+            (at + 1).min(last)
+        };
+        self.option_focus = Some(next);
+    }
+
+    /// Keys the options row takes for itself, once it has focus.
+    ///
+    /// Anything it does not know falls through, so `Ctrl-C` still cancels.
+    fn handle_focused(&mut self, key: KeyEvent) -> bool {
+        use crossterm::event::{KeyCode, KeyModifiers};
+
+        let plain = key.modifiers == KeyModifiers::NONE || key.modifiers == KeyModifiers::SHIFT;
+        match key.code {
+            KeyCode::Left if plain => self.move_option(-1),
+            KeyCode::Right | KeyCode::Tab if plain => self.move_option(1),
+            KeyCode::BackTab => self.move_option(-1),
+            KeyCode::Char(' ') | KeyCode::Enter if plain => {
+                if let Some(at) = self.option_focus {
+                    self.toggle_option(at);
+                }
+            }
+            KeyCode::Esc => self.option_focus = None,
+            // Typing goes nowhere while the row has focus; anything else —
+            // Ctrl-C, F1, the list keys — still does what it always does.
+            _ => return keymap::line_edit(key).is_some(),
+        }
+        true
+    }
+
     /// Applies one key press.
     pub fn handle(&mut self, key: KeyEvent) {
+        // The option keys work wherever focus is.
+        match keymap::option_action(key) {
+            Some(keymap::OptionKey::Toggle(index)) => {
+                self.toggle_option(index);
+                return;
+            }
+            Some(keymap::OptionKey::Focus) => {
+                self.toggle_option_focus();
+                return;
+            }
+            None => {}
+        }
+        if self.option_focus.is_some() && self.handle_focused(key) {
+            return;
+        }
+
         match action_for(key, &self.options.expect) {
             Action::Edit(edit) => {
                 let before = self.query.text();
@@ -835,5 +922,138 @@ mod tests {
                 "a keystroke took {elapsed:?}; matching must stay off the UI thread"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod option_keys {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    use super::App;
+    use crate::candidate::Candidate;
+    use crate::options::{PickerOption, PickerOptions};
+    use crate::selection::Selection;
+
+    fn app() -> App {
+        let options = PickerOptions::default().options(vec![
+            PickerOption::new("--force", false),
+            PickerOption::new("-v", true),
+            PickerOption::new("--dry-run", false),
+        ]);
+        App::new(vec![Candidate::identity("one")], options)
+    }
+
+    fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
+        app.handle(KeyEvent::new(code, modifiers));
+    }
+
+    fn plain(app: &mut App, code: KeyCode) {
+        press(app, code, KeyModifiers::NONE);
+    }
+
+    fn alt(app: &mut App, c: char) {
+        press(app, KeyCode::Char(c), KeyModifiers::ALT);
+    }
+
+    #[test]
+    fn alt_digits_toggle_the_nth_option_from_anywhere() {
+        let mut app = app();
+        alt(&mut app, '1');
+        alt(&mut app, '2');
+        assert_eq!(app.option_state(), [true, false, false]);
+        assert!(app.option_focus.is_none(), "the query keeps focus");
+    }
+
+    #[test]
+    fn an_alt_digit_past_the_end_does_nothing() {
+        let mut app = app();
+        alt(&mut app, '9');
+        assert_eq!(app.option_state(), [false, true, false]);
+    }
+
+    #[test]
+    fn alt_o_moves_focus_on_and_off_the_row() {
+        let mut app = app();
+        alt(&mut app, 'o');
+        assert_eq!(app.option_focus, Some(0));
+        alt(&mut app, 'o');
+        assert_eq!(app.option_focus, None);
+    }
+
+    #[test]
+    fn focus_moves_along_the_row_and_stops_at_the_ends() {
+        let mut app = app();
+        alt(&mut app, 'o');
+
+        plain(&mut app, KeyCode::Left);
+        assert_eq!(app.option_focus, Some(0), "stops at the start");
+
+        plain(&mut app, KeyCode::Right);
+        plain(&mut app, KeyCode::Tab);
+        assert_eq!(app.option_focus, Some(2));
+        plain(&mut app, KeyCode::Right);
+        assert_eq!(app.option_focus, Some(2), "stops at the end");
+
+        plain(&mut app, KeyCode::BackTab);
+        assert_eq!(app.option_focus, Some(1));
+    }
+
+    #[test]
+    fn space_and_enter_toggle_the_focused_option() {
+        let mut app = app();
+        alt(&mut app, 'o');
+
+        plain(&mut app, KeyCode::Char(' '));
+        assert_eq!(app.option_state(), [true, true, false]);
+
+        plain(&mut app, KeyCode::Enter);
+        assert_eq!(app.option_state(), [false, true, false]);
+        assert!(!app.is_done(), "Enter toggles rather than confirming");
+    }
+
+    #[test]
+    fn esc_returns_to_the_query_rather_than_cancelling() {
+        let mut app = app();
+        alt(&mut app, 'o');
+        plain(&mut app, KeyCode::Esc);
+
+        assert_eq!(app.option_focus, None);
+        assert!(!app.is_done());
+
+        // And now Esc cancels as usual.
+        plain(&mut app, KeyCode::Esc);
+        assert_eq!(app.outcome, Some(Selection::Canceled));
+    }
+
+    #[test]
+    fn typing_does_not_reach_the_query_while_the_row_has_focus() {
+        let mut app = app();
+        alt(&mut app, 'o');
+        plain(&mut app, KeyCode::Char('x'));
+
+        assert_eq!(app.query.text(), "");
+        assert_eq!(app.option_state(), [false, true, false]);
+    }
+
+    #[test]
+    fn ctrl_c_still_cancels_from_the_options_row() {
+        let mut app = app();
+        alt(&mut app, 'o');
+        press(&mut app, KeyCode::Char('c'), KeyModifiers::CONTROL);
+        assert_eq!(app.outcome, Some(Selection::Canceled));
+    }
+
+    #[test]
+    fn the_query_keeps_working_when_the_row_is_not_focused() {
+        let mut app = app();
+        plain(&mut app, KeyCode::Char('o'));
+        assert_eq!(app.query.text(), "o");
+    }
+
+    #[test]
+    fn focus_does_nothing_without_options() {
+        let mut app = App::new(vec![Candidate::identity("one")], PickerOptions::default());
+        alt(&mut app, 'o');
+        assert_eq!(app.option_focus, None);
     }
 }

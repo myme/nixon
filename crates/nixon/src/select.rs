@@ -115,6 +115,7 @@ pub fn project_options(config: &Config, query: Option<&str>, multi: bool) -> Pic
         multi,
         expect: vec![(key(KeyCode::F(1)), SelectionType::Show)],
         select_one: true,
+        options: Vec::new(),
     }
 }
 

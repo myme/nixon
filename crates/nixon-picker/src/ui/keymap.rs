@@ -37,6 +37,27 @@ pub enum Action {
     Ignore,
 }
 
+/// A key that belongs to the options row, wherever focus is.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OptionKey {
+    /// `Alt-1`…`Alt-9`: flip the nth toggle.
+    Toggle(usize),
+    /// `Alt-o`: move focus on or off the row.
+    Focus,
+}
+
+/// Recognises the keys the options row owns.
+pub const fn option_action(key: KeyEvent) -> Option<OptionKey> {
+    if !key.modifiers.contains(KeyModifiers::ALT) {
+        return None;
+    }
+    match key.code {
+        KeyCode::Char('o') => Some(OptionKey::Focus),
+        KeyCode::Char(c @ '1'..='9') => Some(OptionKey::Toggle(c as usize - '1' as usize)),
+        _ => None,
+    }
+}
+
 /// Maps a key in the picker, `expect` keys taking precedence.
 pub fn action_for(key: KeyEvent, expect: &[(KeyEvent, SelectionType)]) -> Action {
     if let Some((_, kind)) = expect

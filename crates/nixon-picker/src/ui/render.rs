@@ -25,26 +25,34 @@ const CURRENT_BG: Color = Color::Indexed(237);
 const POINTER_FG: Color = Color::Indexed(168);
 /// The marker's colour, fzf's `marker`, distinct from the pointer.
 const MARKER_FG: Color = Color::Indexed(114);
+/// A toggle that is on.
+const OPTION_ON_FG: Color = Color::Indexed(114);
+/// The toggle the options row is on.
+const OPTION_FOCUS_FG: Color = Color::Indexed(168);
 
 /// Draws the picker. Pure in `app`, so it snapshot-tests under `TestBackend`.
 pub fn render(app: &mut App, frame: &mut Frame<'_>) {
     let area = frame.area();
     let has_header = app.header().is_some();
-    let constraints = if has_header {
-        vec![
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ]
-    } else {
-        vec![Constraint::Length(1), Constraint::Min(0)]
-    };
+    let has_options = !app.option_row().is_empty();
+
+    let mut constraints = Vec::new();
+    if has_header {
+        constraints.push(Constraint::Length(1));
+    }
+    // Query, then the options row, then whatever is left for the list.
+    constraints.push(Constraint::Length(1));
+    if has_options {
+        constraints.push(Constraint::Length(1));
+    }
+    constraints.push(Constraint::Min(0));
+
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints(constraints)
         .split(area);
 
-    let (query_row, list_row) = if has_header {
+    let mut next = if has_header {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 app.header().unwrap_or_default(),
@@ -52,10 +60,17 @@ pub fn render(app: &mut App, frame: &mut Frame<'_>) {
             ))),
             rows[0],
         );
-        (rows[1], rows[2])
+        1
     } else {
-        (rows[0], rows[1])
+        0
     };
+    let query_row = rows[next];
+    next += 1;
+    if has_options {
+        render_options(app, frame, rows[next]);
+        next += 1;
+    }
+    let list_row = rows[next];
 
     render_query(app, frame, query_row);
     render_list(app, frame, list_row);
@@ -107,6 +122,45 @@ fn render_query(app: &App, frame: &mut Frame<'_>, area: Rect) {
             at,
         );
     }
+}
+
+/// Draws the row of toggles below the query.
+///
+/// `[x] --force  [ ] -v`, with the focused toggle picked out and its
+/// description after the row, so the row's width does not jump as focus
+/// moves.
+fn render_options(app: &App, frame: &mut Frame<'_>, area: Rect) {
+    let focus = app.option_focus;
+    let mut spans = Vec::new();
+
+    for (index, option) in app.option_row().iter().enumerate() {
+        if index > 0 {
+            spans.push(Span::raw("  "));
+        }
+        let mark = if option.on { "x" } else { " " };
+        let style = if focus == Some(index) {
+            Style::default()
+                .fg(OPTION_FOCUS_FG)
+                .add_modifier(Modifier::BOLD)
+        } else if option.on {
+            Style::default().fg(OPTION_ON_FG)
+        } else {
+            Style::default().add_modifier(Modifier::DIM)
+        };
+        spans.push(Span::styled(format!("[{mark}] {}", option.label), style));
+    }
+
+    if let Some(description) = focus
+        .and_then(|at| app.option_row().get(at))
+        .and_then(|option| option.description.as_deref())
+    {
+        spans.push(Span::styled(
+            format!("  {description}"),
+            Style::default().add_modifier(Modifier::DIM),
+        ));
+    }
+
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 /// Draws the candidate rows, ANSI preserved and matches highlighted.
@@ -621,5 +675,64 @@ mod tests {
         );
         let (_, cursor) = draw_with_cursor(&mut app);
         assert_eq!(cursor, Some((2, 1)));
+    }
+}
+
+#[cfg(test)]
+mod option_row {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    use super::super::App;
+    use super::render;
+    use crate::candidate::Candidate;
+    use crate::options::{PickerOption, PickerOptions};
+
+    fn app() -> App {
+        let options = PickerOptions::default()
+            .header("Select command")
+            .options(vec![
+                PickerOption::new("--force", false)
+                    .describe("also removes worktrees with local changes"),
+                PickerOption::new("-v", true).describe("print what it does"),
+            ]);
+        App::new(
+            vec![
+                Candidate::identity("remove - Remove a worktree"),
+                Candidate::identity("add - Add a worktree"),
+            ],
+            options,
+        )
+    }
+
+    fn draw(app: &mut App) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(80, 10)).unwrap();
+        app.set_height(7);
+        terminal.draw(|frame| render(app, frame)).unwrap();
+        format!("{}", terminal.backend())
+    }
+
+    fn press(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
+        app.handle(KeyEvent::new(code, modifiers));
+    }
+
+    #[test]
+    fn renders_the_options_row_unfocused() {
+        insta::assert_snapshot!(draw(&mut app()));
+    }
+
+    #[test]
+    fn renders_the_options_row_focused_with_its_description() {
+        let mut app = app();
+        press(&mut app, KeyCode::Char('o'), KeyModifiers::ALT);
+        insta::assert_snapshot!(draw(&mut app));
+    }
+
+    #[test]
+    fn renders_a_toggled_option() {
+        let mut app = app();
+        press(&mut app, KeyCode::Char('1'), KeyModifiers::ALT);
+        insta::assert_snapshot!(draw(&mut app));
     }
 }
