@@ -179,11 +179,14 @@ optparse-applicative provides:
 
 - [ ] MUST: Global config: `$XDG_CONFIG_HOME/nixon.md` (default
       `~/.config/nixon.md`), overridable by `-C`. (`Markdown.hs:67-68`)
-- [ ] MUST: Local (project) config: walking **up** from the project path,
-      the first directory containing `nixon.md` or `.nixon.md` (checked in
-      that order per directory) (`Config.hs:20-27`, `Utils.hs:62-70`).
-      `find_dominating_file` requires the starting path to be a directory;
-      stops at filesystem root.
+- [ ] MUST: Local (project) config: `firstOf (find_dominating_file path)
+      ["nixon.md", ".nixon.md"]` — the **entire** ancestor chain is searched
+      for `nixon.md` first, and only if none exists anywhere is the chain
+      searched again for `.nixon.md`. So a `nixon.md` three directories up
+      beats a `.nixon.md` next to the project. (`Config.hs:20-27`,
+      `Utils.hs:62-70`.) `find_dominating_file` requires the starting path
+      to be a directory; stops at filesystem root. Kept in v2 (ENGINEERING
+      §7.4), tested.
 - [ ] MUST: Local config is merged on top of the global config
       (`env.config <> local`) for the duration of command discovery/handling
       (`Find.hs:120-124`, applied in `findCmd`, `findAndHandleCmd`, and the
@@ -610,9 +613,16 @@ colon-modifiers := ':' ( fields 'm'? | 'm' fields? )   -- Fields + multiple, eit
 2. Keep a command if `cmd.project_types` is empty **or** intersects the
    project's detected type ids.
 3. Add **bin commands**: for each `dir` in `config.bin_dirs`, list
-   `project_path/dir` and for every entry that is *executable* create
-   `Command { name: basename, source: "<full path> \"$@\"", location:
-   Loc(path,0,0,0), lang: None, … }`. Non-existent dirs yield nothing.
+   `project_path/dir` and for every *regular file with an execute bit*
+   (non-recursive) create `Command { name: basename, source: "<full path>
+   \"$@\"", location: Loc(path,0,0,0), lang: None, … }`. Non-existent dirs
+   yield nothing.
+   - [ ] BUG (v1): turtle's `lsif` uses its predicate only to decide whether
+         to *descend* into subdirectories and emits every entry regardless,
+         so v1 actually offered every file in `bin/` (executable or not),
+         every subdirectory as a command, and everything under traversable
+         subdirectories. `bin/README` became a command that cannot run. v2
+         implements the intent above (ENGINEERING §7.3).
 4. **Sort by name** (stable, so for equal names local-before-global order
    from the merge is preserved).
 

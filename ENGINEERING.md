@@ -464,13 +464,15 @@ The `Nixon.hs` global-options row in SPEC §2.1 therefore shrinks to:
 | §10.4 | `new` writes temp file to `/tmp`; can splice into a `bin/` executable | System temp dir; `new` refuses non-markdown commands with `cannot insert after a bin command`. |
 | §2.1 | "Terminal emultor" | Moot (flag removed). |
 | §8.1 | Backend picked by whether stdin is a TTY | Moot — no backends. |
+| §5.5 | `bin_dirs` offered every entry (non-executables, subdirectories, recursive contents) as commands | Only regular files with an execute bit, non-recursive. |
 
 ### 7.4 Quirks kept on purpose (do not "fix")
 
 - Config merge rules exactly as §3.3, including local commands first and
   list concatenation without dedupe.
-- Local config = first `nixon.md`/`.nixon.md` found walking **up** from the
-  project root (§3.1).
+- Local config = `nixon.md` anywhere up the ancestor chain first, then
+  `.nixon.md` anywhere up the chain (§3.1) — a farther `nixon.md` beats a
+  nearer `.nixon.md`.
 - Project discovery depth 1 with wordexp-style expansion; hidden dirs
   included; discovery runs on every invocation (§9.6). (Perf: keep it
   cheap; add a cache only if measured.)
