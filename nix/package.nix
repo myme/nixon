@@ -1,7 +1,14 @@
 { pkgs, craneLib }:
 
 let
-  src = craneLib.cleanCargoSource ./..;
+  # crane's cargo filter drops .snap files, which would leave insta with no
+  # stored snapshots in the sandbox and make every snapshot test "new".
+  src = pkgs.lib.cleanSourceWith {
+    src = ./..;
+    name = "source";
+    filter =
+      path: type: (builtins.match ".*\\.snap$" path != null) || (craneLib.filterCargoSources path type);
+  };
 
   commonArgs = {
     inherit src;
