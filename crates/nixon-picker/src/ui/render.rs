@@ -74,7 +74,8 @@ pub fn render(app: &mut App, frame: &mut Frame<'_>) {
 /// parentheses when the picker is in multi mode, as fzf shows them.
 fn render_query(app: &App, frame: &mut Frame<'_>, area: Rect) {
     // Straight from the matcher's snapshot, so it is correct while the
-    // candidates are still streaming in.
+    // candidates are still streaming in. The marked count is the total, not
+    // the visible total: marks outlive the query that made them.
     let counts = if app.multi() && !app.marked.is_empty() {
         format!(
             "{}/{} ({})",

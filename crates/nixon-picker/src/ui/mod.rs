@@ -5,7 +5,7 @@ pub mod render;
 
 pub use render::render;
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -46,8 +46,12 @@ pub struct App {
     pub query: TextBuffer,
     /// Index into the current matches.
     pub cursor: usize,
-    /// Matched-item indices the user has marked.
-    pub marked: BTreeSet<u32>,
+    /// Candidates the user has marked, keyed by identity.
+    ///
+    /// Keyed rather than positional so marks survive a query change, and
+    /// ordered by identity so confirming returns them in list order, however
+    /// they were marked. ENGINEERING §7.2.
+    pub marked: BTreeMap<u32, Candidate>,
     /// First visible row.
     pub offset: usize,
     /// How many rows the list can show.
@@ -55,19 +59,16 @@ pub struct App {
     /// Set once the pick is over.
     pub outcome: Option<Selection<Candidate>>,
     options: PickerOptions,
+    next_id: u32,
 }
 
 impl App {
     /// Builds the initial state, applying any pre-filled query.
     pub fn new(candidates: Vec<Candidate>, options: PickerOptions) -> Self {
-        let app = Self::empty(options);
-        let injector = app.nucleo.injector();
+        let mut app = Self::empty(options);
         for candidate in candidates {
-            // The matched text is what the user sees, never the escapes.
-            let plain = candidate.plain();
-            injector.push(candidate, |_, columns| columns[0] = plain.as_str().into());
+            app.push(candidate);
         }
-        let mut app = app;
         app.reparse(true);
         app.tick_until_settled();
         app
@@ -84,7 +85,8 @@ impl App {
             matcher: Matcher::new(nucleo_matcher::Config::DEFAULT),
             query: TextBuffer::new(options.initial_query.as_deref().unwrap_or_default()),
             cursor: 0,
-            marked: BTreeSet::new(),
+            marked: BTreeMap::new(),
+            next_id: 0,
             offset: 0,
             height: 10,
             outcome: None,
@@ -94,9 +96,16 @@ impl App {
         app
     }
 
-    /// A handle for pushing candidates in as they arrive.
-    pub fn injector(&self) -> nucleo::Injector<Candidate> {
-        self.nucleo.injector()
+    /// Takes a candidate, giving it the identity its marks are keyed by.
+    ///
+    /// The matched text is the candidate's visible text, never its escapes.
+    pub fn push(&mut self, mut candidate: Candidate) {
+        candidate.id = self.next_id;
+        self.next_id += 1;
+        let plain = candidate.plain();
+        self.nucleo
+            .injector()
+            .push(candidate, |_, columns| columns[0] = plain.as_str().into());
     }
 
     /// Lets the matcher make progress; called once per frame.
@@ -186,9 +195,9 @@ impl App {
                 );
                 let at = from + u32::try_from(row).unwrap_or(0);
                 Row {
+                    marked: self.marked.contains_key(&candidate.id),
                     candidate,
                     indices: indices.clone(),
-                    marked: self.marked.contains(&at),
                     is_cursor: at == cursor,
                 }
             })
@@ -213,7 +222,9 @@ impl App {
                     self.reparse(!appended);
                     self.cursor = 0;
                     self.offset = 0;
-                    self.marked.clear();
+                    // Marks are deliberately kept: they are keyed by
+                    // candidate, so narrowing away a marked row does not
+                    // unmark it. ENGINEERING §7.2.
                     // A frame's worth of matching, no more.
                     self.settle(Duration::from_millis(10));
                 }
@@ -224,7 +235,8 @@ impl App {
             Action::PageDown => self.page(1, self.height),
             Action::HalfPageUp => self.page(-1, self.height / 2),
             Action::HalfPageDown => self.page(1, self.height / 2),
-            Action::ToggleMark => self.toggle_mark(),
+            Action::ToggleMark => self.toggle_mark(1),
+            Action::ToggleMarkUp => self.toggle_mark(-1),
             Action::Confirm(kind) => self.confirm(kind),
             Action::Cancel => self.outcome = Some(Selection::Canceled),
             Action::Ignore => {}
@@ -280,17 +292,19 @@ impl App {
         self.offset = self.offset.min(matched.saturating_sub(self.height));
     }
 
-    fn toggle_mark(&mut self) {
+    /// Marks or unmarks the current row, then steps `delta`. ENGINEERING §7.2.
+    ///
+    /// fzf moves on after marking so a run of rows can be taken without
+    /// reaching for the arrows; Shift-Tab does the same upwards.
+    fn toggle_mark(&mut self, delta: isize) {
         if !self.options.multi {
             return;
         }
-        if let Ok(at) = u32::try_from(self.cursor)
-            && at < self.matched_count()
-        {
-            if !self.marked.insert(at) {
-                self.marked.remove(&at);
+        if let Some(candidate) = self.current() {
+            if self.marked.remove(&candidate.id).is_none() {
+                self.marked.insert(candidate.id, candidate);
             }
-            self.move_cursor(1);
+            self.move_cursor(delta);
         }
     }
 
@@ -299,11 +313,9 @@ impl App {
         let items: Vec<Candidate> = if self.marked.is_empty() {
             self.current().into_iter().collect()
         } else {
-            let snapshot = self.nucleo.snapshot();
-            self.marked
-                .iter()
-                .filter_map(|at| snapshot.get_matched_item(*at).map(|item| item.data.clone()))
-                .collect()
+            // Keyed by identity, so these include rows the current query no
+            // longer matches, in list order.
+            self.marked.values().cloned().collect()
         };
         self.outcome = Some(Selection::selected(kind, items));
     }
@@ -596,6 +608,112 @@ mod tests {
         assert_eq!(app.cursor, 1);
     }
 
+    /// fzf keeps marks across query changes: mark under one search, change
+    /// it, mark more, and Enter returns everything. ENGINEERING §7.2.
+    #[test]
+    fn marks_survive_a_query_change() {
+        let mut app = multi_app(&["alpha-one", "beta-two", "alpha-three"]);
+
+        type_query(&mut app, "alpha");
+        assert_eq!(app.matched_count(), 2);
+        press(&mut app, KeyCode::Tab);
+        assert_eq!(app.marked.len(), 1);
+
+        // Narrow to something the marked row does not match.
+        ctrl(&mut app, 'u');
+        type_query(&mut app, "beta");
+        assert_eq!(app.matched_count(), 1);
+        assert_eq!(app.marked.len(), 1, "the earlier mark must survive");
+
+        press(&mut app, KeyCode::Tab);
+        press(&mut app, KeyCode::Enter);
+
+        let picked = values(&app.outcome.clone().unwrap());
+        assert_eq!(picked, ["alpha-one", "beta-two"]);
+    }
+
+    #[test]
+    fn a_marked_row_that_no_longer_matches_is_still_returned() {
+        let mut app = multi_app(&["keep-me", "other"]);
+        press(&mut app, KeyCode::Tab);
+        type_query(&mut app, "other");
+        assert_eq!(app.matched_count(), 1);
+
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(values(&app.outcome.clone().unwrap()), ["keep-me"]);
+    }
+
+    #[test]
+    fn unmarking_works_after_a_query_change() {
+        let mut app = multi_app(&["alpha", "beta"]);
+        press(&mut app, KeyCode::Tab);
+        assert_eq!(app.marked.len(), 1);
+
+        type_query(&mut app, "alpha");
+        press(&mut app, KeyCode::Tab);
+        assert!(app.marked.is_empty(), "the same row unmarks itself");
+    }
+
+    #[test]
+    fn marks_are_returned_in_list_order_however_they_were_made() {
+        let mut app = multi_app(&["one", "two", "three"]);
+        // Mark the last, then the first.
+        press(&mut app, KeyCode::Down);
+        press(&mut app, KeyCode::Down);
+        press(&mut app, KeyCode::Tab);
+        type_query(&mut app, "one");
+        press(&mut app, KeyCode::Tab);
+        press(&mut app, KeyCode::Enter);
+
+        assert_eq!(values(&app.outcome.clone().unwrap()), ["one", "three"]);
+    }
+
+    #[test]
+    fn shift_tab_marks_and_moves_up() {
+        let mut app = multi_app(&["one", "two", "three"]);
+        press(&mut app, KeyCode::Down);
+        press(&mut app, KeyCode::Down);
+        assert_eq!(app.cursor, 2);
+
+        press(&mut app, KeyCode::BackTab);
+        assert_eq!(app.marked.len(), 1);
+        assert_eq!(app.cursor, 1);
+
+        press(&mut app, KeyCode::BackTab);
+        assert_eq!(app.marked.len(), 2);
+        assert_eq!(app.cursor, 0);
+    }
+
+    #[test]
+    fn shift_tab_does_nothing_without_multi_select() {
+        let mut app = app(&["one", "two"]);
+        press(&mut app, KeyCode::Down);
+        press(&mut app, KeyCode::BackTab);
+        assert!(app.marked.is_empty());
+        assert_eq!(app.cursor, 1);
+    }
+
+    #[test]
+    fn shift_tab_twice_on_the_same_row_unmarks_it() {
+        let mut app = multi_app(&["one", "two"]);
+        press(&mut app, KeyCode::Down);
+        press(&mut app, KeyCode::BackTab);
+        press(&mut app, KeyCode::Down);
+        press(&mut app, KeyCode::BackTab);
+        assert!(app.marked.is_empty());
+    }
+
+    #[test]
+    fn marking_upwards_returns_the_rows_in_list_order() {
+        let mut app = multi_app(&["one", "two", "three"]);
+        press(&mut app, KeyCode::Down);
+        press(&mut app, KeyCode::Down);
+        press(&mut app, KeyCode::BackTab);
+        press(&mut app, KeyCode::BackTab);
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(values(&app.outcome.clone().unwrap()), ["two", "three"]);
+    }
+
     #[test]
     fn tab_twice_on_the_same_row_unmarks_it() {
         let mut app = multi_app(&["one", "two"]);
@@ -676,11 +794,8 @@ mod tests {
         let mut app = App::empty(PickerOptions::default());
         assert_eq!(app.total_count(), 0);
 
-        let injector = app.injector();
         for value in ["one", "two", "three"] {
-            let candidate = Candidate::identity(value);
-            let plain = candidate.plain();
-            injector.push(candidate, |_, columns| columns[0] = plain.as_str().into());
+            app.push(Candidate::identity(value));
         }
 
         app.tick_until_settled();

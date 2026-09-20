@@ -259,7 +259,13 @@ Choosing:
 | `Alt-Enter` | Edit the command's source before running it |
 | `F1` | Print the command's source |
 | `F2` | Open the command where it is defined, in `$EDITOR` |
-| `Tab` | Mark a row, when several may be selected |
+| `Tab` | Mark the row and move down, when several may be selected |
+| `Shift-Tab` | Mark the row and move up |
+
+Marks stick: search for one thing and mark a few rows, then search for
+something else and mark more. `Enter` returns all of them, including the ones
+the current search no longer shows. The count on the right reads
+`matched/total (marked)`.
 | `Esc`, `Ctrl-C` | Cancel; nixon exits 130 |
 
 Moving:

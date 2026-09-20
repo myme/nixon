@@ -91,14 +91,18 @@ fn run_loop(
     let mut untouched = true;
 
     while !app.is_done() {
-        let streaming = stream.as_mut().is_some_and(|stream| {
-            let injector = app.injector();
-            for candidate in stream.drain() {
-                let plain = candidate.plain();
-                injector.push(candidate, |_, columns| columns[0] = plain.as_str().into());
+        let arrived = stream
+            .as_mut()
+            .map(|stream| (stream.drain(), stream.is_finished()));
+        let streaming = match arrived {
+            Some((candidates, finished)) => {
+                for candidate in candidates {
+                    app.push(candidate);
+                }
+                !finished
             }
-            !stream.is_finished()
-        });
+            None => false,
+        };
 
         // Let the background matcher make progress, then draw what it has.
         app.tick();

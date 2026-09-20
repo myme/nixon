@@ -425,3 +425,80 @@ echo \"picked: $1\"
         "nixon waited for the killed command to finish"
     );
 }
+
+/// Shift-Tab marks and steps upwards, so a run can be taken from the bottom.
+#[test]
+fn shift_tab_marks_two_rows_from_the_bottom() {
+    let pty = Pty::with_config(
+        "\
+# `items`
+
+```bash
+printf 'one\\ntwo\\nthree\\n'
+```
+
+# `show ${items:m}`
+
+```bash
+echo \"picked: $@\"
+```
+",
+    );
+    let mut session = pty.spawn(&["run", "show"]);
+
+    settle();
+    // Down to the last row, then mark upwards: three, then two.
+    session.send("\u{1b}[B").unwrap();
+    session.send("\u{1b}[B").unwrap();
+    settle();
+    // CSI Z is Shift-Tab as a legacy terminal sends it.
+    session.send("\u{1b}[Z").unwrap();
+    session.send("\u{1b}[Z").unwrap();
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(output.contains("picked: two three"), "output was: {output}");
+}
+
+/// Marks are keyed by candidate, so they outlive the query that made them.
+#[test]
+fn marks_survive_a_query_change() {
+    let pty = Pty::with_config(
+        "\
+# `items`
+
+```bash
+printf 'alpha-one\\nbeta-two\\nalpha-three\\n'
+```
+
+# `show ${items:m}`
+
+```bash
+echo \"picked: $@\"
+```
+",
+    );
+    let mut session = pty.spawn(&["run", "show"]);
+
+    settle();
+    // Mark a row under one search...
+    session.send("alpha-one").unwrap();
+    settle();
+    session.send("\t").unwrap();
+    settle();
+
+    // ...clear it, search for something else, and mark there too.
+    session.send("\u{15}").unwrap();
+    session.send("beta").unwrap();
+    settle();
+    session.send("\t").unwrap();
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(
+        output.contains("picked: alpha-one beta-two"),
+        "output was: {output}"
+    );
+}

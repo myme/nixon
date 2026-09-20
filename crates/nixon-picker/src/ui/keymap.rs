@@ -25,8 +25,10 @@ pub enum Action {
     HalfPageUp,
     /// Move half a screenful towards the end.
     HalfPageDown,
-    /// Mark or unmark the current row, when multi-select is on.
+    /// Mark or unmark the current row and move down, in multi mode.
     ToggleMark,
+    /// Mark or unmark the current row and move up, in multi mode.
+    ToggleMarkUp,
     /// Confirm with this selection type.
     Confirm(SelectionType),
     /// Cancel the pick.
@@ -54,7 +56,11 @@ pub fn action_for(key: KeyEvent, expect: &[(KeyEvent, SelectionType)]) -> Action
         (KeyCode::F(1), _, _) => return Action::Confirm(SelectionType::Show),
         (KeyCode::F(2), _, _) => return Action::Confirm(SelectionType::Visit),
         (KeyCode::Esc, _, _) | (KeyCode::Char('c' | 'g'), true, _) => return Action::Cancel,
+        // Both encodings of Shift-Tab reach us as BackTab: legacy `CSI Z`,
+        // and kitty's `\t` with SHIFT set. Neither needs the modifier
+        // checked here.
         (KeyCode::Tab, _, _) => return Action::ToggleMark,
+        (KeyCode::BackTab, _, _) => return Action::ToggleMarkUp,
 
         // fzf binds Ctrl-J and Ctrl-K to list movement, not kill-line.
         (KeyCode::Down, _, _) | (KeyCode::Char('n' | 'j'), true, _) => return Action::MoveDown,
@@ -227,6 +233,23 @@ mod tests {
             action_for(key(KeyCode::Char('x')), &[]),
             Action::Edit(Edit::Insert('x'))
         );
+    }
+
+    #[test]
+    fn shift_tab_marks_upwards_in_both_terminal_encodings() {
+        // Legacy terminals send `CSI Z`, which crossterm reports as BackTab
+        // with SHIFT; the kitty protocol sends `\t` with SHIFT, which
+        // crossterm also reports as BackTab.
+        let legacy = KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT);
+        assert_eq!(action_for(legacy, &[]), Action::ToggleMarkUp);
+
+        let bare = KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE);
+        assert_eq!(action_for(bare, &[]), Action::ToggleMarkUp);
+    }
+
+    #[test]
+    fn tab_marks_downwards() {
+        assert_eq!(action_for(key(KeyCode::Tab), &[]), Action::ToggleMark);
     }
 
     #[test]

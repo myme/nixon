@@ -10,16 +10,30 @@ pub struct Candidate {
     pub display: String,
     /// Text returned when the row is selected.
     pub value: String,
+    /// Stable identity, assigned when the picker takes the candidate.
+    ///
+    /// Marks are keyed by this rather than by a row's position, so they
+    /// survive a query change: a row marked under one query is still marked
+    /// when it no longer matches the next. [`Candidate::UNASSIGNED`] until
+    /// the picker sees it.
+    pub id: u32,
 }
 
 impl Candidate {
+    /// The identity of a candidate the picker has not taken yet.
+    pub const UNASSIGNED: u32 = u32::MAX;
+
     /// A candidate whose displayed text is also its value.
     ///
     /// The value has ANSI escapes stripped, as SPEC §8.4 requires.
     pub fn identity(text: impl Into<String>) -> Self {
         let display = text.into();
         let value = strip_ansi(&display);
-        Self { display, value }
+        Self {
+            display,
+            value,
+            id: Self::UNASSIGNED,
+        }
     }
 
     /// The displayed text without ANSI escapes: what the user actually sees.
@@ -36,6 +50,7 @@ impl Candidate {
         Self {
             display: display.into(),
             value: value.into(),
+            id: Self::UNASSIGNED,
         }
     }
 }
