@@ -9,11 +9,25 @@ use crate::command::Command;
 
 /// Where a command's script is written: `<sha1-of-source>-<name><ext>`.
 /// SPEC §7.2.
+///
+/// The name is only a label, so anything that would make it a path is
+/// flattened: a `bin_dirs` command is named after its file, and a separator
+/// in there would point the write at a directory that does not exist.
 pub fn script_path(cache_dir: &Path, command: &Command) -> PathBuf {
     let digest = Sha1::digest(command.source.as_bytes());
-    let name = &command.name;
+    let name = flatten(&command.name);
     let ext = command.lang.extension();
     cache_dir.join(format!("{digest:x}-{name}{ext}"))
+}
+
+/// Replaces anything that would turn a name into a path.
+fn flatten(name: &str) -> String {
+    name.chars()
+        .map(|c| match c {
+            '/' | '\\' | '\0' => '_',
+            other => other,
+        })
+        .collect()
 }
 
 /// Writes a command's source to the cache and returns the path. SPEC §7.2.
@@ -72,6 +86,26 @@ mod tests {
             lang,
             ..Command::default()
         }
+    }
+
+    /// A `bin_dirs` command is named after a path; the cache is one flat
+    /// directory, so writing it used to fail with ENOENT.
+    #[test]
+    fn a_name_with_a_separator_stays_one_file() {
+        let temp = TempDir::new().unwrap();
+        let cmd = command("bin/deploy", "echo go\n", Language::Bash);
+
+        let path = script_path(temp.path(), &cmd);
+        assert_eq!(path.parent(), Some(temp.path()));
+        assert!(
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .ends_with("-bin_deploy.sh"),
+            "got {}",
+            path.display()
+        );
+        assert!(write_script(temp.path(), &cmd).is_ok());
     }
 
     #[test]

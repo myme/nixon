@@ -59,7 +59,7 @@ fn find_bin_commands(config: &Config, project: &Project) -> Vec<Command> {
             };
             found.push(Command {
                 name,
-                source: format!("{} \"$@\"", path.display()),
+                source: format!("{} \"$@\"", shell_words::quote(&path.to_string_lossy())),
                 location: Some(CommandLocation {
                     file_path: path,
                     start_line: 0,
@@ -238,6 +238,34 @@ mod tests {
     }
 
     #[cfg(unix)]
+    /// A file name is not a shell word: a space splits the command and
+    /// `$(…)` in it used to run.
+    #[test]
+    #[cfg(unix)]
+    fn a_bin_path_with_shell_metacharacters_is_quoted() {
+        let temp = TempDir::new().unwrap();
+        let bin = temp.child("bin");
+        bin.create_dir_all().unwrap();
+        let script = bin.child("a b$(id)");
+        script.write_str("#!/bin/sh\n").unwrap();
+        make_executable(script.path());
+
+        let config = Config {
+            bin_dirs: vec![PathBuf::from("bin")],
+            ..Config::default()
+        };
+        let found = find_project_commands(&config, &project(temp.path(), Vec::new()));
+
+        assert_eq!(found[0].name, "a b$(id)");
+        assert_eq!(
+            found[0].source,
+            format!(
+                "{} \"$@\"",
+                shell_words::quote(&script.path().to_string_lossy())
+            )
+        );
+    }
+
     fn make_executable(path: &Path) {
         use std::os::unix::fs::PermissionsExt as _;
         let mut perms = std::fs::metadata(path).unwrap().permissions();
