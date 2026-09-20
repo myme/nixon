@@ -39,7 +39,10 @@ be overridden either way.
 
 A bare argument that is not a subcommand is `run`'s, so `nixon hello` and
 `nixon run hello` are the same. A word that *is* a subcommand is always the
-subcommand: a command called `edit` has to be run as `nixon run edit`.
+subcommand: a command called `edit` has to be run as `nixon run edit`. The
+reserved words are `edit`, `eval`, `gc`, `new`, `project`, `run`, `help` and
+`internal` — the last of these is packaging machinery and is hidden from
+`--help`, but it shadows a command of that name like any other.
 
 ## `run`
 
