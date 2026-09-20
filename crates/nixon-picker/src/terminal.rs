@@ -53,7 +53,7 @@ impl TerminalGuard {
         install_panic_hook();
         enable_raw_mode().map_err(|_| no_terminal())?;
         // From here on every path, including an early return, restores.
-        let _restore = Restore;
+        let restore = Restore;
 
         let mut stderr = io::stderr();
         execute!(stderr, EnterAlternateScreen)?;
@@ -65,7 +65,7 @@ impl TerminalGuard {
         }
         Ok(Self {
             terminal: Terminal::new(CrosstermBackend::new(stderr))?,
-            _restore,
+            _restore: restore,
         })
     }
 
