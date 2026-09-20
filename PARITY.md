@@ -81,7 +81,7 @@ Counts are at the bottom.
 | ATX and setext headings | done (`supports_alternate_header_format`) |
 | Heading text = all text + inline code | done (`detects_project_type`, `command_name_is_the_first_word`) |
 | QUIRK `getText` leaves internal double spaces | done (no test — reproduced in `extract::get_text`; invisible downstream) |
-| Unparseable attributes → whole text is the name | done (`extracts_name`) |
+| Unparsable attributes → whole text is the name | done (`extracts_name`) |
 | `parseHeaderArgs` 9 cases | done (`extracts_name`, `extracts_name_arg_and_kwarg`, `extracts_a_flag` ×4, `extracts_type` ×2, `mixes_args_and_kwargs`) |
 | QUIRK kwarg values are letters only | changed (§7.3 — `kwarg_values_are_not_limited_to_letters`) |
 | QUIRK trailing `{...}` parsed after the name | done (`command_name_is_the_first_word`) |
