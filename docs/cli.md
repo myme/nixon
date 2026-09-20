@@ -70,9 +70,17 @@ widgets rely on that.
 nixon project [-i] [-I] [-l] [-s] [PROJECT] [COMMAND] [ARGS]...
 ```
 
-Selects a project, then a command in it. `PROJECT` is a query, with one special
-case: `.` means the project containing the current directory, falling back to
-an unfiltered picker when there is none.
+Selects a project, then a command in it. `PROJECT` is a query, with two
+special cases:
+
+- `.` means the project containing the current directory, falling back to an
+  unfiltered picker when there is none.
+- Anything containing `/`, or starting with `~`, `./` or `../`, is a
+  directory: nixon resolves it directly, with no discovery and no picker, and
+  reports a path that is not there rather than searching for it.
+
+A `COMMAND` naming a command exactly runs it without the picker, hidden
+`_names` included.
 
 | Flag | Effect |
 |---|---|

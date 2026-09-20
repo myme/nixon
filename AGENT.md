@@ -113,7 +113,13 @@ Fixture rules, each learned from a failure:
 - `--list` with no matches prints to stderr and exits **0**. The shell widgets
   depend on it.
 - Hidden `_commands` are excluded from the run picker but available to
-  placeholders, `--list`, `edit` and `new`.
+  placeholders, `--list`, `edit` and `new`. A name given in full runs its
+  command without the picker, hidden or not, and beats a fuzzy match.
+- A `project` argument with a separator in it, or starting with `~`, `./` or
+  `../`, is a directory: resolved on the spot, no discovery, no picker. `.`
+  still means the project containing the cwd.
+- Every command gets `nixon_project_path` and `nixon_bin` — `current_exe()`,
+  so a command can call the same nixon back.
 - A heading's `-f`/`--name` tokens are options: toggled at the prompt, placed
   in argv where the heading put them, exported as `nixon_opt_<name>`. Malformed
   option syntax fails the file with a position, never silently. The prompt is

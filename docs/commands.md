@@ -151,9 +151,51 @@ Values are either bare (`[A-Za-z0-9_-]+`) or `"quoted"`, in which case anything
 but a `"` goes. A heading whose attribute block does not parse is treated as
 all name.
 
+## Calling nixon from a command
+
+`$nixon_bin` is the absolute path of the nixon that started the command, so a
+command can run another command — in another project — without guessing which
+nixon is on `PATH`.
+
+````markdown
+### `git-worktree-add ${branch}`
+
+Adds a worktree and links it into the package that owns it.
+
+```bash
+dir="../$1"
+git worktree add "$dir" "$1"
+
+pkg=$(basename "$PWD")
+"$nixon_bin" project ~/code/novem/novem-utils link-project "$pkg" "$dir"
+```
+````
+
+`link-project` lives in `~/code/novem/novem-utils`, receives `$pkg` and `$dir`
+as `$1` and `$2`, and runs inside that project: its own local `nixon.md`, its
+own `direnv` or `nix-shell`.
+
+Two things make this work without surprises:
+
+- A project argument containing `/`, or starting with `~`, `.` or `..`, is
+  taken as a directory. Nixon resolves it straight away — no discovery, no
+  picker — and a path that is not there is an error naming it. `.` still means
+  the project containing the current directory.
+- A command name given in full is run without the picker, even when it is also
+  a fuzzy match for others, and even when it is a hidden `_name`.
+
+Together those mean the line above never stops to ask anything, which is what
+lets it run from a script.
+
+The nested `direnv` wrapping is correct rather than doubled: the wrapper
+compares `$DIRENV_DIR` against the *target* project, so the inner nixon still
+wraps for `novem-utils` even though the outer command is already inside its
+own environment.
+
 ## What a command gets
 
 - **`$nixon_project_path`** — the project's directory.
+- **`$nixon_bin`** — the nixon that started it, as an absolute path.
 - **Working directory** — the project root.
 - **Positional arguments** — from `${…}` placeholders, then anything left over
   on the command line.

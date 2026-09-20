@@ -119,6 +119,19 @@ there.
 Cancelling the picker kills the referenced command's whole process group, not
 just the interpreter.
 
+## What the command receives
+
+Besides the placeholder values, every command is given:
+
+| Variable | Value |
+|---|---|
+| `nixon_project_path` | The project's directory. |
+| `nixon_bin` | The nixon that started it, as an absolute path. |
+| `nixon_opt_<name>` | `1` for each option that is on, empty for each that is off. |
+
+`nixon_bin` is what a command uses to run another command; see
+[calling nixon from a command](commands.md#calling-nixon-from-a-command).
+
 ## Arguments on the command line
 
 Arguments after a command name are search queries for its placeholders, in
