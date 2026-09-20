@@ -476,6 +476,21 @@ mod tests {
     }
 
     #[test]
+    fn inherited_types_are_ordered_innermost_first() {
+        let parsed = commands(&[
+            "# Outer {type=\"outer\"}",
+            "",
+            "## Middle {type=\"middle\"}",
+            "",
+            "### `cmd` {type=\"own\"}",
+            "```bash",
+            "echo hi",
+            "```",
+        ]);
+        assert_eq!(parsed[0].project_types, ["own", "middle", "outer"]);
+    }
+
+    #[test]
     fn a_command_heading_type_is_inherited_by_nested_commands() {
         let parsed = commands(&[
             "### `sub-parent` {type=\"git\"}",

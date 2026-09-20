@@ -48,8 +48,12 @@ pub fn walk(file: &str, nodes: &[Node]) -> Result<ParsedFile, MarkdownError> {
                 // it, until a sibling or shallower heading. SPEC §4.4 BUG: v1
                 // only did this for command headings.
                 stack.retain(|frame| frame.level < *level);
-                let inherited: Vec<String> =
-                    stack.iter().flat_map(|frame| frame.types.clone()).collect();
+                // Innermost enclosing heading first, as v1 accumulated them.
+                let inherited: Vec<String> = stack
+                    .iter()
+                    .rev()
+                    .flat_map(|frame| frame.types.clone())
+                    .collect();
                 let own = attrs.kwarg_values("type");
                 stack.push(Frame {
                     level: *level,
