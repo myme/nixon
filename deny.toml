@@ -36,3 +36,8 @@ allow = ["MITNFA"]
 [[licenses.exceptions]]
 name = "finl_unicode"
 allow = ["Unicode-DFS-2016"]
+
+# ratatui-core -> kasuari -> hashbrown. Zlib is permissive.
+[[licenses.exceptions]]
+name = "foldhash"
+allow = ["Zlib"]
