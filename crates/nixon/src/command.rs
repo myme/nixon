@@ -174,6 +174,11 @@ impl Command {
         })
     }
 
+    /// Every option at its declared default.
+    pub fn default_options(&self) -> Vec<bool> {
+        self.options.iter().map(|option| option.default).collect()
+    }
+
     /// The option with this name, if the command declares one.
     pub fn option(&self, name: &str) -> Option<&CommandOption> {
         self.options.iter().find(|option| option.name == name)

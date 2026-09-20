@@ -3,7 +3,7 @@
 use nixon_picker::{Candidate, CandidateStream, FilterPicker, Picker, PickerOptions, Selection};
 use serde::Deserialize;
 
-use crate::command::Command;
+use crate::command::{ArgSpec, Command};
 use crate::error::{NixonError, Result};
 use crate::eval::{Context, Evaluation, PROJECT_PATH_VAR, evaluate_capture, prepare};
 use crate::format::{format_columns, pick_fields};
@@ -56,11 +56,23 @@ pub struct Resolver<'a, P: Picker, R: ProcessRunner> {
 }
 
 impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
-    /// Resolves every placeholder of `command`.
+    /// Resolves `command` with its options at their defaults.
+    pub fn resolve_env(&mut self, command: &Command, args: &[String]) -> Result<Resolved> {
+        self.resolve_with(command, args, &command.default_options())
+    }
+
+    /// Resolves every argument of `command`, with the options in `on`.
     ///
     /// `args` are search queries for the matching placeholders, not values;
     /// args beyond the placeholders become pre-expanded positional arguments.
-    pub fn resolve_env(&mut self, command: &Command, args: &[String]) -> Result<Resolved> {
+    /// An option that is on contributes its token where the heading put it,
+    /// so `$1` and `"$@"` read like the heading.
+    pub fn resolve_with(
+        &mut self,
+        command: &Command,
+        args: &[String],
+        on: &[bool],
+    ) -> Result<Resolved> {
         let mut resolved = Resolved {
             env: vec![(
                 PROJECT_PATH_VAR.to_owned(),
@@ -69,26 +81,64 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             ..Resolved::default()
         };
 
-        let placeholders: Vec<Placeholder> = command.placeholders().cloned().collect();
-        for (placeholder, query) in zip_args(&placeholders, args) {
-            let values = if placeholder.value.is_empty() {
-                self.select_for(&placeholder, query.as_deref())?
-            } else {
-                placeholder.value.clone()
-            };
+        for (index, option) in command.options.iter().enumerate() {
+            let set = on.get(index).copied().unwrap_or(option.default);
+            resolved
+                .env
+                .push((option.env_var(), if set { "1" } else { "" }.to_owned()));
+        }
 
-            match &placeholder.kind {
-                PlaceholderType::Stdin => {
-                    resolved.stdin.get_or_insert_with(Vec::new).extend(values);
+        let placeholders: Vec<Placeholder> = command.placeholders().cloned().collect();
+        let mut queries = zip_args(&placeholders, args).into_iter();
+
+        for spec in &command.args {
+            match spec {
+                ArgSpec::Option(index) => {
+                    let option = &command.options[*index];
+                    if on.get(*index).copied().unwrap_or(option.default) {
+                        resolved.args.push(option.token.clone());
+                    }
                 }
-                PlaceholderType::Arg => resolved.args.extend(values),
-                PlaceholderType::EnvVar(name) => {
-                    resolved.env.push((name.clone(), values.join(" ")));
+                ArgSpec::Placeholder(_) => {
+                    let Some((placeholder, query)) = queries.next() else {
+                        continue;
+                    };
+                    self.apply(&mut resolved, &placeholder, query.as_deref())?;
                 }
             }
         }
 
+        // Arguments beyond the placeholders, already expanded.
+        for (placeholder, query) in queries {
+            self.apply(&mut resolved, &placeholder, query.as_deref())?;
+        }
+
         Ok(resolved)
+    }
+
+    /// Resolves one placeholder into the right part of `resolved`.
+    fn apply(
+        &mut self,
+        resolved: &mut Resolved,
+        placeholder: &Placeholder,
+        query: Option<&str>,
+    ) -> Result<()> {
+        let values = if placeholder.value.is_empty() {
+            self.select_for(placeholder, query)?
+        } else {
+            placeholder.value.clone()
+        };
+
+        match &placeholder.kind {
+            PlaceholderType::Stdin => {
+                resolved.stdin.get_or_insert_with(Vec::new).extend(values);
+            }
+            PlaceholderType::Arg => resolved.args.extend(values),
+            PlaceholderType::EnvVar(name) => {
+                resolved.env.push((name.clone(), values.join(" ")));
+            }
+        }
+        Ok(())
     }
 
     /// Runs the command a placeholder references and selects from its output.
@@ -369,6 +419,32 @@ mod tests {
             };
             resolver.resolve_env(outer, args)
         }
+
+        fn resolve_with(
+            &self,
+            outer: &Command,
+            args: &[String],
+            on: &[bool],
+            picker: &mut impl Picker,
+            runner: &mut FakeRunner,
+        ) -> crate::error::Result<Resolved> {
+            let context = Context {
+                config: &self.config,
+                cache_dir: self.cache.path(),
+                shell: Some("/bin/bash"),
+                direnv_dir: None,
+            };
+            let project = project();
+            let mut resolver = Resolver {
+                context: &context,
+                project: &project,
+                commands: &self.commands,
+                picker,
+                runner,
+                header: outer.show(),
+            };
+            resolver.resolve_with(outer, args, on)
+        }
     }
 
     fn arg(name: &str) -> Placeholder {
@@ -394,6 +470,76 @@ mod tests {
         ) -> std::io::Result<nixon_picker::Selection<Candidate>> {
             Err(std::io::Error::other("no terminal"))
         }
+    }
+
+    fn with_options(name: &str, heading: &str) -> Command {
+        let (_, args, options) = crate::command::parse_command_name(heading).unwrap();
+        Command {
+            name: name.to_owned(),
+            source: "true\n".to_owned(),
+            lang: Language::Bash,
+            args,
+            options,
+            ..Command::default()
+        }
+    }
+
+    #[test]
+    fn an_option_that_is_on_takes_its_place_in_argv() {
+        let harness = Harness::new(vec![command("files", "ls\n", Vec::new())]);
+        let outer = with_options("edit", "edit --force ${files} -v");
+
+        let mut picker = ScriptedPicker::new(vec![selected(&["a.txt"])]);
+        let mut runner = FakeRunner::new().with_output(&["a.txt"]);
+
+        let resolved = harness
+            .resolve_with(&outer, &[], &[true, false], &mut picker, &mut runner)
+            .unwrap();
+        assert_eq!(resolved.args, ["--force", "a.txt"]);
+
+        let mut picker = ScriptedPicker::new(vec![selected(&["a.txt"])]);
+        let mut runner = FakeRunner::new().with_output(&["a.txt"]);
+        let resolved = harness
+            .resolve_with(&outer, &[], &[false, true], &mut picker, &mut runner)
+            .unwrap();
+        assert_eq!(resolved.args, ["a.txt", "-v"]);
+    }
+
+    #[test]
+    fn every_option_is_exported_whether_on_or_off() {
+        let harness = Harness::new(Vec::new());
+        let outer = with_options("build", "build --release --no-cache");
+
+        let mut picker = ScriptedPicker::new(Vec::new());
+        let mut runner = FakeRunner::new();
+        let resolved = harness
+            .resolve_with(&outer, &[], &[true, false], &mut picker, &mut runner)
+            .unwrap();
+
+        assert!(
+            resolved
+                .env
+                .contains(&("nixon_opt_release".to_owned(), "1".to_owned()))
+        );
+        assert!(
+            resolved
+                .env
+                .contains(&("nixon_opt_no_cache".to_owned(), String::new()))
+        );
+    }
+
+    #[test]
+    fn options_fall_back_to_their_declared_defaults() {
+        let harness = Harness::new(Vec::new());
+        let mut outer = with_options("build", "build --release");
+        outer.options[0].default = true;
+
+        let mut picker = ScriptedPicker::new(Vec::new());
+        let mut runner = FakeRunner::new();
+        let resolved = harness
+            .resolve(&outer, &[], &mut picker, &mut runner)
+            .unwrap();
+        assert_eq!(resolved.args, ["--release"]);
     }
 
     #[test]
