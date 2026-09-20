@@ -16,9 +16,11 @@
 use std::process::ExitCode;
 
 pub mod command;
+pub mod config;
 pub mod format;
 pub mod language;
 pub mod placeholder;
+pub mod project;
 pub mod select;
 
 /// Runs nixon. Subcommand dispatch lands with SPEC §10.
