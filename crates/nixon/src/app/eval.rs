@@ -29,10 +29,12 @@ pub struct EvalOpts {
 impl<P: Picker, R: ProcessRunner> App<P, R> {
     /// Evaluates a one-off command. SPEC §10.3.
     pub fn eval(&mut self, opts: &EvalOpts) -> Result<ExitCode> {
+        // ENGINEERING §7.3: without --project, fall back to the current
+        // directory as `run` does, rather than v1's interactive picker.
         let project = if opts.select_project {
             self.pick_one_project(None)?
         } else {
-            self.project_for_query(Some("."))?
+            self.current_project()
         };
 
         let (source, detected) = match &opts.file {

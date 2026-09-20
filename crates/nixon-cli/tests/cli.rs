@@ -175,6 +175,21 @@ fn eval_runs_an_inline_expression() {
 }
 
 #[test]
+fn eval_works_outside_any_recognised_project() {
+    let fixture = Fixture::new();
+    // No marker here, so this directory is not a project.
+    let elsewhere = fixture.temp.child("elsewhere");
+    elsewhere.create_dir_all().unwrap();
+
+    let mut cmd = fixture.nixon();
+    cmd.current_dir(elsewhere.path())
+        .args(["eval", "echo anywhere"])
+        .assert()
+        .success()
+        .stdout("anywhere\n");
+}
+
+#[test]
 fn eval_reads_a_file_with_dash_f() {
     let fixture = Fixture::new();
     let script = fixture.temp.child("script.sh");
