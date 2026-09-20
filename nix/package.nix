@@ -7,7 +7,7 @@ let
   # stored snapshot and every snapshot test is "new"; docs/, which pandoc
   # renders into man pages and a test reads to prove the documented --help has
   # not drifted.
-  keep = path: builtins.match ".*(\\.snap|/docs/[^/]*\\.md)$" path != null;
+  keep = path: builtins.match ".*(\\.snap|/docs/.*\\.md)$" path != null;
 
   src = pkgs.lib.cleanSourceWith {
     src = ./..;
@@ -67,16 +67,19 @@ let
 
         pandoc -s -f gfm -t man \
           --metadata title=nixon.md --metadata section=5 \
+          docs/man/nixon.md.5.md \
           docs/configuration.md docs/commands.md docs/placeholders.md \
           -o $out/share/man/man5/nixon.md.5
 
         pandoc -s -f gfm -t man \
           --metadata title=nixon-picker --metadata section=7 \
-          docs/picker.md -o $out/share/man/man7/nixon-picker.7
+          docs/man/nixon-picker.7.md docs/picker.md \
+          -o $out/share/man/man7/nixon-picker.7
 
         pandoc -s -f gfm -t man \
           --metadata title=nixon-shell --metadata section=7 \
-          docs/shell-integration.md -o $out/share/man/man7/nixon-shell.7
+          docs/man/nixon-shell.7.md docs/shell-integration.md \
+          -o $out/share/man/man7/nixon-shell.7
       '';
 
       meta = {

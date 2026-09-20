@@ -80,6 +80,7 @@ in
         nativeBuildInputs = [
           pkgs.man-db
           pkgs.groff
+          pkgs.gzip
         ];
       }
       ''
@@ -100,6 +101,12 @@ in
           if [ -s warnings.txt ]; then
             echo "$page renders with warnings:" >&2
             cat warnings.txt >&2
+            exit 1
+          fi
+          # whatis and `man -k` read the NAME section; without one the page
+          # is invisible to them.
+          if ! zcat "$page" | grep -q '^\.SH NAME'; then
+            echo "$page has no NAME section" >&2
             exit 1
           fi
         done
