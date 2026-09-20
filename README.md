@@ -2,6 +2,11 @@
 
 Project environment and command launcher.
 
+`nixon` reads `nixon.md` files, finds the commands in them, lets you pick one
+with a built-in fuzzy picker, and runs it — optionally inside `direnv` or
+`nix-shell`. It has no external dependencies: the picker is built in, so there
+is no `fzf` or `rofi` to install.
+
 ## Configuration
 
 `nixon` bases its configuration around `nixon.md` files. The configuration files
@@ -180,75 +185,168 @@ vim -p $FILES
 
 ## Usage
 
-Run a command from the current directory:
+Pick a command in the current project and run it:
 
 ``` shell
 nixon
 ```
 
-Query for a project and command:
+Run a command by name. A name that matches exactly one command runs without
+the picker appearing:
+
+``` shell
+nixon hello-sh
+```
+
+Pick a project first, then a command in it:
 
 ``` shell
 nixon project
 ```
 
+List commands, or projects, without running anything:
+
+``` shell
+nixon run -l
+nixon project -l
+```
+
+Evaluate a one-off expression in the current project:
+
+``` shell
+nixon eval 'echo "$nixon_project_path"'
+```
+
 Help text:
 
-```
-❯ nixon --help
+```console
+$ nixon --help
 Command & environment launcher
 
-Usage: nixon [-C|--config CONFIG] [-b|--backend BACKEND]
-             [(-e|--exact) | --no-exact] [(-i|--ignore-case) | --no-ignore-case]
-             [(-T|--force-tty) | --no-force-tty] [-p|--path PATH]
-             [(-d|--direnv) | --no-direnv] [(-n|--nix) | --no-nix]
-             [-t|--terminal TERMINAL] [-L|--loglevel LOGLEVEL]
-             [edit | eval | gc | new | project | run | [command] [args...]
-               [-i|--insert] [-l|--list] [-s|--select]]
+Usage: nixon [OPTIONS] [COMMAND]
 
-Available options:
-  -h,--help                Show this help text
-  -C,--config CONFIG       Path to configuration file (default:
-                           /home/myme/.config/nixon.md)
-  -b,--backend BACKEND     Backend to use: fzf, rofi
-  -e,--exact               Enable exact match
-  -i,--ignore-case         Case-insensitive match
-  -T,--force-tty           Never fork or spawn off separate processes
-  -p,--path PATH           Project directory
-  -d,--direnv              Evaluate .envrc files using `direnv exec`
-  -n,--nix                 Invoke nix-shell if *.nix files are found
-  -t,--terminal TERMINAL   Terminal emultor for non-GUI commands
-  -L,--loglevel LOGLEVEL   Loglevel: debug, info, warning, error
-  command                  Command to run
-  args...                  Arguments to command
-  -i,--insert              Select a command and output its source
-  -l,--list                List commands
-  -s,--select              Output command selection on stdout
+Commands:
+  edit     Edit a command in `$EDITOR`
+  eval     Evaluate an expression
+  gc       Garbage collect cached scripts
+  new      Insert a new command into a config file
+  project  Select a project and run a command in it
+  run      Select and run a command
+  help     Print this message or the help of the given subcommand(s)
 
-Available commands:
-  edit                     Edit a command in $EDITOR
-  eval                     Evaluate expression
-  gc                       Garbage collect cached items
-  new                      Create a new command
-  project                  Project actions
-  run                      Run command
+Options:
+  -C, --config <CONFIG>      Path to config file [default: [..]]
+  -e, --exact                Exact match in the selector
+  -i, --ignore-case          Case-insensitive match in the selector
+  -p, --path <PATH>          Project directory, repeatable
+  -d, --direnv               Run commands through `direnv exec`
+  -n, --nix                  Run commands through `nix-shell`
+  -L, --loglevel <LOGLEVEL>  Log level
+  -h, --help                 Print help
+  -V, --version              Print version
+
 ```
 
-### FZF selection bindings
+### Picker keys
 
-There are some additional bindings available when selection commands through the
-`fzf` interface:
+The picker follows `fzf`'s bindings, and the query line follows readline's.
 
- <dl>
-  <dt>Return</dt>
-  <dd>Primary selection</dd>
-  <dt>Alt-Return</dt>
-  <dd>Edit selection before execution</dd>
-  <dt>F1</dt>
-  <dd>Print out the source of the selected command</dd>
-  <dt>F2</dt>
-  <dd>Jump to the selected command in `$EDITOR`</dd>
-</dl>
+Choosing:
+
+| Key | Action |
+|---|---|
+| `Enter` | Run the selected command |
+| `Alt-Enter` | Edit the command's source before running it |
+| `F1` | Print the command's source |
+| `F2` | Open the command where it is defined, in `$EDITOR` |
+| `Tab` | Mark a row, when several may be selected |
+| `Esc`, `Ctrl-C` | Cancel; nixon exits 130 |
+
+Moving:
+
+| Key | Action |
+|---|---|
+| `Down`, `Ctrl-N`, `Ctrl-J` | Next candidate |
+| `Up`, `Ctrl-P`, `Ctrl-K` | Previous candidate |
+| `PgDn`, `PgUp` | A screenful at a time |
+
+Editing the query — and the same keys work in the edit-before-run editor,
+where `Up`/`Down` move between lines and `Alt-Enter` inserts a newline:
+
+| Key | Action |
+|---|---|
+| `Ctrl-A`, `Home` / `Ctrl-E`, `End` | Start / end of line |
+| `Ctrl-B`, `Left` / `Ctrl-F`, `Right` | Back / forward one character |
+| `Alt-B` / `Alt-F` | Back / forward one word |
+| `Backspace`, `Ctrl-H` / `Delete`, `Ctrl-D` | Delete before / under the cursor |
+| `Ctrl-W`, `Alt-Backspace` / `Alt-D` | Delete the word before / after the cursor |
+| `Ctrl-U` | Delete to the start of the line |
+| `Ctrl-Y` | Paste back what was last deleted |
+
+The row you are on is highlighted, matched characters are picked out, and the
+counts on the right read `matched/total`, with `(marked)` added when you are
+selecting several.
+
+### Shell widgets
+
+The package installs widgets to `$out/share/nixon`. Source the one for your
+shell to get:
+
+| Key | Action |
+|---|---|
+| `Alt-i` | Run a command and insert what you pick from its output |
+| `Alt-I` | Insert a command's source at the cursor |
+| `Alt-p` | Insert a project's path |
+
+``` shell
+# ~/.bashrc
+source /path/to/share/nixon/nixon-widget.bash
+
+# ~/.zshrc
+source /path/to/share/nixon/nixon-widget.zsh
+
+# ~/.config/fish/config.fish
+source /path/to/share/nixon/nixon-widget.fish
+```
+
+### Completion
+
+Completion is generated by the binary itself, so command and project names are
+completed from your actual configuration. Add the line for your shell:
+
+``` shell
+# bash
+eval "$(COMPLETE=bash nixon)"
+
+# zsh
+eval "$(COMPLETE=zsh nixon)"
+
+# fish
+COMPLETE=fish nixon | source
+```
+
+## Changes from v1
+
+v2 is a rewrite in Rust. Configuration files carry over unchanged; the
+command line has a few deliberate differences.
+
+- **The picker is built in.** `fzf` and `rofi` are no longer needed or used,
+  and the `rofi` GUI mode is gone with them.
+- **Removed flags.** `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went
+  with the backend concept. Passing one is now an ordinary argument error.
+  Commands run in the terminal you started them from; a command marked `&`
+  still detaches.
+- **Exit codes are propagated.** v1 always exited 0; v2 exits with the
+  command's status. Cancelling a selection exits 130.
+- **The shell widgets are not compatible with v1's** — they used `-b fzf -T`,
+  which no longer parse. Use the ones shipped with v2.
+- **A missing config file is no longer fatal.** v1 exited 1 when
+  `$XDG_CONFIG_HOME/nixon.md` did not exist; v2 treats it as empty.
+  Malformed configuration is still an error.
+- **A project found from a subdirectory** now resolves to the project root.
+  v1 reported its parent directory with an empty name.
+- **`type="…"` on a section heading** applies to the commands beneath it. v1
+  documented this but only honoured it on command headings.
 
 ## Some history, inspirations & similar projects
 
@@ -275,10 +373,11 @@ Org Model-inspired style, small commands in a file I could dump into my various
 projects. As the name indicates, it would also be `nix`-aware and run commands
 in a `nix-shell`, if configured to do so. It also gained support for `direnv`.
 
-Although this project is written in `Haskell` and one of the most popular
-`Haskell` libraries, [Pandoc](https://pandoc.org/), is a document parser that
-understand Org Mode syntax quite well, I eventually felt like `Markdown` was
-more appropriate simply due to its popularity.
+The first version of `nixon` was written in `Haskell`, where one of the most
+popular libraries, [Pandoc](https://pandoc.org/), is a document parser that
+understands Org Mode syntax quite well. I eventually felt like `Markdown` was
+more appropriate simply due to its popularity. v2 is a Rust rewrite, and parses
+Markdown with [comrak](https://github.com/kivikakk/comrak).
 
 After starting `nixon` I've become aware of various projects that has made
 similar approaches to markdown-based code evaluation. Here's a short-list of

@@ -388,3 +388,43 @@ fn new_asks_before_writing() {
         .success()
         .stdout(contains("Update ").and(contains("? [y/N]")));
 }
+
+/// The README shows `nixon --help`; this keeps that block honest.
+///
+/// trycmd would normally run the README's console blocks, but it parses the
+/// fenced blocks *inside* the embedded `nixon.md` example too — it does not
+/// respect the outer `~~~~~~markdown` fence — and those are command sources,
+/// not shell sessions. Comparing the one console block directly avoids
+/// rewriting the example users are reading.
+#[test]
+fn the_readme_help_block_matches_the_binary() {
+    let readme = std::fs::read_to_string("../../README.md").unwrap();
+    let block = readme
+        .split("```console\n$ nixon --help\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\n```").next())
+        .expect("README should contain a `nixon --help` console block");
+
+    let output = Fixture::new().nixon().arg("--help").assert().success();
+    let actual = String::from_utf8_lossy(&output.get_output().stdout).into_owned();
+
+    // The config default is a real path in the binary and `[..]` in the
+    // README, since it depends on the environment.
+    let normalise = |text: &str| -> Vec<String> {
+        text.lines()
+            .map(|line| {
+                line.find("[default: ").map_or_else(
+                    || line.to_owned(),
+                    |at| format!("{}[default: [..]]", &line[..at]),
+                )
+            })
+            .filter(|line| !line.trim().is_empty())
+            .collect()
+    };
+
+    assert_eq!(
+        normalise(block),
+        normalise(&actual),
+        "README's --help block has drifted from the binary"
+    );
+}
