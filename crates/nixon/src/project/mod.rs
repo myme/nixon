@@ -3,6 +3,8 @@
 //! Detection and discovery land with SPEC §9.2-§9.6; this module is the pure
 //! data the config block parses into.
 
+pub mod detect;
+
 use std::path::PathBuf;
 
 /// What makes a directory a project of some type. SPEC §9.1.
@@ -30,4 +32,15 @@ pub struct ProjectType {
     pub markers: Vec<ProjectMarker>,
     /// Shown when inspecting a project.
     pub description: String,
+}
+
+/// A directory recognised as a project. SPEC §9.1.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Project {
+    /// The project directory's own name.
+    pub name: PathBuf,
+    /// The directory containing it.
+    pub dir: PathBuf,
+    /// Every type that matched.
+    pub types: Vec<ProjectType>,
 }
