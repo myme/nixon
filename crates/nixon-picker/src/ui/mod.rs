@@ -10,19 +10,20 @@ use std::collections::BTreeSet;
 use crossterm::event::KeyEvent;
 
 use crate::candidate::Candidate;
-use crate::matcher::matches;
+use crate::matcher::{Match, matches};
 use crate::options::PickerOptions;
 use crate::selection::{Selection, SelectionType};
+use crate::textbuf::TextBuffer;
 use keymap::{Action, action_for};
 
 /// The picker's whole state. Pure: no I/O, no terminal. ENGINEERING §4.1.
 pub struct App {
     /// Every candidate offered.
     pub candidates: Vec<Candidate>,
-    /// What the user has typed.
-    pub query: String,
-    /// Indices into `candidates`, in display order.
-    pub matched: Vec<usize>,
+    /// The query line, with its own cursor. ENGINEERING §7.2.
+    pub query: TextBuffer,
+    /// The matches, in display order, each with the characters it matched.
+    pub matched: Vec<Match>,
     /// Index into `matched`.
     pub cursor: usize,
     /// Indices into `candidates` the user has marked.
@@ -41,7 +42,7 @@ impl App {
     pub fn new(candidates: Vec<Candidate>, options: PickerOptions) -> Self {
         let mut app = Self {
             candidates,
-            query: options.initial_query.clone().unwrap_or_default(),
+            query: TextBuffer::new(options.initial_query.as_deref().unwrap_or_default()),
             matched: Vec::new(),
             cursor: 0,
             marked: BTreeSet::new(),
@@ -74,16 +75,16 @@ impl App {
     pub fn current(&self) -> Option<&Candidate> {
         self.matched
             .get(self.cursor)
-            .and_then(|index| self.candidates.get(*index))
+            .and_then(|m| self.candidates.get(m.index))
     }
 
-    /// The rows currently visible, with their index into `candidates`.
-    pub fn visible(&self) -> impl Iterator<Item = (usize, &Candidate)> {
+    /// The rows currently visible, each with its match. ENGINEERING §7.2.
+    pub fn visible(&self) -> impl Iterator<Item = (&Match, &Candidate)> {
         self.matched
             .iter()
             .skip(self.offset)
             .take(self.height)
-            .filter_map(|index| self.candidates.get(*index).map(|c| (*index, c)))
+            .filter_map(|m| self.candidates.get(m.index).map(|c| (m, c)))
     }
 
     /// Whether the pick has finished.
@@ -94,26 +95,19 @@ impl App {
     /// Applies one key press. ENGINEERING §7.2.
     pub fn handle(&mut self, key: KeyEvent) {
         match action_for(key, &self.options.expect) {
-            Action::Insert(c) => {
-                self.query.push(c);
-                self.recompute();
-            }
-            Action::DeleteBackward => {
-                self.query.pop();
-                self.recompute();
-            }
-            Action::DeleteWord => {
-                let trimmed = self.query.trim_end();
-                let cut = trimmed.rfind(char::is_whitespace).map_or(0, |i| i + 1);
-                self.query.truncate(cut);
-                self.recompute();
-            }
-            Action::Clear => {
-                self.query.clear();
-                self.recompute();
+            Action::Edit(edit) => {
+                let before = self.query.text();
+                self.query.apply(&edit);
+                // Only re-match when the text actually changed; a cursor move
+                // must not disturb the selection.
+                if self.query.text() != before {
+                    self.recompute();
+                }
             }
             Action::MoveUp => self.move_cursor(-1),
             Action::MoveDown => self.move_cursor(1),
+            Action::PageUp => self.page(-1),
+            Action::PageDown => self.page(1),
             Action::ToggleMark => self.toggle_mark(),
             Action::Confirm(kind) => self.confirm(kind),
             Action::Cancel => self.outcome = Some(Selection::Canceled),
@@ -123,12 +117,17 @@ impl App {
 
     /// Re-runs the query, keeping the cursor in range.
     fn recompute(&mut self) {
-        self.matched = matches(&self.query, &self.candidates, self.options.matching)
-            .into_iter()
-            .map(|m| m.index)
-            .collect();
+        self.matched = matches(&self.query.text(), &self.candidates, self.options.matching);
         self.cursor = self.cursor.min(self.matched.len().saturating_sub(1));
         self.scroll_into_view();
+    }
+
+    /// Moves a screenful. ENGINEERING §7.2.
+    fn page(&mut self, direction: isize) {
+        let page = self.height.max(1);
+        for _ in 0..page {
+            self.move_cursor(direction);
+        }
     }
 
     fn move_cursor(&mut self, delta: isize) {
@@ -157,7 +156,7 @@ impl App {
         if !self.options.multi {
             return;
         }
-        if let Some(index) = self.matched.get(self.cursor).copied() {
+        if let Some(index) = self.matched.get(self.cursor).map(|m| m.index) {
             if !self.marked.insert(index) {
                 self.marked.remove(&index);
             }
@@ -267,7 +266,55 @@ mod tests {
         let mut app = app(&["one"]);
         type_query(&mut app, "foo bar");
         ctrl(&mut app, 'w');
-        assert_eq!(app.query, "foo ");
+        assert_eq!(app.query.text(), "foo ");
+    }
+
+    #[test]
+    fn control_a_and_e_move_within_the_query() {
+        let mut app = app(&["one"]);
+        type_query(&mut app, "abc");
+        ctrl(&mut app, 'a');
+        assert_eq!(app.query.cursor(), (0, 0));
+        press(&mut app, KeyCode::Char('x'));
+        assert_eq!(app.query.text(), "xabc");
+        ctrl(&mut app, 'e');
+        assert_eq!(app.query.cursor(), (0, 4));
+    }
+
+    #[test]
+    fn moving_the_query_cursor_does_not_change_the_selection() {
+        let mut app = app(&["alpha", "beta", "gamma"]);
+        press(&mut app, KeyCode::Down);
+        assert_eq!(app.cursor, 1);
+        ctrl(&mut app, 'a');
+        assert_eq!(app.cursor, 1, "a cursor move must not re-filter");
+    }
+
+    #[test]
+    fn control_y_yanks_back_what_was_deleted() {
+        let mut app = app(&["one"]);
+        type_query(&mut app, "foo bar");
+        ctrl(&mut app, 'w');
+        ctrl(&mut app, 'y');
+        assert_eq!(app.query.text(), "foo bar");
+    }
+
+    #[test]
+    fn page_keys_move_a_screenful() {
+        let mut app = app(&["a", "b", "c", "d", "e", "f"]);
+        app.set_height(2);
+        press(&mut app, KeyCode::PageDown);
+        assert_eq!(app.cursor, 2);
+        press(&mut app, KeyCode::PageUp);
+        assert_eq!(app.cursor, 0);
+    }
+
+    #[test]
+    fn matched_characters_are_recorded_for_highlighting() {
+        let mut app = app(&["git-files"]);
+        type_query(&mut app, "gf");
+        assert_eq!(app.matched.len(), 1);
+        assert!(!app.matched[0].indices.is_empty());
     }
 
     #[test]

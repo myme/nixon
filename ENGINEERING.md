@@ -443,7 +443,7 @@ The `Nixon.hs` global-options row in SPEC §2.1 therefore shrinks to:
 | SIGINT while a foreground child runs | Ignored in nixon, delivered to the child (as v1). |
 | Child exit status | **Propagated** as nixon's exit code (v1 always exited 0). |
 | Cancel (Esc/^C) anywhere, including during placeholder expansion | Exit **130**, message `Selection canceled.` on stderr. No panic. Deliberately collides with a child that itself exits 130 (SIGINT) — both mean "interrupted" to a shell script, and that is the conventional code. |
-| Keys in the picker | `Enter` run · `Alt-Enter` edit-before-run · `F1` show source · `F2` open in `$EDITOR` · `Tab` toggle mark (multi) · `Esc`/`Ctrl-C` cancel · `Ctrl-N/P`, `Up/Down` move. Same as v1's fzf bindings plus fzf's defaults people already use. |
+| Keys in the picker | Actions: `Enter` run · `Alt-Enter` edit-before-run · `F1` show source · `F2` open in `$EDITOR` · `Tab` toggle mark (multi) · `Esc`/`Ctrl-C` cancel. List: `Ctrl-N`/`Ctrl-J`/`Down` next, `Ctrl-P`/`Ctrl-K`/`Up` previous, `PgUp`/`PgDn`. Query line follows **readline/fzf defaults**: `Ctrl-A`/`Home`, `Ctrl-E`/`End`, `Ctrl-B`/`Left`, `Ctrl-F`/`Right`, `Alt-B`/`Alt-F` word, `Ctrl-H`/`Backspace`, `Ctrl-D`/`Delete`, `Ctrl-W`/`Alt-Backspace` delete word back, `Alt-D` delete word forward, `Ctrl-U` delete to start, `Ctrl-Y` yank. The terminal cursor is shown at the query position; matched characters are highlighted in the list (nucleo match indices), like fzf. |
 | `-1` auto-select | Kept: a query (from the CLI positional) that matches exactly one candidate selects it without opening the picker. |
 | ANSI in candidates | Kept (fzf `--ansi`): rendered in the picker, stripped from returned values. |
 

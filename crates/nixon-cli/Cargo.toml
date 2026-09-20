@@ -23,6 +23,7 @@ tracing-subscriber.workspace = true
 [dev-dependencies]
 assert_cmd.workspace = true
 assert_fs.workspace = true
+expectrl.workspace = true
 insta.workspace = true
 predicates.workspace = true
 

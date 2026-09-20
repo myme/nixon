@@ -26,13 +26,15 @@ impl Default for MatchOptions {
     }
 }
 
-/// A candidate that matched, with its score.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// A candidate that matched, with its score and which characters matched.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Match {
     /// Index into the candidates that were searched.
     pub index: usize,
     /// Higher is a better match.
     pub score: u32,
+    /// Character positions in the candidate's display text that matched.
+    pub indices: Vec<u32>,
 }
 
 /// Matches `query` against `candidates`, by their displayed text.
@@ -44,7 +46,10 @@ pub fn matches(query: &str, candidates: &[Candidate], opts: MatchOptions) -> Vec
         return candidates
             .iter()
             .enumerate()
-            .map(|(index, _)| Match { index, score: 0 })
+            .map(|(index, _)| Match {
+                index,
+                ..Match::default()
+            })
             .collect();
     }
 
@@ -65,11 +70,21 @@ pub fn matches(query: &str, candidates: &[Candidate], opts: MatchOptions) -> Vec
         .iter()
         .enumerate()
         .filter_map(|(index, candidate)| {
+            let plain = candidate.plain();
             let mut buf = Vec::new();
-            let haystack = nucleo_matcher::Utf32Str::new(&candidate.display, &mut buf);
+            let haystack = nucleo_matcher::Utf32Str::new(&plain, &mut buf);
+            let mut indices = Vec::new();
             pattern
-                .score(haystack, &mut matcher)
-                .map(|score| Match { index, score })
+                .indices(haystack, &mut matcher, &mut indices)
+                .map(|score| {
+                    indices.sort_unstable();
+                    indices.dedup();
+                    Match {
+                        index,
+                        score,
+                        indices: std::mem::take(&mut indices),
+                    }
+                })
         })
         .collect();
 

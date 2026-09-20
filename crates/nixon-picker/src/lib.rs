@@ -14,6 +14,7 @@ pub mod options;
 pub mod picker;
 pub mod selection;
 pub mod terminal;
+pub mod textbuf;
 pub mod ui;
 
 pub use candidate::Candidate;

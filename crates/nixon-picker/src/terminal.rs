@@ -3,9 +3,13 @@
 
 use std::io::{self, Stderr};
 
+use crossterm::event::{
+    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    supports_keyboard_enhancement,
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
@@ -20,11 +24,23 @@ pub struct TerminalGuard {
 
 impl TerminalGuard {
     /// Takes the terminal, installing a panic hook that gives it back.
+    ///
+    /// Where the terminal supports the kitty keyboard protocol, it is asked
+    /// for disambiguated escape codes so `Ctrl-H`, `Alt-Enter` and
+    /// `Alt-Backspace` arrive as distinct events rather than as whatever
+    /// legacy byte they collide with. Terminals without it fall back to the
+    /// legacy encoding, which the keymap also accepts. ENGINEERING §7.2.
     pub fn new() -> io::Result<Self> {
         install_panic_hook();
         enable_raw_mode()?;
         let mut stderr = io::stderr();
         execute!(stderr, EnterAlternateScreen)?;
+        if supports_keyboard_enhancement().unwrap_or(false) {
+            let _ = execute!(
+                stderr,
+                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+            );
+        }
         Ok(Self {
             terminal: Terminal::new(CrosstermBackend::new(stderr))?,
         })
@@ -44,6 +60,8 @@ impl Drop for TerminalGuard {
 
 /// Puts the terminal back. Safe to call more than once.
 pub fn restore() {
+    // Popping the flags when none were pushed is harmless.
+    let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
     let _ = disable_raw_mode();
     let _ = execute!(io::stderr(), LeaveAlternateScreen);
 }

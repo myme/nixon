@@ -13,6 +13,7 @@ ansi-to-tui.workspace = true
 crossterm.workspace = true
 nucleo-matcher.workspace = true
 ratatui.workspace = true
+strip-ansi-escapes.workspace = true
 
 [features]
 test-util = []

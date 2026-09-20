@@ -153,8 +153,8 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         args: &[String],
     ) -> Result<ExitCode> {
         let edited = match nixon_picker::editor::edit_text(command.source.trim())? {
-            nixon_picker::editor::Edit::Canceled => return Err(NixonError::Canceled),
-            nixon_picker::editor::Edit::Submitted(text) => text,
+            nixon_picker::editor::Edited::Canceled => return Err(NixonError::Canceled),
+            nixon_picker::editor::Edited::Submitted(text) => text,
         };
         if edited.trim().is_empty() {
             return Err(NixonError::NothingSelected("Empty command.".to_owned()));
