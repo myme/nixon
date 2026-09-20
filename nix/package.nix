@@ -1,12 +1,13 @@
 { pkgs, craneLib }:
 
 let
-  # crane's cargo filter keeps only what cargo needs to build. Test fixtures
-  # have to be added back or the checks see a different tree than `cargo
-  # test` does: .snap files, or insta finds no stored snapshot and every
-  # snapshot test is "new", and README.md, which a test reads to prove the
-  # documented --help has not drifted. ENGINEERING §1.1.
-  keep = path: builtins.match ".*(\\.snap|/README\\.md)$" path != null;
+  # crane's cargo filter keeps only what cargo needs to build. Everything else
+  # the build or the tests read has to be named here, or the checks see a
+  # different tree than `cargo test` does: .snap files, or insta finds no
+  # stored snapshot and every snapshot test is "new"; docs/, which pandoc
+  # renders into man pages and a test reads to prove the documented --help has
+  # not drifted.
+  keep = path: builtins.match ".*(\\.snap|/docs/[^/]*\\.md)$" path != null;
 
   src = pkgs.lib.cleanSourceWith {
     src = ./..;
@@ -21,7 +22,7 @@ let
   };
 
   # Built once and reused by every check, so a code change never rebuilds
-  # dependencies (ENGINEERING §1.1).
+  # dependencies.
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
   nixon = craneLib.buildPackage (
@@ -31,7 +32,7 @@ let
 
       # The widgets are v2's: no -b/-T, which no longer parse. Completion is
       # clap_complete's CompleteEnv, so the loaders are `eval`'d snippets
-      # rather than generated files (ENGINEERING §2.1).
+      # rather than generated files.
       postInstall = ''
         install -Dm444 -t $out/share/nixon \
           ${../extra}/nixon-widget.bash \
@@ -49,6 +50,7 @@ let
         mkdir -p $out/share/fish/vendor_completions.d
         echo 'COMPLETE=fish nixon | source' \
           > $out/share/fish/vendor_completions.d/nixon.fish
+
       '';
 
       meta = {

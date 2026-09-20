@@ -207,7 +207,7 @@ pub struct EvalArgs {
     /// The expression to evaluate.
     #[arg(conflicts_with = "file")]
     pub command: Option<String>,
-    /// Placeholders, each parsed with the placeholder grammar. SPEC §5.3.
+    /// Placeholders, each parsed with the placeholder grammar.
     #[arg(value_parser = parse_placeholder)]
     pub placeholders: Vec<Placeholder>,
     /// Read the expression from a file instead.

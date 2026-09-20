@@ -7,112 +7,44 @@ with a built-in fuzzy picker, and runs it — optionally inside `direnv` or
 `nix-shell`. It has no external dependencies: the picker is built in, so there
 is no `fzf` or `rofi` to install.
 
-## Configuration
+## Install
 
-`nixon` bases its configuration around `nixon.md` files. The configuration files
-are generic markdown files, with some syntactic markers to indicate which part
-of the file is supposed to be treated as either commands or configuration by
-`nixon`.
+With flakes:
 
-General configuration may be done by placing a `nixon.md` in
-`$XDG_CONFIG_DIRS/nixon`. Project specific configuration may be done by placing
-a `nixon.md` (or `.nixon.md`) in the root of the project.
+``` shell
+nix run github:myme/nixon
+nix profile install github:myme/nixon
+```
 
-Following is an example configuration. There is also an inspirational
-configuration under [./extra/config.md](./extra/config.md).
+Or build from a checkout:
 
-Example configuration:
+``` shell
+nix build
+./result/bin/nixon --help
+```
+
+## Quick start
+
+Write a `nixon.md` in a project:
 
 ~~~~~~markdown
-
-# Nixon
+# My project
 
 ## Config
 
-The following source code block defines a `nixon` configuration using `YAML`:
-
 ``` yaml config
-exact_match: true
-ignore_case: true
 use_direnv: true
-use_nix: true
 project_dirs:
   - ~/src
-project_types:
-  - name: cabal
-    test: ["cabal.project"]
-    desc: Cabal new-style project,
-  - name: npm
-    test: ["package.json"]
-    desc: NPM project,
-  - name: nix
-    test: ["default.nix", "shell.nix"]
-    desc: Nix project,
-  - name: git
-    test: [".git"]
-    desc: Git repository,
-  - name: project
-    desc: Generic project
 ```
 
-`JSON` is also supported:
+### `hello`
 
-``` json config
-{
-  "exact_match": true,
-  "ignore_case": true,
-  "use_direnv":true,
-  "use_nix":true,
-  "project_dirs": [
-    "~/src"
-  ],
-  "project_types": [
-    { "name": "cabal", "test": ["cabal.project"], "desc": "Cabal new-style project"},
-    { "name": "npm", "test": ["package.json"], "desc": "NPM project"},
-    { "name": "nix", "test": ["default.nix", "shell.nix"], "desc": "Nix project"},
-    { "name": "git", "test": [".git"], "desc": "Git repository"},
-    { "name": "project", "desc": "Generic project"}
-  ]
-}
-```
-
-Please note that only one configuration source code block is allowed per file,
-to avoid misconfiguration.
-
-## Commands
-
-Commands are defined as markdown sections with titles in inline code tags.
-
-### `hello-sh`
-
-This is a basic shell command with a description.
-
-```
-echo "Hello, World!"
-```
-
-### `hello-python`
-
-This is a Python command (note the `python` language annotation):
-
-```python
-print("Hello, World!")
-```
-
-### `terminal &`
-
-Spawn a terminal as a background task.
+Says hello.
 
 ```bash
-x-terminal-emulator
+echo "Hello, World!"
 ```
-
-## Git stuff {type="git"}
-
-Markdown headers can indicate what kind of projects commands are associated
-with. Commands under this "Git stuff" heading are only available within projects
-detected as `git` projects. That is determined by the `name: git` test in the
-`project_types`, testing for a `.git` directory (or file) in the project root.
 
 ### `git-files`
 
@@ -122,80 +54,23 @@ git ls-files
 
 ### `vim-file`
 
-This `vim-file` command references the `git-files` command as an argument
-placeholder. In this case `nixon` will first execute the `git-files` command to
-list all the tracked files within the project. It will then present the user
-with an interactive, fuzzy-finding prompt. Once the user makes their selection
-the selected file will be passed as `$1` (first argument) to the `vim-file`
-command.
+Picks a tracked file and opens it.
 
 ```bash ${git-files}
 vim "$1"
 ```
-
-### `vim-files`
-
-It's possible to specify a multi-selection modifier to let the user select
-multiple files to pass to `vim`. In the `fzf` interface marking files for
-selection is done using `<tab>`.
-
-```bash ${git-files | multi}
-vim -p "$@"
-```
-
-### `vim-files-m`
-
-There's a shorthand `:m` if typing ` | multi` is too long.
-
-```bash ${git-files:m}
-vim -p "$@"
-```
-
-### `vim-stdin`
-
-The `stdin` placeholder may be used to select candidates that will be passed to
-the command's `stdin`. Here we're using the `xargs` command to relay that as
-positional arguments to `vim`.
-
-```bash <{git-files | multi}
-xargs vim -p
-```
-
-### `vim-env`
-
-The `environment variable` placeholder places the selection of a placeholder
-into an environmental variable. The `environment variable` is named after the
-placeholder action with `-` *(dashes)* replaced by `_` *(underscore)*,
-`git_files` in this case.
-
-```bash ={git-files | multi}
-vim -p $git_files
-```
-
-### `vim-env-alias`
-
-It is possible to give the environment variable an explicit name by placing and
-alias before the `=`, in this case `FILES`.
-
-```bash FILES={git-files | multi}
-vim -p $FILES
-```
-
 ~~~~~~
 
-## Usage
-
-Pick a command in the current project and run it:
+Then pick a command and run it:
 
 ``` shell
 nixon
 ```
 
-Run a command by name. A name that matches exactly one command runs without
-the picker appearing:
+Run one by name — a name matching exactly one command skips the picker:
 
 ``` shell
-nixon hello-sh
+nixon hello
 ```
 
 Pick a project first, then a command in it:
@@ -204,133 +79,23 @@ Pick a project first, then a command in it:
 nixon project
 ```
 
-List commands, or projects, without running anything:
+## Documentation
 
-``` shell
-nixon run -l
-nixon project -l
-```
+- [Configuration](docs/configuration.md) — where config files live, how they
+  merge, and every setting.
+- [Commands](docs/commands.md) — how a markdown heading becomes a runnable
+  command.
+- [Placeholders](docs/placeholders.md) — commands that feed other commands.
+- [Command line](docs/cli.md) — every subcommand and flag.
+- [The picker](docs/picker.md) — keys, matching and auto-selection.
+- [Shell integration](docs/shell-integration.md) — widgets, completion and
+  scripting.
 
-Evaluate a one-off expression in the current project:
+There is also an inspirational configuration under
+[extra/config.md](./extra/config.md).
 
-``` shell
-nixon eval 'echo "$nixon_project_path"'
-```
-
-Help text:
-
-```console
-$ nixon --help
-Command & environment launcher
-
-Usage: nixon [OPTIONS] [COMMAND]
-
-Commands:
-  edit     Edit a command in `$EDITOR`
-  eval     Evaluate an expression
-  gc       Garbage collect cached scripts
-  new      Insert a new command into a config file
-  project  Select a project and run a command in it
-  run      Select and run a command
-  help     Print this message or the help of the given subcommand(s)
-
-Options:
-  -C, --config <CONFIG>      Path to config file [default: [..]]
-  -e, --exact                Exact match in the selector
-  -i, --ignore-case          Case-insensitive match in the selector
-  -p, --path <PATH>          Project directory, repeatable
-  -d, --direnv               Run commands through `direnv exec`
-  -n, --nix                  Run commands through `nix-shell`
-  -L, --loglevel <LOGLEVEL>  Log level
-  -h, --help                 Print help
-  -V, --version              Print version
-
-```
-
-### Picker keys
-
-The picker follows `fzf`'s bindings, and the query line follows readline's.
-
-Choosing:
-
-| Key | Action |
-|---|---|
-| `Enter` | Run the selected command |
-| `Alt-Enter` | Edit the command's source before running it |
-| `F1` | Print the command's source |
-| `F2` | Open the command where it is defined, in `$EDITOR` |
-| `Tab` | Mark the row and move down, when several may be selected |
-| `Shift-Tab` | Mark the row and move up |
-
-Marks stick: search for one thing and mark a few rows, then search for
-something else and mark more. `Enter` returns all of them, including the ones
-the current search no longer shows. The count on the right reads
-`matched/total (marked)`.
-| `Esc`, `Ctrl-C` | Cancel; nixon exits 130 |
-
-Moving:
-
-| Key | Action |
-|---|---|
-| `Down`, `Ctrl-N`, `Ctrl-J` | Next candidate |
-| `Up`, `Ctrl-P`, `Ctrl-K` | Previous candidate |
-| `PgDn`, `Ctrl-V` / `PgUp`, `Alt-V` | A full page |
-| `Alt-J` / `Alt-K` | Half a page |
-
-Editing the query — and the same keys work in the edit-before-run editor,
-where `Up`/`Down` move between lines and `Alt-Enter` inserts a newline:
-
-| Key | Action |
-|---|---|
-| `Ctrl-A`, `Home` / `Ctrl-E`, `End` | Start / end of line |
-| `Ctrl-B`, `Left` / `Ctrl-F`, `Right` | Back / forward one character |
-| `Alt-B` / `Alt-F` | Back / forward one word |
-| `Backspace`, `Ctrl-H` / `Delete`, `Ctrl-D` | Delete before / under the cursor |
-| `Ctrl-W`, `Alt-Backspace` / `Alt-D` | Delete the word before / after the cursor |
-| `Ctrl-U` | Delete to the start of the line |
-| `Ctrl-Y` | Paste back what was last deleted |
-
-The row you are on is highlighted, matched characters are picked out, and the
-counts on the right read `matched/total`, with `(marked)` added when you are
-selecting several.
-
-### Shell widgets
-
-The package installs widgets to `$out/share/nixon`. Source the one for your
-shell to get:
-
-| Key | Action |
-|---|---|
-| `Alt-i` | Run a command and insert what you pick from its output |
-| `Alt-I` | Insert a command's source at the cursor |
-| `Alt-p` | Insert a project's path |
-
-``` shell
-# ~/.bashrc
-source /path/to/share/nixon/nixon-widget.bash
-
-# ~/.zshrc
-source /path/to/share/nixon/nixon-widget.zsh
-
-# ~/.config/fish/config.fish
-source /path/to/share/nixon/nixon-widget.fish
-```
-
-### Completion
-
-Completion is generated by the binary itself, so command and project names are
-completed from your actual configuration. Add the line for your shell:
-
-``` shell
-# bash
-eval "$(COMPLETE=bash nixon)"
-
-# zsh
-eval "$(COMPLETE=zsh nixon)"
-
-# fish
-COMPLETE=fish nixon | source
-```
+Installed as man pages: `nixon(1)`, `nixon.md(5)`, `nixon-picker(7)` and
+`nixon-shell(7)`.
 
 ## Changes from v1
 
