@@ -31,6 +31,7 @@ test-util = ["nixon-picker/test-util"]
 
 [dev-dependencies]
 assert_fs.workspace = true
+nixon = { path = ".", features = ["test-util"] }
 nixon-picker = { workspace = true, features = ["test-util"] }
 proptest.workspace = true
 rstest.workspace = true

@@ -1240,6 +1240,7 @@ dependencies = [
  "crossterm",
  "etcetera",
  "glob",
+ "nixon",
  "nixon-picker",
  "proptest",
  "rstest",
