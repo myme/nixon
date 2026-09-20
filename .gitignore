@@ -2,8 +2,3 @@
 /result
 /result-*
 .direnv/
-
-# Haskell (v1, removed at parity)
-.ghc.environment.*
-dist
-dist-newstyle
