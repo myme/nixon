@@ -113,11 +113,20 @@ fn run_opts(args: RunArgs) -> RunOpts {
 }
 
 /// `nixon foo bar` is `nixon run foo bar`: the first word is the command.
+///
+/// A `--` between the name and the rest is the shell's way of saying "no
+/// more flags"; it has done its job by the time we get here, so it does not
+/// travel on into the command's arguments.
 fn external_opts(args: Vec<String>) -> RunOpts {
     let mut args = args.into_iter();
+    let command = args.next();
+    let mut rest: Vec<String> = args.collect();
+    if rest.first().is_some_and(|arg| arg == "--") {
+        rest.remove(0);
+    }
     RunOpts {
-        command: args.next(),
-        args: args.collect(),
+        command,
+        args: rest,
         ..RunOpts::default()
     }
 }
@@ -126,11 +135,8 @@ fn project_opts(args: ProjectArgs) -> ProjectOpts {
     ProjectOpts {
         project: args.project,
         run: RunOpts {
-            command: args.command,
-            args: args.args,
             insert: args.insert,
-            list: false,
-            select: false,
+            ..external_opts(args.args)
         },
         list: args.list,
         select: args.select,

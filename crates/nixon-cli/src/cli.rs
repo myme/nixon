@@ -203,17 +203,15 @@ pub struct ProjectArgs {
     /// Project to select.
     #[arg(add = clap_complete::ArgValueCompleter::new(crate::complete::project_names))]
     pub project: Option<String>,
-    /// Command to run in it.
-    #[arg(add = clap_complete::ArgValueCompleter::new(crate::complete::command_names))]
-    pub command: Option<String>,
-    /// Arguments to the command: option tokens, and queries for its
-    /// placeholders.
-    // Unlike `run`, the command is its own positional here, so a flag
-    // written directly after the project name is still nixon's.
+    /// The command to run in it, then its own arguments.
+    // One positional, as in `run`: everything after the command name is the
+    // command's. A flag written straight after the project name is still
+    // nixon's, because the command name has not arrived yet.
     #[arg(
+        value_name = "COMMAND",
         trailing_var_arg = true,
         allow_hyphen_values = true,
-        add = clap_complete::ArgValueCompleter::new(crate::complete::option_tokens)
+        add = clap_complete::ArgValueCompleter::new(crate::complete::project_command_args)
     )]
     pub args: Vec<String>,
     /// Select a project command and output its source.

@@ -933,3 +933,68 @@ fn nixons_flags_still_work_before_the_command_name() {
         .success()
         .stdout("only.txt\n\n");
 }
+
+/// The flag boundary: nixon's flags go before the command name, and
+/// everything after it belongs to the command. The same for both spellings
+/// and for `project`.
+#[test]
+fn nixons_flags_stop_at_the_command_name() {
+    let run = |args: &[&str], expected: &str| {
+        Fixture::with_config(CLASHING_MD)
+            .nixon()
+            .args(args)
+            .assert()
+            .success()
+            .stdout(expected.to_owned());
+    };
+
+    // After the command name: the command's.
+    run(&["clash", "-i"], "args: -i\n");
+    run(&["run", "clash", "-i"], "args: -i\n");
+    run(&["project", ".", "clash", "-i"], "args: -i\n");
+
+    // Before it: nixon's own. `-i` prints the source instead of running.
+    Fixture::with_config(CLASHING_MD)
+        .nixon()
+        .args(["run", "-i", "clash"])
+        .assert()
+        .success()
+        .stdout(contains("echo \"args: $*\""));
+
+    Fixture::with_config(CLASHING_MD)
+        .nixon()
+        .args(["project", ".", "-i", "clash"])
+        .assert()
+        .success()
+        .stdout(contains("echo \"args: $*\""));
+}
+
+/// `project`'s own flags still work directly after the project name, since
+/// the command name has not arrived yet.
+#[test]
+fn a_project_flag_after_the_project_name_is_still_nixons() {
+    Fixture::new()
+        .nixon()
+        .args(["project", ".", "-I"])
+        .assert()
+        .success()
+        .stdout(contains("project"));
+}
+
+/// `--` says "no more flags"; it has done its job before nixon sees it, so
+/// it does not travel on into the command's arguments.
+#[test]
+fn a_double_dash_does_not_reach_the_command() {
+    for args in [
+        ["clash", "--", "-i"].as_slice(),
+        ["run", "clash", "--", "-i"].as_slice(),
+        ["project", ".", "clash", "--", "-i"].as_slice(),
+    ] {
+        Fixture::with_config(CLASHING_MD)
+            .nixon()
+            .args(args)
+            .assert()
+            .success()
+            .stdout("args: -i\n");
+    }
+}

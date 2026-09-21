@@ -53,6 +53,11 @@ pub fn run_args(current: &OsStr) -> Vec<CompletionCandidate> {
     option_tokens(current)
 }
 
+/// `project`'s second positional: the command name, then its arguments.
+pub fn project_command_args(current: &OsStr) -> Vec<CompletionCandidate> {
+    run_args(current)
+}
+
 /// The option tokens of the command already named on the line.
 ///
 /// `--no-<name>` is offered alongside each token, since that is how an
@@ -89,7 +94,7 @@ pub fn option_tokens(current: &OsStr) -> Vec<CompletionCandidate> {
 fn named_command() -> Option<String> {
     match partial_cli()?.command? {
         Commands::Run(args) => args.args.into_iter().next(),
-        Commands::Project(args) => args.command,
+        Commands::Project(args) => args.args.into_iter().next(),
         Commands::External(args) => args.into_iter().next(),
         _ => None,
     }

@@ -34,6 +34,24 @@ Global options come before the subcommand. Each on/off flag has a hidden
 `--no-…` counterpart, and the last one given wins, so a config file setting can
 be overridden either way.
 
+**Where nixon's flags stop.** A subcommand's own flags go *before* the command
+name; everything after the command name belongs to the command. `nixon run -i
+hello` prints `hello`'s source, `nixon run hello -i` passes `-i` to `hello`.
+The same for `project`, where the project name comes first and nixon's flags
+may follow it, because the command name has not arrived yet:
+
+| Command line | `-i` belongs to |
+|---|---|
+| `nixon run -i hello` | nixon |
+| `nixon run hello -i` | the command |
+| `nixon hello -i` | the command |
+| `nixon project . -i hello` | nixon |
+| `nixon project . hello -i` | the command |
+
+A `--` after the command name is the shell's way of saying "no more flags". It
+has done its job by the time nixon sees it, so it is dropped rather than passed
+on: `nixon run hello -- -i` gives `hello` the single argument `-i`.
+
 `-L` takes `debug`, `info`, `warning` (or `warn`) and `error`. The default is
 `warning`.
 
@@ -49,6 +67,8 @@ reserved words are `edit`, `eval`, `gc`, `new`, `project`, `run`, `help` and
 ```
 nixon run [-i] [-l] [-s] [COMMAND] [ARGS]...
 ```
+
+nixon's own flags go before `COMMAND`; see the flag boundary above.
 
 Selects a command in the current project and runs it. `COMMAND` is a search
 query for the picker; a name matching a command exactly runs it without the
@@ -72,6 +92,9 @@ widgets rely on that.
 ```
 nixon project [-i] [-I] [-l] [-s] [PROJECT] [COMMAND] [ARGS]...
 ```
+
+nixon's own flags go before `COMMAND`, which may be after `PROJECT`; see the
+flag boundary above.
 
 Selects a project, then a command in it. `PROJECT` is a query, with two
 special cases:
