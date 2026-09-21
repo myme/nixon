@@ -13,7 +13,7 @@ mod mangen;
 
 use std::process::ExitCode;
 
-use clap::Parser as _;
+use clap::{CommandFactory as _, Parser as _};
 use nixon::app::eval::EvalOpts;
 use nixon::app::history::{HistoryOpts, Outcome};
 use nixon::app::new::NewOpts;
@@ -181,11 +181,32 @@ fn project_opts(args: ProjectArgs) -> ProjectOpts {
     }
 }
 
+/// Splits `eval`'s positionals: with `--file` there is no expression among
+/// them, so the first word is a placeholder like the rest.
 fn eval_opts(args: EvalArgs) -> EvalOpts {
+    let mut placeholders = args.placeholders;
+    let source = match (args.file.is_some(), args.command) {
+        (true, Some(first)) => {
+            // Through clap, so a bad first word reads and exits exactly
+            // like a bad second one.
+            let parsed = nixon::placeholder::parse_one(&first).unwrap_or_else(|err| {
+                Cli::command()
+                    .error(
+                        clap::error::ErrorKind::InvalidValue,
+                        format!("invalid value '{first}' for '[PLACEHOLDERS]...': {err}"),
+                    )
+                    .exit()
+            });
+            placeholders.insert(0, parsed);
+            None
+        }
+        (true, None) => None,
+        (false, command) => command,
+    };
     EvalOpts {
-        source: args.command,
+        source,
         file: args.file,
-        placeholders: args.placeholders,
+        placeholders,
         language: args.language,
         select_project: args.project,
     }

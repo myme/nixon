@@ -234,8 +234,8 @@ pub struct ProjectArgs {
 /// `nixon eval`.
 #[derive(Debug, Default, Args)]
 pub struct EvalArgs {
-    /// The expression to evaluate.
-    #[arg(conflicts_with = "file")]
+    /// The expression to evaluate, or the first placeholder when `--file`
+    /// supplies the source instead.
     pub command: Option<String>,
     /// Placeholders, each parsed with the placeholder grammar.
     #[arg(value_parser = parse_placeholder)]

@@ -220,6 +220,39 @@ fn eval_reads_a_file_with_dash_f() {
         .stdout("from-file\n");
 }
 
+/// `-f` supplies the source, so every positional after it is a
+/// placeholder. The first used to be taken as the expression and then
+/// rejected for conflicting with `--file`.
+#[test]
+fn eval_takes_placeholders_after_dash_f() {
+    let fixture = Fixture::with_config("# `_one`\n\n```bash\necho only\n```\n");
+    let script = fixture.temp.child("script.sh");
+    script.write_str("echo \"got $1\"\n").unwrap();
+
+    fixture
+        .nixon()
+        .args(["eval", "-f", script.path().to_str().unwrap(), "${_one}"])
+        .assert()
+        .success()
+        .stdout("got only\n");
+}
+
+/// And a word that is not a placeholder is reported as one, in the same
+/// words and with the same exit code as any other bad placeholder.
+#[test]
+fn a_bad_placeholder_after_dash_f_is_a_cli_error() {
+    let fixture = Fixture::new();
+    let script = fixture.temp.child("script.sh");
+    script.write_str("echo hi\n").unwrap();
+
+    fixture
+        .nixon()
+        .args(["eval", "-f", script.path().to_str().unwrap(), "echo hi"])
+        .assert()
+        .code(2)
+        .stderr(contains("invalid value 'echo hi' for '[PLACEHOLDERS]...'"));
+}
+
 #[test]
 fn gc_reports_what_it_removes() {
     let fixture = Fixture::new();
