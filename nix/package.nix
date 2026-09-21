@@ -30,6 +30,8 @@ let
       # literal text rather than triggering anything.
       pkgs.bashInteractive
       pkgs.ncurses
+      # The fish widget is checked by sourcing it in a real fish.
+      pkgs.fish
     ];
   };
 

@@ -959,11 +959,13 @@ fn the_history_picker_runs_the_chosen_line_again() {
 #[cfg(unix)]
 fn the_bash_widget_inserts_a_history_line() {
     let pty = Pty::with_config("# `greet`\n\n```bash\necho hello\n```\n");
+    // Two lines, so the picker really opens rather than taking the only
+    // one without drawing.
+    let cwd = pty.temp.child("project").path().display().to_string();
     pty.temp
         .child("state/nixon/history")
         .write_str(&format!(
-            "1700000000\t{}\tnixon run greet\n",
-            pty.temp.child("project").path().display()
+            "1700000000\t{cwd}\tnixon run other\n1700000001\t{cwd}\tnixon run greet\n"
         ))
         .unwrap();
 

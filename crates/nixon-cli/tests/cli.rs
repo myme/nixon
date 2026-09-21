@@ -1143,3 +1143,32 @@ fn history_select_with_a_unique_query_needs_no_terminal() {
         .success()
         .stdout("nixon run alpha\n");
 }
+
+/// Sourcing the fish widget with no log yet must be quiet and leave one
+/// number behind.
+///
+/// It used to leave two — an `or`/`and` chain printed `0` twice when the
+/// file was missing — which made the first prompt of every fish session
+/// fail with `math: Missing operator` and swallowed the first command.
+#[test]
+fn the_fish_widget_handles_a_missing_log() {
+    let fixture = Fixture::new();
+    let widget = std::fs::canonicalize("../../extra/nixon-widget.fish").unwrap();
+
+    let output = Command::new("fish")
+        .arg("-c")
+        .arg(format!(
+            "source {}; echo seen=[$__nixon_history_seen]; __nixon_history__; echo ok",
+            widget.display()
+        ))
+        .env("NIXON_HISTORY_FILE", fixture.temp.child("absent").path())
+        .env("HOME", fixture.temp.path())
+        .output()
+        .unwrap();
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stdout.contains("seen=[0]"), "stdout was {stdout:?}");
+    assert!(stdout.contains("ok"), "the hook did not return: {stderr:?}");
+    assert!(stderr.is_empty(), "stderr was {stderr:?}");
+}

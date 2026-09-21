@@ -46,11 +46,16 @@ end
 set -q NIXON_HISTORY_FILE
 or set -g NIXON_HISTORY_FILE (test -n "$XDG_STATE_HOME"; and echo $XDG_STATE_HOME; or echo $HOME/.local/state)/nixon/history
 function __nixon_history_size__
-    test -f $NIXON_HISTORY_FILE
-    or echo 0
-    and stat -c %s $NIXON_HISTORY_FILE 2>/dev/null
-    or stat -f %z $NIXON_HISTORY_FILE 2>/dev/null
-    or echo 0
+    if not test -f $NIXON_HISTORY_FILE
+        echo 0
+        return
+    end
+    set -l size (stat -c %s $NIXON_HISTORY_FILE 2>/dev/null; or stat -f %z $NIXON_HISTORY_FILE 2>/dev/null)
+    if test -n "$size"
+        echo $size
+    else
+        echo 0
+    end
 end
 
 # Whatever is already logged counts as read, so sourcing this does not
