@@ -651,3 +651,45 @@ fn an_exact_placeholder_argument_runs_without_drawing() {
     assert!(output.contains("opened bugs"), "output was: {output}");
     assert!(!output.contains("opened bugs2"), "output was: {output}");
 }
+
+/// `Alt-o` moves onto the options row, where `Space` toggles; walking off
+/// the end goes back to the query, and `Enter` runs.
+#[test]
+fn alt_o_and_space_toggle_an_option() {
+    let pty = Pty::with_config(GWR_MD);
+    let mut session = pty.spawn(&["run", "gwr"]);
+
+    settle();
+    session.send("\u{1b}o").unwrap();
+    settle();
+    session.send(" ").unwrap();
+    settle();
+    // Off the end of the one-option row, back to the query.
+    session.send("\u{1b}[C").unwrap();
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(
+        output.contains("gwr args: --force /tmp/wt-one"),
+        "output was: {output}"
+    );
+}
+
+/// From the options row, `Enter` runs rather than toggling.
+#[test]
+fn enter_confirms_from_the_options_row() {
+    let pty = Pty::with_config(GWR_MD);
+    let mut session = pty.spawn(&["run", "gwr"]);
+
+    settle();
+    session.send("\u{1b}o").unwrap();
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(
+        output.contains("gwr args: /tmp/wt-one"),
+        "output was: {output}"
+    );
+}

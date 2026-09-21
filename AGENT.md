@@ -90,7 +90,10 @@ Fixture rules, each learned from a failure:
   the same `KeyCode`.
 - The options row sits between the header and the query: it belongs to the
   command, not to the list. `Alt-1`…`Alt-9` toggle from anywhere; `Alt-o`
-  focuses the row, where typing is swallowed but `Ctrl-C` is not.
+  focuses the row, where `Space` toggles and the arrows move, walking off
+  either end returns to the query, and every other key — `Enter`, `Esc`,
+  `Ctrl-C`, the list keys — still means what it means elsewhere. Typing is
+  the one thing the row swallows.
 - Cancelling signals the child's **process group**. The child is an
   interpreter; the work is its children, and killing only the interpreter
   leaves them holding the stdout pipe.

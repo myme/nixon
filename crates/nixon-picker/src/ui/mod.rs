@@ -244,21 +244,28 @@ impl App {
         };
     }
 
-    /// Moves along the options row, stopping at either end.
-    fn move_option(&mut self, delta: isize) {
+    /// Moves along the options row, leaving it at either end.
+    ///
+    /// Walking off the row is how you get back to the query without
+    /// reaching for `Alt-o`, and it never changes anything.
+    const fn move_option(&mut self, delta: isize) {
         let Some(at) = self.option_focus else { return };
         let last = self.options.options.len().saturating_sub(1);
-        let next = if delta < 0 {
-            at.saturating_sub(1)
+        self.option_focus = if delta < 0 {
+            at.checked_sub(1)
+        } else if at >= last {
+            None
         } else {
-            (at + 1).min(last)
+            Some(at + 1)
         };
-        self.option_focus = Some(next);
     }
 
     /// Keys the options row takes for itself, once it has focus.
     ///
-    /// Anything it does not know falls through, so `Ctrl-C` still cancels.
+    /// `Space` toggles and the arrows move; everything else means what it
+    /// means everywhere else in the picker, so `Enter` confirms the
+    /// selection and `Esc` cancels the pick. The row is left with `Alt-o`,
+    /// or by walking off either end of it.
     fn handle_focused(&mut self, key: KeyEvent) -> bool {
         use crossterm::event::{KeyCode, KeyModifiers};
 
@@ -267,14 +274,14 @@ impl App {
             KeyCode::Left if plain => self.move_option(-1),
             KeyCode::Right | KeyCode::Tab if plain => self.move_option(1),
             KeyCode::BackTab => self.move_option(-1),
-            KeyCode::Char(' ') | KeyCode::Enter if plain => {
+            KeyCode::Char(' ') if plain => {
                 if let Some(at) = self.option_focus {
                     self.toggle_option(at);
                 }
             }
-            KeyCode::Esc => self.option_focus = None,
             // Typing goes nowhere while the row has focus; anything else —
-            // Ctrl-C, F1, the list keys — still does what it always does.
+            // Enter, Esc, Ctrl-C, F1, the list keys — still does what it
+            // always does.
             _ => return keymap::line_edit(key).is_some(),
         }
         true
@@ -991,47 +998,65 @@ mod option_keys {
     }
 
     #[test]
-    fn focus_moves_along_the_row_and_stops_at_the_ends() {
+    fn focus_moves_along_the_row() {
         let mut app = app();
         alt(&mut app, 'o');
-
-        plain(&mut app, KeyCode::Left);
-        assert_eq!(app.option_focus, Some(0), "stops at the start");
 
         plain(&mut app, KeyCode::Right);
         plain(&mut app, KeyCode::Tab);
         assert_eq!(app.option_focus, Some(2));
-        plain(&mut app, KeyCode::Right);
-        assert_eq!(app.option_focus, Some(2), "stops at the end");
 
         plain(&mut app, KeyCode::BackTab);
         assert_eq!(app.option_focus, Some(1));
     }
 
+    /// Walking off either end is how the row is left without a keystroke
+    /// that means something else.
     #[test]
-    fn space_and_enter_toggle_the_focused_option() {
+    fn walking_off_either_end_returns_to_the_query() {
+        let mut app = app();
+
+        alt(&mut app, 'o');
+        plain(&mut app, KeyCode::Left);
+        assert_eq!(app.option_focus, None, "off the start");
+        assert!(!app.is_done());
+
+        alt(&mut app, 'o');
+        for _ in 0..3 {
+            plain(&mut app, KeyCode::Right);
+        }
+        assert_eq!(app.option_focus, None, "off the end");
+        assert!(!app.is_done());
+    }
+
+    #[test]
+    fn space_toggles_the_focused_option() {
         let mut app = app();
         alt(&mut app, 'o');
 
         plain(&mut app, KeyCode::Char(' '));
         assert_eq!(app.option_state(), [true, true, false]);
-
-        plain(&mut app, KeyCode::Enter);
-        assert_eq!(app.option_state(), [false, true, false]);
-        assert!(!app.is_done(), "Enter toggles rather than confirming");
+        assert!(!app.is_done());
     }
 
+    /// Enter means what it means everywhere else: run the selection.
     #[test]
-    fn esc_returns_to_the_query_rather_than_cancelling() {
+    fn enter_confirms_from_the_options_row() {
+        let mut app = app();
+        alt(&mut app, 'o');
+        plain(&mut app, KeyCode::Enter);
+
+        assert!(app.is_done(), "Enter should confirm, not toggle");
+        assert_eq!(app.option_state(), [false, true, false], "nothing toggled");
+    }
+
+    /// And so does Esc.
+    #[test]
+    fn esc_cancels_from_the_options_row() {
         let mut app = app();
         alt(&mut app, 'o');
         plain(&mut app, KeyCode::Esc);
 
-        assert_eq!(app.option_focus, None);
-        assert!(!app.is_done());
-
-        // And now Esc cancels as usual.
-        plain(&mut app, KeyCode::Esc);
         assert_eq!(app.outcome, Some(Selection::Canceled));
     }
 

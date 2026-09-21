@@ -32,20 +32,31 @@ the current query no longer shows.
 A command that declares [options](commands.md#options) shows them in a row
 under its name, above the query: `[x] --force  [ ] -v`.
 
+Wherever the focus is:
+
 | Key | Action |
 |---|---|
-| `Alt-1` … `Alt-9` | Flip the first to ninth option, wherever the focus is |
+| `Alt-1` … `Alt-9` | Flip the first to ninth option |
 | `Alt-o` | Move the focus onto the row, or back to the query |
-| `Left`, `Right`, `Tab`, `Shift-Tab` | Move along the row |
-| `Space`, `Enter` | Flip the focused option |
-| `Esc` | Back to the query |
 
-While the row has focus, typing goes nowhere; `Ctrl-C` and the list keys still
-work. The toggles carry from one placeholder prompt to the next, so a command
-with several placeholders is only asked about them once.
+With the focus **on the row**:
+
+| Key | Action |
+|---|---|
+| `Space` | Flip the focused option |
+| `Left`, `Shift-Tab` | Move left; off the first option, back to the query |
+| `Right`, `Tab` | Move right; past the last option, back to the query |
+
+Every other key means on the row what it means anywhere else: `Enter` runs the
+selection, `Esc` cancels the pick, `Ctrl-N` and `Ctrl-P` move in the list.
+Typing is the exception — it goes nowhere while the row has focus, so a stray
+letter cannot quietly change the query.
+
+The toggles carry from one placeholder prompt to the next, so a command with
+several placeholders is only asked about them once.
 
 A command with options and no placeholders gets a prompt with the row and
-nothing else, where `Enter` runs and `Esc` cancels.
+nothing else, where `Space` toggles, `Enter` runs and `Esc` cancels.
 
 ## Moving
 

@@ -719,8 +719,10 @@ mod option_row {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
+    use ratatui::style::{Modifier, Style};
+
     use super::super::App;
-    use super::render;
+    use super::{OPTION_FOCUS_FG, OPTION_ON_FG, render};
     use crate::candidate::Candidate;
     use crate::options::{PickerOption, PickerOptions};
 
@@ -762,6 +764,48 @@ mod option_row {
         let mut app = app();
         press(&mut app, KeyCode::Char('o'), KeyModifiers::ALT);
         insta::assert_snapshot!(draw(&mut app));
+    }
+
+    /// The cells of one row, with the style each carries.
+    fn styles(app: &mut App, row: u16) -> Vec<(char, Style)> {
+        let mut terminal = Terminal::new(TestBackend::new(80, 10)).unwrap();
+        app.set_height(7);
+        terminal.draw(|frame| render(app, frame)).unwrap();
+
+        let buffer = terminal.backend().buffer().clone();
+        (0..80)
+            .map(|x| {
+                let cell = &buffer[(x, row)];
+                (cell.symbol().chars().next().unwrap_or(' '), cell.style())
+            })
+            .collect()
+    }
+
+    /// The style of the cells spelling `text` on the options row.
+    fn style_of(app: &mut App, text: &str) -> Style {
+        let cells = styles(app, 1);
+        let rendered: String = cells.iter().map(|(c, _)| *c).collect();
+        let at = rendered
+            .find(text)
+            .unwrap_or_else(|| panic!("{text} is not on the options row: {rendered}"));
+        cells[at].1
+    }
+
+    /// The focused toggle is picked out; the others are not.
+    #[test]
+    fn the_focused_option_carries_the_focus_style() {
+        let mut app = app();
+
+        // Unfocused: neither is the focus colour.
+        assert_ne!(style_of(&mut app, "--force").fg, Some(OPTION_FOCUS_FG));
+
+        press(&mut app, KeyCode::Char('o'), KeyModifiers::ALT);
+        let focused = style_of(&mut app, "--force");
+        assert_eq!(focused.fg, Some(OPTION_FOCUS_FG));
+        assert!(focused.add_modifier.contains(Modifier::BOLD));
+
+        // The one beside it keeps the on-colour rather than the focus one.
+        assert_eq!(style_of(&mut app, "-v").fg, Some(OPTION_ON_FG));
     }
 
     /// The options row pushes the query down; the cursor goes with it.
