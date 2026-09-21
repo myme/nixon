@@ -137,13 +137,33 @@ pub fn record(path: &Path, entry: &Entry) {
 /// than a pipe buffer is what stops their lines interleaving.
 fn append(path: &Path, line: &str) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        create_dir(parent)?;
     }
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)?;
+
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).append(true);
+    // Every value the user has ever picked is in here, and every `eval`
+    // source: it is theirs to read, nobody else's.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+
+    let mut file = options.open(path)?;
     file.write_all(line.as_bytes())
+}
+
+/// Creates the log's directory, private to its owner.
+fn create_dir(path: &Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        builder.mode(0o700);
+    }
+    builder.create(path)
 }
 
 #[cfg(test)]
@@ -190,6 +210,21 @@ mod tests {
         let written = std::fs::read_to_string(path.path()).unwrap();
         assert_eq!(written.lines().count(), 2);
         assert!(written.ends_with("nixon run two\n"));
+    }
+
+    /// The log is the user's own: it names every value they ever picked.
+    #[test]
+    #[cfg(unix)]
+    fn the_log_and_its_directory_are_private() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let temp = TempDir::new().unwrap();
+        let path = temp.child("state/nixon/history");
+        record(path.path(), &entry(&["run", "one"]));
+
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(path.path()), 0o600);
+        assert_eq!(mode(path.path().parent().unwrap()), 0o700);
     }
 
     #[test]
