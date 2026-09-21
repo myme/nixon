@@ -159,10 +159,37 @@ impl App {
         self.scroll_into_view();
     }
 
+    /// Where each shown row sits in nucleo's ranking, or `None` when the
+    /// ranking is the order to show.
+    ///
+    /// `sort: false` means the matches keep the order they were injected
+    /// in — discovery order for commands, newest-first for history — which
+    /// nucleo cannot be asked for, so it is recovered from the ids it
+    /// assigned on the way in. That costs a pass over the matches, which is
+    /// affordable only because the lists that opt out of ranking are
+    /// bounded; the ranked path, where the hundreds of thousands live, does
+    /// not pay it.
+    fn shown_order(&self) -> Option<Vec<u32>> {
+        if self.options.matching.sort {
+            return None;
+        }
+        let snapshot = self.nucleo.snapshot();
+        let mut order: Vec<(u32, u32)> = snapshot
+            .matched_items(..)
+            .enumerate()
+            .map(|(rank, item)| (item.data.id, u32::try_from(rank).unwrap_or(u32::MAX)))
+            .collect();
+        order.sort_unstable();
+        Some(order.into_iter().map(|(_, rank)| rank).collect())
+    }
+
     /// The candidate under the cursor.
     pub fn current(&self) -> Option<Candidate> {
         let snapshot = self.nucleo.snapshot();
-        let at = u32::try_from(self.cursor).ok()?;
+        let at = match self.shown_order() {
+            Some(order) => *order.get(self.cursor)?,
+            None => u32::try_from(self.cursor).ok()?,
+        };
         snapshot.get_matched_item(at).map(|item| item.data.clone())
     }
 
@@ -184,12 +211,28 @@ impl App {
         }
 
         let cursor = u32::try_from(self.cursor).unwrap_or(u32::MAX);
+        let order = self.shown_order();
+        let window: Vec<Candidate> = order.as_ref().map_or_else(
+            || {
+                snapshot
+                    .matched_items(from..to)
+                    .map(|item| item.data.clone())
+                    .collect()
+            },
+            |order| {
+                order[from as usize..to as usize]
+                    .iter()
+                    .filter_map(|rank| snapshot.get_matched_item(*rank))
+                    .map(|item| item.data.clone())
+                    .collect()
+            },
+        );
+
         let mut indices = Vec::new();
-        snapshot
-            .matched_items(from..to)
+        window
+            .into_iter()
             .enumerate()
-            .map(|(row, item)| {
-                let candidate = item.data.clone();
+            .map(|(row, candidate)| {
                 match_indices(
                     &mut self.matcher,
                     &pattern,
@@ -462,6 +505,36 @@ mod tests {
     fn alt(app: &mut App, c: char) {
         app.handle(KeyEvent::new(KeyCode::Char(c), KeyModifiers::ALT));
         app.tick_until_settled();
+    }
+
+    /// `no_sort` means the matching candidates keep the order they were
+    /// injected in. Only the non-interactive matcher honoured it, so the
+    /// picker ranked a list that had asked not to be ranked — commands lost
+    /// discovery order and history stopped being newest-first.
+    #[test]
+    fn without_sorting_the_picker_keeps_the_injection_order() {
+        let mut app = App::new(
+            candidates(&["abacus", "beacon"]),
+            PickerOptions::default().no_sort(),
+        );
+        type_query(&mut app, "b");
+
+        assert_eq!(app.matched_count(), 2);
+        let shown: Vec<String> = app
+            .rows()
+            .into_iter()
+            .map(|row| row.candidate.value)
+            .collect();
+        assert_eq!(shown, ["abacus", "beacon"]);
+        assert_eq!(app.current().unwrap().value, "abacus");
+    }
+
+    /// And with sorting it is nucleo's ranking, as before.
+    #[test]
+    fn with_sorting_the_better_match_comes_first() {
+        let mut app = app(&["abacus", "beacon"]);
+        type_query(&mut app, "b");
+        assert_eq!(app.current().unwrap().value, "beacon");
     }
 
     fn type_query(app: &mut App, text: &str) {

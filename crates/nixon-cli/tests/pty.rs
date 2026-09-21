@@ -954,6 +954,27 @@ fn the_history_picker_runs_the_chosen_line_again() {
     assert!(output.contains("hello"), "output was: {output}");
 }
 
+/// Commands keep the order the markdown declares, whatever nucleo ranks.
+///
+/// `b` matches both; `beacon` scores better, but the command picker asks
+/// not to be sorted, so the cursor starts on the first one declared.
+#[test]
+fn the_command_picker_keeps_discovery_order_under_a_query() {
+    let pty = Pty::with_config(
+        "# `abacus`\n\n```bash\necho abacus-ran\n```\n\n# `beacon`\n\n```bash\necho beacon-ran\n```\n",
+    );
+
+    let mut session = pty.spawn(&["run", "b"]);
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(
+        output.contains("abacus-ran"),
+        "the ranked match won: {output}"
+    );
+}
+
 /// Sets up a bash with the widgets sourced and two lines in the log.
 ///
 /// Two, so the picker really opens rather than taking the only one without
