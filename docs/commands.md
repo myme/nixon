@@ -187,10 +187,12 @@ Two things make this work without surprises:
 Together those mean the line above never stops to ask anything, which is what
 lets it run from a script.
 
-The nested `direnv` wrapping is correct rather than doubled: the wrapper
-compares `$DIRENV_DIR` against the *target* project, so the inner nixon still
-wraps for `novem-utils` even though the outer command is already inside its
-own environment.
+The nested `direnv` wrapping is correct rather than doubled. The wrapper asks
+whether the environment already loaded is the one the *target* would load —
+that is, whether `$DIRENV_DIR` is the directory of the nearest `.envrc` at or
+above it. So the inner nixon wraps for `novem-utils` even though the outer
+command is already inside its own environment, and a package with its own
+`.envrc` under an already-loaded monorepo root gets wrapped too.
 
 ## What a command gets
 

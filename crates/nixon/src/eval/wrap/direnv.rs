@@ -9,10 +9,10 @@ use crate::fs::find_dominating_file;
 /// Returns `Some(argv)` unchanged when direnv is already active for `cwd`,
 /// which is what stops the nix wrapper being tried as well.
 pub fn wrap(argv: &[String], cwd: &Path, direnv_dir: Option<&str>) -> Option<Vec<String>> {
-    if is_active(cwd, direnv_dir) {
+    let envrc = find_dominating_file(cwd, ".envrc")?;
+    if is_active(envrc.parent()?, direnv_dir) {
         return Some(argv.to_vec());
     }
-    find_dominating_file(cwd, ".envrc")?;
 
     let mut wrapped = vec![
         "direnv".to_owned(),
@@ -23,19 +23,22 @@ pub fn wrap(argv: &[String], cwd: &Path, direnv_dir: Option<&str>) -> Option<Vec
     Some(wrapped)
 }
 
-/// Whether `$DIRENV_DIR` already covers `cwd`.
+/// Whether the loaded direnv environment is the one `nearest` would load.
 ///
-/// direnv prefixes the path with `-`, which v1 dropped by discarding
+/// It has to be that one and not merely an ancestor: in a monorepo a
+/// package with its own `.envrc` under an already-loaded root needs its own
+/// environment, and treating any ancestor as active never wrapped it.
+///
+/// direnv prefixes `$DIRENV_DIR` with `-`, which v1 dropped by discarding
 /// everything before the first `/`.
-fn is_active(cwd: &Path, direnv_dir: Option<&str>) -> bool {
+fn is_active(nearest: &Path, direnv_dir: Option<&str>) -> bool {
     let Some(dir) = direnv_dir else {
         return false;
     };
     let Some(slash) = dir.find('/') else {
         return false;
     };
-    let active = Path::new(&dir[slash..]);
-    cwd.ancestors().any(|ancestor| ancestor == active)
+    nearest == Path::new(&dir[slash..])
 }
 
 #[cfg(test)]
@@ -98,11 +101,37 @@ mod tests {
     #[test]
     fn leaves_the_command_alone_when_direnv_is_active_in_a_parent() {
         let temp = TempDir::new().unwrap();
+        temp.child(".envrc").write_str("use nix\n").unwrap();
         let deep = temp.child("a/b");
         deep.create_dir_all().unwrap();
         let active = format!("-{}", temp.path().display());
 
+        // The parent's .envrc is the nearest one, so it is the loaded one.
         assert_eq!(wrap(&argv(), deep.path(), Some(&active)), Some(argv()));
+    }
+
+    /// A monorepo: the root is loaded, but the package has an `.envrc` of
+    /// its own, so its environment is not the one in effect.
+    #[test]
+    fn a_nearer_envrc_is_wrapped_even_under_an_active_parent() {
+        let temp = TempDir::new().unwrap();
+        temp.child(".envrc").write_str("use nix\n").unwrap();
+        let package = temp.child("packages/api");
+        package.create_dir_all().unwrap();
+        package.child(".envrc").write_str("use nix\n").unwrap();
+
+        let active = format!("-{}", temp.path().display());
+        let wrapped = wrap(&argv(), package.path(), Some(&active)).unwrap();
+
+        assert_eq!(wrapped[0], "direnv");
+        assert_eq!(wrapped[2], package.path().to_string_lossy());
+    }
+
+    #[test]
+    fn direnv_does_not_apply_without_an_envrc_whatever_is_loaded() {
+        let temp = TempDir::new().unwrap();
+        let active = format!("-{}", temp.path().display());
+        assert_eq!(wrap(&argv(), temp.path(), Some(&active)), None);
     }
 
     #[test]

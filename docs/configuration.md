@@ -133,8 +133,11 @@ A command can be wrapped in a project environment. `direnv` is tried first, and
 the first wrapper that applies wins.
 
 - `use_direnv` wraps in `direnv exec <cwd>` when there is an `.envrc` at or
-  above the working directory. If `$DIRENV_DIR` already covers it, nothing is
-  wrapped and nix is not tried either.
+  above the working directory. Nothing is wrapped — and nix is not tried —
+  when the environment already loaded is the one that directory would load,
+  that is when `$DIRENV_DIR` is the directory of its nearest `.envrc`. A
+  nearer `.envrc` than the loaded one is still wrapped, so a package inside a
+  monorepo gets its own environment.
 - `use_nix` wraps in `nix-shell --command`. As with the local config, the whole
   ancestor chain is searched for `shell.nix` before `default.nix` is considered.
   `flake.nix` is not supported.

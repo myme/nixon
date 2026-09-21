@@ -92,6 +92,7 @@ mod tests {
     #[test]
     fn an_active_direnv_stops_nix_being_applied() {
         let temp = TempDir::new().unwrap();
+        temp.child(".envrc").write_str("use nix\n").unwrap();
         temp.child("shell.nix").write_str("{}\n").unwrap();
         let active = format!("-{}", temp.path().display());
 
