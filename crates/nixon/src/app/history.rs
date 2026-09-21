@@ -10,6 +10,9 @@ use crate::output;
 use crate::process::{ExitCode, ProcessRunner};
 use crate::select;
 
+/// How far back the picker looks when nothing says otherwise.
+const DEFAULT_LIMIT: usize = 1000;
+
 /// What `history` was asked to do.
 #[derive(Clone, Debug, Default)]
 pub struct HistoryOpts {
@@ -60,7 +63,11 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             return Ok(Outcome::Done(0));
         }
 
-        let entries = history::recent(history::read(&path), opts.limit);
+        // The picker shows a tail; a listing without a limit shows the lot.
+        let limit = opts
+            .limit
+            .or(if opts.list { None } else { Some(DEFAULT_LIMIT) });
+        let entries = history::recent(history::read(&path, limit), limit);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |since| since.as_secs());

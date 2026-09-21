@@ -72,13 +72,12 @@ fn unescape(field: &str) -> String {
         match chars.next() {
             Some('t') => out.push('\t'),
             Some('n') => out.push('\n'),
-            Some('\\') => out.push('\\'),
+            Some('\\') | None => out.push('\\'),
             // Not an escape we wrote: keep both characters as they are.
             Some(other) => {
                 out.push('\\');
                 out.push(other);
             }
-            None => out.push('\\'),
         }
     }
     out
@@ -105,16 +104,76 @@ fn parse(line: &str) -> Option<Entry> {
     })
 }
 
-/// Every entry in the log, oldest first.
+/// How much of the log to read at a time when working backwards.
+const CHUNK: u64 = 64 * 1024;
+
+/// The last `limit` entries, oldest first, or all of them for `None`.
 ///
-/// A log that cannot be read is an empty one: there is nothing to show, and
-/// nothing has gone wrong that the user can act on.
-pub fn read(path: &Path) -> Vec<Entry> {
-    std::fs::read_to_string(path)
-        .unwrap_or_default()
-        .lines()
-        .filter_map(parse)
-        .collect()
+/// Read from the end: a log grows for as long as nixon is used, and the
+/// picker only ever shows its tail. A log that cannot be read is an empty
+/// one — there is nothing to show, and nothing the user can act on.
+pub fn read(path: &Path, limit: Option<usize>) -> Vec<Entry> {
+    let Some(limit) = limit else {
+        return std::fs::read_to_string(path)
+            .unwrap_or_default()
+            .lines()
+            .filter_map(parse)
+            .collect();
+    };
+
+    tail(path, limit).unwrap_or_default()
+}
+
+/// How many of `byte` are in `buffer`.
+#[expect(
+    clippy::naive_bytecount,
+    reason = "a crate to count newlines in a few 64 KiB reads is not worth it"
+)]
+fn bytecount(buffer: &[u8], byte: u8) -> usize {
+    buffer.iter().filter(|b| **b == byte).count()
+}
+
+/// Reads backwards until `limit` entries are in hand, or the file runs out.
+///
+/// Consecutive duplicates collapse later, so this takes a few more lines
+/// than asked for rather than risk coming up short.
+fn tail(path: &Path, limit: usize) -> std::io::Result<Vec<Entry>> {
+    use std::io::{Read as _, Seek as _, SeekFrom};
+
+    let mut file = std::fs::File::open(path)?;
+    let mut at = file.seek(SeekFrom::End(0))?;
+    let mut buffer: Vec<u8> = Vec::new();
+
+    loop {
+        if at == 0 {
+            break;
+        }
+        let step = CHUNK.min(at);
+        at -= step;
+        file.seek(SeekFrom::Start(at))?;
+
+        let mut chunk = vec![0; usize::try_from(step).unwrap_or(usize::MAX)];
+        file.read_exact(&mut chunk)?;
+        chunk.extend_from_slice(&buffer);
+        buffer = chunk;
+
+        // The first line of the buffer may be half a line until `at` is 0.
+        if bytecount(&buffer, b'\n') > limit {
+            break;
+        }
+    }
+
+    let text = String::from_utf8_lossy(&buffer);
+    let mut lines: Vec<&str> = text.lines().collect();
+    if at > 0 && !lines.is_empty() {
+        // Whatever the first chunk started in the middle of.
+        lines.remove(0);
+    }
+    let from = lines.len().saturating_sub(limit);
+    Ok(lines[from..]
+        .iter()
+        .filter_map(|line| parse(line))
+        .collect())
 }
 
 /// The entries to show: newest first, runs of the same command collapsed,
@@ -306,7 +365,7 @@ mod reading {
         let original = entry(1_700_000_000, &["run", "edit", "a file.txt"]);
         path.write_str(&original.line()).unwrap();
 
-        assert_eq!(read(path.path()), [original]);
+        assert_eq!(read(path.path(), None), [original]);
     }
 
     /// A directory may be named anything at all, including with the field
@@ -323,7 +382,7 @@ mod reading {
         path.write_str(&original.line()).unwrap();
 
         assert_eq!(original.line().lines().count(), 1, "the line was split");
-        assert_eq!(read(path.path()), [original]);
+        assert_eq!(read(path.path(), None), [original]);
     }
 
     #[test]
@@ -333,7 +392,7 @@ mod reading {
         path.write_str("not a log line\n1700000000\t/home/me\tnixon run ok\n\n")
             .unwrap();
 
-        let entries = read(path.path());
+        let entries = read(path.path(), None);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].invocation, ["run", "ok"]);
     }
@@ -341,7 +400,45 @@ mod reading {
     #[test]
     fn a_missing_log_reads_as_empty() {
         let temp = TempDir::new().unwrap();
-        assert!(read(temp.child("nothing").path()).is_empty());
+        assert!(read(temp.child("nothing").path(), None).is_empty());
+        assert!(read(temp.child("nothing").path(), Some(10)).is_empty());
+    }
+
+    /// A log grows for as long as nixon is used; the picker only ever wants
+    /// its tail, so reading it all would be work with nothing to show for it.
+    #[test]
+    fn a_limited_read_takes_the_end_of_a_long_log() {
+        use std::fmt::Write as _;
+
+        let temp = TempDir::new().unwrap();
+        let path = temp.child("history");
+
+        let mut log = String::new();
+        for n in 0..20_000 {
+            let _ = writeln!(log, "{n}\t/home/me\tnixon run cmd{n}");
+        }
+        path.write_str(&log).unwrap();
+
+        let entries = read(path.path(), Some(5));
+        assert_eq!(entries.len(), 5);
+        assert_eq!(entries[4].invocation, ["run", "cmd19999"]);
+        assert_eq!(entries[0].invocation, ["run", "cmd19995"]);
+
+        // And the whole thing when nothing limits it.
+        assert_eq!(read(path.path(), None).len(), 20_000);
+    }
+
+    /// The tail read must not lose the only line, or half of it.
+    #[test]
+    fn a_limited_read_of_a_short_log_keeps_everything() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.child("history");
+        path.write_str("1\t/home/me\tnixon run one\n2\t/home/me\tnixon run two\n")
+            .unwrap();
+
+        let entries = read(path.path(), Some(10));
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].invocation, ["run", "one"]);
     }
 
     #[test]
