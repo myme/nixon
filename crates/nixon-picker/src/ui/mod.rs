@@ -62,6 +62,12 @@ pub struct App {
     pub option_focus: Option<usize>,
     options: PickerOptions,
     next_id: u32,
+    /// Whether the background matcher still has work for the current query.
+    ///
+    /// While it has, the snapshot answers an older query than the one on
+    /// screen, so neither the loop nor a confirmation may treat it as the
+    /// final word.
+    matching: bool,
 }
 
 impl App {
@@ -94,6 +100,7 @@ impl App {
             outcome: None,
             option_focus: None,
             options,
+            matching: true,
         };
         app.reparse(true);
         app
@@ -113,8 +120,13 @@ impl App {
 
     /// Lets the matcher make progress; called once per frame.
     pub fn tick(&mut self) {
-        self.nucleo.tick(10);
+        self.matching = self.nucleo.tick(10).running;
         self.clamp();
+    }
+
+    /// Whether the snapshot may still be behind the query.
+    pub const fn is_matching(&self) -> bool {
+        self.matching
     }
 
     /// Runs the matcher to completion. For the non-streaming path and tests.
@@ -129,7 +141,12 @@ impl App {
     /// count.
     fn settle(&mut self, budget: Duration) {
         let deadline = std::time::Instant::now() + budget;
-        while self.nucleo.tick(1).running && std::time::Instant::now() < deadline {}
+        loop {
+            self.matching = self.nucleo.tick(1).running;
+            if !self.matching || std::time::Instant::now() >= deadline {
+                break;
+            }
+        }
         self.clamp();
     }
 
@@ -386,6 +403,8 @@ impl App {
         // The same query the non-interactive paths parse, so `--list` and
         // the picker agree on what a term means.
         let query = self.query.text();
+        // Whatever the matcher had is now for an older query.
+        self.matching = true;
         self.nucleo.pattern.reparse(
             0,
             &opts.query(&query),
@@ -452,6 +471,12 @@ impl App {
 
     /// Marked rows if any, else the row under the cursor.
     fn confirm(&mut self, kind: SelectionType) {
+        // What is confirmed must answer the query on screen. A keystroke
+        // only queues the query, and on a long list the matcher is still
+        // working on it when the next key arrives.
+        if self.matching {
+            self.tick_until_settled();
+        }
         let items: Vec<Candidate> = if self.marked.is_empty() {
             self.current().into_iter().collect()
         } else {
@@ -720,6 +745,33 @@ mod tests {
         type_query(&mut app, "zzz");
         press(&mut app, KeyCode::Enter);
         assert_eq!(app.outcome, Some(Selection::Empty));
+    }
+
+    /// Enter must answer the query on screen, not the one the matcher has
+    /// caught up with.
+    ///
+    /// Matching runs in the background with a bounded budget per tick, so
+    /// on a large list a keystroke leaves the snapshot behind. Confirming
+    /// against it took a candidate that did not match at all.
+    #[test]
+    fn confirming_waits_for_the_matcher_to_catch_up() {
+        // Large enough that the rescore cannot finish between the two
+        // keystrokes: with a short list the matcher wins the race anyway
+        // and the bug hides.
+        let items: Vec<Candidate> = (0..200_000)
+            .map(|i| Candidate::identity(format!("src/module{}/file_{i}.rs", i % 97)))
+            .collect();
+        let mut app = App::new(items, PickerOptions::default());
+
+        // A keystroke only queues the query; `press` would settle it.
+        app.handle(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
+        app.handle(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert_eq!(
+            app.outcome,
+            Some(Selection::Empty),
+            "confirmed against a snapshot for an older query"
+        );
     }
 
     #[test]

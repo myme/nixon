@@ -219,8 +219,13 @@ fn run_loop(
         };
         terminal.draw(|frame| render(app, frame))?;
 
-        if streaming && !event::poll(Duration::from_millis(30))? {
-            // Nothing typed; loop round to pick up more candidates.
+        // Blocking only once there is nothing left to do. nucleo publishes
+        // its results on a tick, and a search that outlives one frame's
+        // budget would otherwise wait for a keystroke to be seen at all —
+        // on a long list the picker sat showing an old count until the user
+        // typed again.
+        if (streaming || app.is_matching()) && !event::poll(Duration::from_millis(30))? {
+            // Nothing typed; loop round for more candidates or more matches.
             continue;
         }
 
