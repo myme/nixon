@@ -117,7 +117,12 @@ Fixture rules, each learned from a failure:
   depend on it.
 - Hidden `_commands` are excluded from the run picker but available to
   placeholders, `--list`, `edit` and `new`. A name given in full runs its
-  command without the picker, hidden or not, and beats a fuzzy match.
+  command without the picker, hidden or not, and beats a fuzzy match. So does
+  an argument equal to a candidate's value.
+- `run` takes one positional holding the command name and everything after
+  it, so `nixon run c -i` and `nixon c -i` agree and nixon's own flags go
+  before the name. `project` keeps its own positionals, so a flag after the
+  project name is still nixon's.
 - A `project` argument with a separator in it, or starting with `~`, `./` or
   `../`, is a directory: resolved on the spot, no discovery, no picker. `.`
   still means the project containing the cwd.
