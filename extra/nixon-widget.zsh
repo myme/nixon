@@ -1,6 +1,7 @@
 # nixon zle widgets.
 #
-# Alt-h  insert something nixon ran before
+# Alt-h  run something nixon ran before
+# Alt-H  insert it at the prompt instead
 # Alt-i  insert a selection from a command's output
 # Alt-I  insert a command's source
 # Alt-p  cd into a project
@@ -21,6 +22,24 @@ nixon-insert-selection() {
 
 nixon-insert-history() {
   LBUFFER="${LBUFFER}$(nixon history -s)"
+  local ret=$?
+  zle reset-prompt
+  return $ret
+}
+
+# Runs what nixon ran before, as if it had been typed — which is what puts
+# it in this shell's history and redraws the prompt. No leading space: the
+# point of the line is to be found again.
+nixon-run-history() {
+  local line
+  line="$(nixon history -s </dev/tty)"
+  if [[ -z "$line" ]]; then
+    zle redisplay
+    return 0
+  fi
+  zle push-line # Clear the buffer; zsh restores it at the next prompt.
+  BUFFER="$line"
+  zle accept-line
   local ret=$?
   zle reset-prompt
   return $ret
@@ -108,12 +127,14 @@ typeset -ga precmd_functions
 (($precmd_functions[(I)__nixon_history__])) || precmd_functions+=(__nixon_history__)
 
 zle -N nixon-insert-history
+zle -N nixon-run-history
 zle -N nixon-insert-selection
 zle -N nixon-insert-command
 zle -N nixon-insert-project
 zle -N nixon-cd-project
 
-bindkey '\eh' nixon-insert-history
+bindkey '\eh' nixon-run-history
+bindkey '\eH' nixon-insert-history
 bindkey '\ei' nixon-insert-selection
 bindkey '\eI' nixon-insert-command
 bindkey '\eP' nixon-insert-project

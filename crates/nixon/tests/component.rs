@@ -1304,6 +1304,24 @@ fn choosing_a_history_line_asks_for_it_to_be_rerun() {
     }
 }
 
+/// `Alt-Enter` hands the line back instead of running it.
+#[test]
+fn alt_enter_on_a_history_line_prints_it() {
+    let fixture = Fixture::new(HISTORY_MD);
+    seed_history(&fixture, &[(1, "nixon run build"), (2, "nixon run other")]);
+
+    let picker = ScriptedPicker::new(vec![Selection::selected(
+        SelectionType::Edit,
+        vec![Candidate::identity("nixon run build")],
+    )]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    match app.history(&HistoryOpts::default()).unwrap() {
+        nixon::app::history::Outcome::Done(code) => assert_eq!(code, 0),
+        nixon::app::history::Outcome::Rerun(argv) => panic!("it ran {argv:?}"),
+    }
+}
+
 /// `--select` prints rather than running.
 #[test]
 fn selecting_a_history_line_runs_nothing() {

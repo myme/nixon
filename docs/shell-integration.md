@@ -10,7 +10,8 @@ you are already typing rather than in a subshell.
 
 | Key | Action |
 |---|---|
-| `Alt-h` | Insert something nixon ran before |
+| `Alt-h` | Run something nixon ran before |
+| `Alt-H` | Put it on the prompt instead, to edit first |
 | `Alt-i` | Run a command and insert what you pick from its output |
 | `Alt-I` | Insert a command's source at the cursor |
 | `Alt-p` | Pick a project and change directory into it |
@@ -19,10 +20,18 @@ you are already typing rather than in a subshell.
 `Alt-p` is fzf's `Alt-C` for projects: nothing is typed, the prompt is redrawn
 in the new directory, and cancelling leaves everything as it was.
 
-`Alt-h` picks from [the log](cli.md#the-log) and puts the whole command line
-on the prompt without running it — `nixon history -s` — so you can edit it
-first and press Enter yourself.
-`nixon history` on its own runs the chosen line straight away.
+`Alt-h` picks from [the log](cli.md#the-log) and runs the line, the same way
+`Alt-p` runs its `cd`. `Alt-H` puts it on the prompt instead, so you can edit
+it before pressing Enter yourself. Both go through `nixon history -s`, which
+prints the chosen line and runs nothing; what differs is what the widget does
+with it.
+
+Readline binds `\eH` to `do-lowercase-version`, so in bash `Alt-H` is `Alt-h`
+unless something binds it. The widget does.
+
+Typed directly, `nixon history` runs the chosen line, and `Alt-Enter` at the
+picker prints it rather than running it — the same hand-it-back that `Alt-H`
+gives you.
 
 Source the one for your shell:
 

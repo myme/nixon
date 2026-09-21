@@ -954,13 +954,12 @@ fn the_history_picker_runs_the_chosen_line_again() {
     assert!(output.contains("hello"), "output was: {output}");
 }
 
-/// The bash `Alt-h` widget inserts a past invocation without running it.
-#[test]
+/// Sets up a bash with the widgets sourced and two lines in the log.
+///
+/// Two, so the picker really opens rather than taking the only one without
+/// drawing.
 #[cfg(unix)]
-fn the_bash_widget_inserts_a_history_line() {
-    let pty = Pty::with_config("# `greet`\n\n```bash\necho hello\n```\n");
-    // Two lines, so the picker really opens rather than taking the only
-    // one without drawing.
+fn history_widget_shell(pty: &Pty) -> std::process::Command {
     let cwd = pty.temp.child("project").path().display().to_string();
     pty.temp
         .child("state/nixon/history")
@@ -991,6 +990,15 @@ fn the_bash_widget_inserts_a_history_line() {
         "-i",
     ]);
     pty.apply(&mut command);
+    command
+}
+
+/// The bash `Alt-h` widget runs the invocation it picked.
+#[test]
+#[cfg(unix)]
+fn the_bash_widget_runs_a_history_line() {
+    let pty = Pty::with_config("# `greet`\n\n```bash\necho hello\n```\n");
+    let command = history_widget_shell(&pty);
 
     let mut session = Session::spawn(command).unwrap();
     session.get_process_mut().set_window_size(80, 24).unwrap();
@@ -998,6 +1006,36 @@ fn the_bash_widget_inserts_a_history_line() {
 
     session.expect("ready> ").unwrap();
     session.send("\u{1b}h").unwrap();
+    settle();
+    session.send("\r").unwrap();
+    settle();
+
+    // `greet` is the newest entry, so it is the row Enter lands on, and
+    // running it echoes.
+    if session.expect("hello").is_err() {
+        session.send("exit\r").unwrap();
+        let (_, seen) = finish(&mut session);
+        panic!("the widget did not run the invocation: {seen:?}");
+    }
+
+    session.send("exit\r").unwrap();
+    let _ = finish(&mut session);
+}
+
+/// `Alt-H` inserts instead. Readline binds `\eH` to do-lowercase-version,
+/// so without its own binding it would just be another `Alt-h`.
+#[test]
+#[cfg(unix)]
+fn the_bash_widget_inserts_a_history_line() {
+    let pty = Pty::with_config("# `greet`\n\n```bash\necho hello\n```\n");
+    let command = history_widget_shell(&pty);
+
+    let mut session = Session::spawn(command).unwrap();
+    session.get_process_mut().set_window_size(80, 24).unwrap();
+    session.set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("ready> ").unwrap();
+    session.send("\u{1b}H").unwrap();
     settle();
     session.send("\r").unwrap();
     settle();

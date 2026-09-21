@@ -96,7 +96,10 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
                         output::line(&candidate.value)?;
                         Ok(Outcome::Done(0))
                     }
-                    SelectionType::Show => {
+                    // `Alt-Enter` hands the line back to be edited, which
+                    // for a logged command line means printing it rather
+                    // than opening the source `Edit` means elsewhere.
+                    SelectionType::Show | SelectionType::Edit => {
                         output::line(&candidate.value)?;
                         Ok(Outcome::Done(0))
                     }

@@ -1,6 +1,7 @@
 # nixon readline widgets.
 #
-# Alt-h  insert something nixon ran before
+# Alt-h  run something nixon ran before
+# Alt-H  insert it at the prompt instead
 # Alt-i  insert a selection from a command's output
 # Alt-I  insert a command's source
 # Alt-p  cd into a project
@@ -49,6 +50,12 @@ __nixon_cd__() {
     printf 'builtin cd -- %q' "$(builtin unset CDPATH && builtin cd -- "$dir" && builtin pwd)"
 }
 
+# Prints the invocation to run, or nothing if none was chosen. The same
+# macro types it, for the same reason: `bind -x` cannot submit a line.
+__nixon_history_run__() {
+  nixon history -s | head -n 1
+}
+
 # Puts what nixon ran into this shell's history, so Ctrl-R finds it.
 #
 # Cheap when nothing has happened: one `wc -c` against a remembered byte
@@ -84,7 +91,7 @@ case "${PROMPT_COMMAND-}" in
   *) PROMPT_COMMAND="${PROMPT_COMMAND%;};__nixon_history__" ;;
 esac
 
-bind -x '"\eh": nixon-insert-history'
+bind -x '"\eH": nixon-insert-history'
 bind -x '"\ei": nixon-insert-selection'
 bind -x '"\eI": nixon-insert-command'
 bind -x '"\eP": nixon-insert-project'
@@ -105,8 +112,17 @@ bind -x '"\eP": nixon-insert-project'
 #
 # shellcheck disable=SC2016  # the macro is literal readline input, not shell
 bind -m emacs-standard '"\ep": " \C-b\C-k \C-u`__nixon_cd__`\e\C-e\C-m\C-y\C-h\e \C-y\ey\C-x\C-x\C-d\C-y\ey\C-_"'
+
+# `Alt-h` runs what it picked, so it is the same macro. Readline binds
+# `\eH` to do-lowercase-version by default, which is why `Alt-H` has to be
+# bound outright above: unbound, it is just another `Alt-h`.
+#
+# shellcheck disable=SC2016  # the macro is literal readline input, not shell
+bind -m emacs-standard '"\eh": " \C-b\C-k \C-u`__nixon_history_run__`\e\C-e\C-m\C-y\C-h\e \C-y\ey\C-x\C-x\C-d\C-y\ey\C-_"'
 bind -m vi-command '"\C-z": emacs-editing-mode'
 bind -m vi-insert '"\C-z": emacs-editing-mode'
 bind -m emacs-standard '"\C-z": vi-editing-mode'
 bind -m vi-command '"\ep": "\C-z\ep\C-z"'
 bind -m vi-insert '"\ep": "\C-z\ep\C-z"'
+bind -m vi-command '"\eh": "\C-z\eh\C-z"'
+bind -m vi-insert '"\eh": "\C-z\eh\C-z"'

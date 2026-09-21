@@ -163,6 +163,11 @@ Fixture rules, each learned from a failure:
   `\C-\e(`, that bash 5.3 does not bind — readline abandons the rest of a
   macro at an unbound sequence, so the `cd` is typed and never run. It is
   dropped here.
+- Lowercase acts, uppercase hands the line back: `Alt-h`/`Alt-H`,
+  `Alt-p`/`Alt-P`. `Alt-h` is the same macro as `Alt-p`, because `bind -x`
+  cannot submit a line either; zsh and fish do it in the widget. Readline
+  binds `\eH` and friends to `do-lowercase-version`, so an uppercase key that
+  is not bound outright is silently the lowercase one.
 
 ## Prose
 

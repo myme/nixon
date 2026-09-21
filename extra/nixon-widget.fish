@@ -1,6 +1,7 @@
 # nixon fish widgets.
 #
-# Alt-h  insert something nixon ran before
+# Alt-h  run something nixon ran before
+# Alt-H  insert it at the prompt instead
 # Alt-i  insert a selection from a command's output
 # Alt-I  insert a command's source
 # Alt-p  cd into a project
@@ -17,6 +18,18 @@ end
 function nixon-insert-history
     commandline -i (nixon history -s)
     commandline -f repaint
+end
+
+# Runs what nixon ran before. Unlike zsh there is nowhere to park a
+# half-typed line, so the buffer is replaced.
+function nixon-run-history
+    set -l line (nixon history -s)
+    if test -n "$line"
+        commandline -r -- $line
+        commandline -f execute
+    else
+        commandline -f repaint
+    end
 end
 
 function nixon-insert-command
@@ -73,7 +86,8 @@ function __nixon_history__ --on-event fish_prompt
     set -g __nixon_history_seen $size
 end
 
-bind \eh nixon-insert-history
+bind \eh nixon-run-history
+bind \eH nixon-insert-history
 bind \ei nixon-insert-selection
 bind \eI nixon-insert-command
 bind \eP nixon-insert-project
