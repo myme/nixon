@@ -128,8 +128,8 @@ in
     pkgs.runCommand "nixon-check-completion"
       {
         nativeBuildInputs = [
+          pkgs.expect
           pkgs.zsh
-          pkgs.util-linux
         ];
       }
       ''
@@ -147,11 +147,21 @@ in
         EOF
 
         # A real Tab at a real prompt: `_nixon` is autoloaded by compinit,
-        # so nothing here sources it. `script` supplies the tty completion
-        # needs.
+        # so nothing here sources it. Expect supplies the tty completion
+        # needs on both Linux and Darwin.
         PATH=${nixon}/bin:$PATH
-        printf 'nixon \t\n\nexit\n' \
-          | script -qec "zsh -i" /dev/null > out.txt 2>&1 || true
+        expect > out.txt 2>&1 <<'EXPECT'
+        set timeout 10
+        spawn zsh -i
+        expect "comps=_nixon"
+        expect "ready> "
+        send -- "nixon \t"
+        expect "history"
+        send -- "\003"
+        expect "ready> "
+        send -- "exit\r"
+        expect eof
+        EXPECT
         cat -v out.txt
 
         grep -q 'comps=_nixon' out.txt || {
