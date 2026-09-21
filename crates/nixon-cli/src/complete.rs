@@ -29,10 +29,10 @@ pub fn maybe_complete() {
 /// Completion runs in a fresh process with no state, so this rebuilds just
 /// enough config to answer, and answers nothing rather than failing.
 pub fn command_names(current: &OsStr) -> Vec<CompletionCandidate> {
-    let Some(app) = completion_app() else {
+    let Some(mut app) = completion_app() else {
         return Vec::new();
     };
-    let project = app.current_project();
+    let project = completion_project(&mut app);
     let Ok(config) = app.config_for(&project) else {
         return Vec::new();
     };
@@ -66,10 +66,10 @@ pub fn option_tokens(current: &OsStr) -> Vec<CompletionCandidate> {
     let Some(name) = named_command() else {
         return Vec::new();
     };
-    let Some(app) = completion_app() else {
+    let Some(mut app) = completion_app() else {
         return Vec::new();
     };
-    let project = app.current_project();
+    let project = completion_project(&mut app);
     let Ok(config) = app.config_for(&project) else {
         return Vec::new();
     };
@@ -88,6 +88,23 @@ pub fn option_tokens(current: &OsStr) -> Vec<CompletionCandidate> {
             .flat_map(|option| [option.token.clone(), format!("--no-{}", option.name)]),
         current,
     )
+}
+
+/// The project whose commands the line is asking about.
+///
+/// `nixon project other <TAB>` means the commands of `other`, not of
+/// wherever the cursor happens to be. Anything that does not resolve falls
+/// back to the current project rather than offering nothing.
+fn completion_project(app: &mut App<FilterPicker, RealRunner>) -> nixon::project::Project {
+    let named = match partial_cli().and_then(|cli| cli.command) {
+        Some(Commands::Project(args)) => args.project,
+        _ => None,
+    };
+    let Some(name) = named else {
+        return app.current_project();
+    };
+    app.project_for_query(Some(&name))
+        .unwrap_or_else(|_| app.current_project())
 }
 
 /// The command `run` or `project` was given on the line being completed.
@@ -149,12 +166,25 @@ fn completion_app() -> Option<App<FilterPicker, RealRunner>> {
 
 /// Re-parses the words the shell is completing, for `-C` and `-p`.
 ///
-/// The line is normally incomplete, so a parse failure is expected and just
-/// means falling back to the defaults.
+/// The protocol puts the line being completed *after* `--`; what comes
+/// before is the completion request itself. The word under the cursor is
+/// dropped, since it is half-typed and not yet part of the command line.
+///
+/// The line is normally incomplete even so, and a parse failure just means
+/// falling back to the defaults.
 fn partial_cli() -> Option<Cli> {
-    let words: Vec<PathBuf> = std::env::args_os()
-        .take_while(|word| word != "--")
-        .map(PathBuf::from)
-        .collect();
+    let mut args = std::env::args_os().skip_while(|word| word != "--");
+    args.next()?;
+
+    let mut words: Vec<PathBuf> = args.map(PathBuf::from).collect();
+    match std::env::var("_CLAP_COMPLETE_INDEX")
+        .ok()
+        .and_then(|index| index.parse::<usize>().ok())
+    {
+        Some(index) if index <= words.len() => words.truncate(index),
+        _ => {
+            words.pop();
+        }
+    }
     Cli::try_parse_from_words(&words)
 }

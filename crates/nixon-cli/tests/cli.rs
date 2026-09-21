@@ -281,6 +281,98 @@ fn the_bash_selection_widget_inserts_one_argument_per_value() {
         .stdout("[  a b  ]");
 }
 
+/// Asks the completion protocol what it would offer.
+///
+/// `--` separates the completion request from the line being completed;
+/// `_CLAP_COMPLETE_INDEX` says which of those words the cursor is on.
+fn complete(fixture: &Fixture, line: &[&str], index: usize) -> String {
+    let mut cmd = fixture.nixon();
+    cmd.env("COMPLETE", "bash")
+        .env("_CLAP_COMPLETE_INDEX", index.to_string())
+        .arg("--")
+        .arg("nixon")
+        .args(line);
+    let out = cmd.assert().success().get_output().stdout.clone();
+    String::from_utf8(out).unwrap()
+}
+
+/// The config named on the line is the config completed against.
+///
+/// The words after `--` are the line; the parser was reading the ones
+/// before it, so it saw only its own argv and every request fell back to
+/// the default config.
+#[test]
+fn completion_reads_the_config_on_the_line() {
+    let fixture = Fixture::new();
+    fixture
+        .temp
+        .child("config/nixon.md")
+        .write_str(
+            "```json config\n{\"project_types\": [{\"name\": \"git\", \"test\": [\".git\"], \"desc\": \"Git\"}]}\n```\n\n# `global-command`\n\n```bash\necho global\n```\n",
+        )
+        .unwrap();
+    let other = fixture.temp.child("other.md");
+    other
+        .write_str("# `special-command`\n\n```bash\necho special\n```\n")
+        .unwrap();
+
+    let offered = complete(
+        &fixture,
+        &["-C", other.path().to_str().unwrap(), "run", ""],
+        4,
+    );
+    // The project's own `nixon.md` contributes either way; it is the
+    // global config `-C` replaces.
+    assert!(
+        offered.contains("special-command"),
+        "the config on the line was not read: {offered}"
+    );
+    assert!(
+        !offered.contains("global-command"),
+        "the default global config was read instead: {offered}"
+    );
+}
+
+/// A command's option tokens need the command name off the line.
+#[test]
+fn completion_offers_the_named_commands_options() {
+    let fixture =
+        Fixture::with_config("# `worktree --force`\n\n- `--force`: off\n\n```bash\necho wt\n```\n");
+
+    let offered = complete(&fixture, &["run", "worktree", "--"], 3);
+    assert!(
+        offered.contains("--force"),
+        "the command's own option was not offered: {offered}"
+    );
+}
+
+/// `project <name> <TAB>` completes in that project, not this one.
+#[test]
+fn completion_looks_in_the_project_the_line_names() {
+    let fixture = Fixture::new();
+    let other = fixture.temp.child("other");
+    other.create_dir_all().unwrap();
+    other.child(".git").create_dir_all().unwrap();
+    other
+        .child("nixon.md")
+        .write_str("# `elsewhere`\n\n```bash\necho there\n```\n")
+        .unwrap();
+    fixture
+        .temp
+        .child("config/nixon.md")
+        .write_str(&format!(
+            "```json config\n{{\"project_dirs\": [\"{}/*\"], \"project_types\": [{{\"name\": \"git\", \"test\": [\".git\"], \"desc\": \"Git\"}}]}}\n```\n",
+            fixture.temp.path().display()
+        ))
+        .unwrap();
+
+    let offered = complete(&fixture, &["project", "other", ""], 3);
+    assert!(
+        offered.contains("elsewhere"),
+        "the named project's commands were not offered: {offered}"
+    );
+}
+
 #[test]
 fn gc_reports_what_it_removes() {
     let fixture = Fixture::new();
