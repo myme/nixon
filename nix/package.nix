@@ -64,9 +64,15 @@ let
         echo 'source <(COMPLETE=bash nixon)' \
           > $out/share/bash-completion/completions/nixon
 
+        # Generated here rather than at shell start-up: files on zsh's
+        # completion path are autoloaded, not sourced, so `_nixon` has to be
+        # the completer itself. clap's script declares `#compdef nixon` for
+        # compinit and ends by registering its function under another name;
+        # calling that function is what makes the first Tab work too.
         mkdir -p $out/share/zsh/site-functions
-        echo 'source <(COMPLETE=zsh nixon)' \
-          > $out/share/zsh/site-functions/_nixon
+        COMPLETE=zsh $out/bin/nixon > $out/share/zsh/site-functions/_nixon
+        echo '_clap_dynamic_completer_nixon "$@"' \
+          >> $out/share/zsh/site-functions/_nixon
 
         mkdir -p $out/share/fish/vendor_completions.d
         echo 'COMPLETE=fish nixon | source' \

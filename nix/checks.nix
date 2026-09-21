@@ -122,6 +122,50 @@ in
         touch $out
       '';
 
+  # The installed `_nixon` is something compinit can register, and it
+  # completes on the first Tab rather than only arming itself for the next.
+  completion =
+    pkgs.runCommand "nixon-check-completion"
+      {
+        nativeBuildInputs = [
+          pkgs.zsh
+          pkgs.util-linux
+        ];
+      }
+      ''
+        export HOME=$PWD
+        fpath_dir=${nixon}/share/zsh/site-functions
+        test -f "$fpath_dir/_nixon" || { echo "no _nixon installed" >&2; exit 1; }
+
+        export ZDOTDIR=$PWD
+        cat > .zshrc <<EOF
+        fpath=($fpath_dir \$fpath)
+        autoload -Uz compinit
+        compinit -D -i
+        print -r -- "comps=\''${_comps[nixon]-NONE}"
+        PS1='ready> '
+        EOF
+
+        # A real Tab at a real prompt: `_nixon` is autoloaded by compinit,
+        # so nothing here sources it. `script` supplies the tty completion
+        # needs.
+        PATH=${nixon}/bin:$PATH
+        printf 'nixon \t\n\nexit\n' \
+          | script -qec "zsh -i" /dev/null > out.txt 2>&1 || true
+        cat -v out.txt
+
+        grep -q 'comps=_nixon' out.txt || {
+          echo "compinit did not register _nixon for nixon" >&2
+          exit 1
+        }
+        grep -q 'history' out.txt || {
+          echo "Tab offered no subcommands" >&2
+          exit 1
+        }
+
+        touch $out
+      '';
+
   # Only the bash widget: shellcheck has no zsh or fish support, and
   # checking those as bash reports their own syntax as errors.
   shellcheck = runCheck "shellcheck" [
