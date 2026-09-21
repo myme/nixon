@@ -32,18 +32,56 @@ impl Entry {
 
     /// The line as it is stored: three tab-separated fields.
     ///
-    /// Tabs separate them because a path may hold anything else. The
-    /// invocation is shell-quoted, so it holds no tab of its own.
+    /// A path may hold a tab or a newline, so the field is escaped rather
+    /// than trusted; the invocation is shell-quoted and holds neither.
     pub fn line(&self) -> String {
         format!(
             "{}\t{}\t{}\n",
             self.at,
-            self.cwd,
+            escape(&self.cwd),
             shell_words::join(
                 std::iter::once("nixon").chain(self.invocation.iter().map(String::as_str))
             )
         )
     }
+}
+
+/// Makes a field safe to put between tabs.
+fn escape(field: &str) -> String {
+    let mut out = String::with_capacity(field.len());
+    for c in field.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\t' => out.push_str("\\t"),
+            '\n' => out.push_str("\\n"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// Puts an escaped field back as it was.
+fn unescape(field: &str) -> String {
+    let mut out = String::with_capacity(field.len());
+    let mut chars = field.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('t') => out.push('\t'),
+            Some('n') => out.push('\n'),
+            Some('\\') => out.push('\\'),
+            // Not an escape we wrote: keep both characters as they are.
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 /// Parses one stored line back into an entry.
@@ -53,7 +91,7 @@ impl Entry {
 fn parse(line: &str) -> Option<Entry> {
     let mut fields = line.splitn(3, '\t');
     let at = fields.next()?.parse().ok()?;
-    let cwd = fields.next()?.to_owned();
+    let cwd = unescape(fields.next()?);
     let mut invocation = shell_words::split(fields.next()?).ok()?;
     // Stored with the program name, held without it: the field is a command
     // line, the struct is the arguments.
@@ -133,8 +171,10 @@ pub fn record(path: &Path, entry: &Entry) {
 
 /// One `write` of one whole line, appended.
 ///
-/// Two nixons running at once both append; a single write of a line shorter
-/// than a pipe buffer is what stops their lines interleaving.
+/// Two nixons running at once both append. What keeps their lines apart is
+/// `O_APPEND`: on a local filesystem each write seeks to the end and lands
+/// there as a unit. Over NFS that guarantee is weaker, and interleaving is
+/// possible; the log is not worth more than that.
 fn append(path: &Path, line: &str) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         create_dir(parent)?;
@@ -266,6 +306,23 @@ mod reading {
         let original = entry(1_700_000_000, &["run", "edit", "a file.txt"]);
         path.write_str(&original.line()).unwrap();
 
+        assert_eq!(read(path.path()), [original]);
+    }
+
+    /// A directory may be named anything at all, including with the field
+    /// separator in it.
+    #[test]
+    fn a_cwd_with_a_tab_or_newline_round_trips() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.child("history");
+        let original = Entry {
+            at: 1_700_000_000,
+            cwd: "/home/me/od\td\nname\\here".to_owned(),
+            invocation: vec!["run".to_owned(), "x".to_owned()],
+        };
+        path.write_str(&original.line()).unwrap();
+
+        assert_eq!(original.line().lines().count(), 1, "the line was split");
         assert_eq!(read(path.path()), [original]);
     }
 
