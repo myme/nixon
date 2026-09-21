@@ -189,6 +189,9 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             initial_query: query.map(ToOwned::to_owned),
             multi: placeholder.multiple,
             select_one: true,
+            // A command-line argument that is a candidate's value is an
+            // answer, not a search for one.
+            select_exact: true,
             matching: crate::matcher_options(self.context.config),
             options: self.options.clone(),
             ..PickerOptions::default()

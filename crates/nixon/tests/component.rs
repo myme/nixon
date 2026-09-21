@@ -901,3 +901,113 @@ fn edit_takes_an_exact_hidden_name() {
     let argv = &app.runner.last().unwrap().argv;
     assert!(argv.last().unwrap().ends_with("nixon.md"), "argv: {argv:?}");
 }
+
+const OVERLAPPING_MD: &str = "\
+# `_worktrees`
+
+```bash
+printf 'bugs\\nbugs2\\n'
+```
+
+# `open ${_worktrees}`
+
+```bash
+echo \"opened $1\"
+```
+
+# `open-many ${_worktrees:m}`
+
+```bash
+echo \"opened $@\"
+```
+
+# `_rows`
+
+```bash
+printf 'NAME\\nbugs\\nbugs2\\n'
+```
+
+# `columns ${_rows | cols+h 1}`
+
+```bash
+echo \"picked $1\"
+```
+";
+
+/// An argument equal to a candidate's value is an answer, even though it
+/// also fuzzy-matches `bugs2`.
+#[test]
+fn an_exact_placeholder_value_needs_no_picker() {
+    let fixture = Fixture::new(OVERLAPPING_MD);
+    let picker = picks(&[]);
+    let runner = FakeRunner::new().with_output(&["bugs", "bugs2"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts {
+        command: Some("open".to_owned()),
+        args: vec!["bugs".to_owned()],
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert!(app.picker.calls.is_empty(), "the picker was asked");
+    assert_eq!(&app.runner.last().unwrap().argv[2..], ["bugs"]);
+}
+
+/// The same for a buffered format, where the whole list exists first.
+#[test]
+fn an_exact_value_works_for_a_buffered_format() {
+    let fixture = Fixture::new(OVERLAPPING_MD);
+    let picker = picks(&[]);
+    let runner = FakeRunner::new().with_output(&["NAME", "bugs", "bugs2"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts {
+        command: Some("columns".to_owned()),
+        args: vec!["bugs".to_owned()],
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert!(app.picker.calls.is_empty(), "the picker was asked");
+    assert_eq!(&app.runner.last().unwrap().argv[2..], ["bugs"]);
+}
+
+/// An argument that is only a fuzzy match still opens the picker.
+#[test]
+fn a_partial_placeholder_value_still_opens_the_picker() {
+    let fixture = Fixture::new(OVERLAPPING_MD);
+    let picker = picks(&[&["bugs2"]]);
+    let runner = FakeRunner::new().with_output(&["bugs", "bugs2"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts {
+        command: Some("open".to_owned()),
+        args: vec!["bgs".to_owned()],
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert_eq!(app.picker.calls.len(), 1);
+    assert_eq!(&app.runner.last().unwrap().argv[2..], ["bugs2"]);
+}
+
+/// A multi placeholder given an exact value takes that one item, not the
+/// list it would otherwise offer.
+#[test]
+fn an_exact_value_selects_one_item_of_a_multi_placeholder() {
+    let fixture = Fixture::new(OVERLAPPING_MD);
+    let picker = picks(&[]);
+    let runner = FakeRunner::new().with_output(&["bugs", "bugs2"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts {
+        command: Some("open-many".to_owned()),
+        args: vec!["bugs".to_owned()],
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert!(app.picker.calls.is_empty(), "the picker was asked");
+    assert_eq!(&app.runner.last().unwrap().argv[2..], ["bugs"]);
+}

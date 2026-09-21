@@ -841,3 +841,35 @@ fn project_list_includes_the_worktrees_of_a_bare_container() {
         .success()
         .stdout(contains("gaia").and(contains("gaia/bugs")));
 }
+
+const OVERLAPPING_MD: &str = "\
+# `_worktrees`
+
+```bash
+printf 'bugs\\nbugs2\\n'
+```
+
+# `open ${_worktrees}`
+
+```bash
+echo \"opened $1\"
+```
+";
+
+/// An exact value settles the placeholder, so no terminal is needed even
+/// though `bugs` also fuzzy-matches `bugs2`.
+#[test]
+#[cfg(unix)]
+fn an_exact_placeholder_value_runs_without_a_terminal() {
+    let fixture = Fixture::with_config(OVERLAPPING_MD);
+    let nixon = assert_cmd::cargo::cargo_bin("nixon");
+
+    let mut cmd = Command::new("setsid");
+    cmd.arg("--wait").arg(nixon).args(["open", "bugs"]);
+    fixture.apply(&mut cmd);
+
+    cmd.write_stdin("")
+        .assert()
+        .success()
+        .stdout("opened bugs\n");
+}

@@ -10,7 +10,7 @@ use crate::candidate::Candidate;
 use crate::confirm;
 use crate::filter::filter;
 use crate::options::PickerOptions;
-use crate::selection::Selection;
+use crate::selection::{Selection, SelectionType};
 use crate::stream::CandidateStream;
 use crate::terminal::TerminalGuard;
 use crate::ui::{App, render};
@@ -40,12 +40,17 @@ pub trait Picker {
     /// Picks, and reports where the toggles ended up.
     ///
     /// The default leaves them as they were given, which is right for every
-    /// picker that draws nothing.
+    /// picker that draws nothing. Every implementation must first honour
+    /// [`exact_selection`], so a query that names a candidate outright gets
+    /// the same answer whichever picker is in play.
     fn pick_options(
         &mut self,
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        if let Some(selection) = exact_selection(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
         let selection = self.pick(options, candidates)?;
         Ok((selection, option_state(options)))
     }
@@ -101,6 +106,9 @@ impl Picker for TuiPicker {
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        if let Some(selection) = exact_selection(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
         // `-1` still applies: with a unique match there is nothing to ask,
         // and the toggles stay as they were given.
         if let Some(selection) = short_circuit(options, &candidates) {
@@ -165,6 +173,10 @@ fn run_loop(
         let streaming = match arrived {
             Some((candidates, finished)) => {
                 for candidate in candidates {
+                    // An exact answer needs no more of the stream.
+                    if untouched && let Some(selection) = exact_match(options, &candidate) {
+                        return Ok(selection);
+                    }
                     app.push(candidate);
                 }
                 !finished
@@ -247,6 +259,33 @@ impl Picker for FilterPicker {
             matched,
         ))
     }
+}
+
+/// The candidate `select_exact` settles the pick with, if there is one.
+///
+/// Part of the [`Picker`] contract: every implementation honours it, so the
+/// answer does not depend on which picker is in play.
+pub fn exact_selection(
+    options: &PickerOptions,
+    candidates: &[Candidate],
+) -> Option<Selection<Candidate>> {
+    candidates
+        .iter()
+        .find_map(|candidate| exact_match(options, candidate))
+}
+
+/// A candidate whose value is exactly the query.
+///
+/// Unlike `-1` this does not need the whole list: nothing later can be a
+/// better answer than an exact one, so it settles the pick as soon as the
+/// candidate is seen — which is what lets it work on a stream.
+fn exact_match(options: &PickerOptions, candidate: &Candidate) -> Option<Selection<Candidate>> {
+    if !options.select_exact {
+        return None;
+    }
+    let query = options.initial_query.as_deref()?;
+    (candidate.value == query)
+        .then(|| Selection::selected(SelectionType::Default, vec![candidate.clone()]))
 }
 
 /// fzf's `-1`: a query matching exactly one row selects it without drawing.
@@ -343,6 +382,9 @@ impl Picker for ScriptedPicker {
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        if let Some(selection) = exact_selection(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
         let state = self.toggled(options);
         let selection = self.pick(options, candidates)?;
         Ok((selection, state))
@@ -353,9 +395,26 @@ impl Picker for ScriptedPicker {
         options: &PickerOptions,
         stream: &mut CandidateStream,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        let mut candidates = Vec::new();
+        loop {
+            for candidate in stream.drain() {
+                // An exact answer needs no more of the stream, exactly as
+                // in the real picker's loop.
+                if let Some(selection) = exact_selection(options, std::slice::from_ref(&candidate))
+                {
+                    return Ok((selection, option_state(options)));
+                }
+                candidates.push(candidate);
+            }
+            if stream.is_finished() {
+                break;
+            }
+            std::thread::yield_now();
+        }
+
         let state = self.toggled(options);
-        let selection = self.pick_stream(options, stream)?;
-        Ok((selection, state))
+        self.calls.push((options.clone(), candidates));
+        Ok((self.answers.pop_front().unwrap_or(Selection::Empty), state))
     }
 
     fn confirm(&mut self, options: &PickerOptions) -> io::Result<Option<Vec<bool>>> {

@@ -609,3 +609,45 @@ fn a_complete_command_line_runs_without_the_confirm_prompt() {
         "output was: {output}"
     );
 }
+
+const OVERLAPPING_MD: &str = "\
+# `_worktrees`
+
+```bash
+printf 'bugs\\nbugs2\\n'
+```
+
+# `open ${_worktrees}`
+
+```bash
+echo \"opened $1\"
+```
+";
+
+/// An argument that is only a fuzzy match still opens the picker, where the
+/// pre-filled query narrows to two rows and the user chooses.
+#[test]
+fn a_fuzzy_placeholder_argument_still_opens_the_picker() {
+    let pty = Pty::with_config(OVERLAPPING_MD);
+    let mut session = pty.spawn(&["run", "open", "bgs"]);
+
+    settle();
+    // Two rows match; move to the second and take it.
+    session.send("\u{e}").unwrap();
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(output.contains("opened bugs2"), "output was: {output}");
+}
+
+/// An exact argument never draws: the command runs straight away.
+#[test]
+fn an_exact_placeholder_argument_runs_without_drawing() {
+    let pty = Pty::with_config(OVERLAPPING_MD);
+    let mut session = pty.spawn(&["run", "open", "bugs"]);
+
+    let output = drain(&mut session);
+    assert!(output.contains("opened bugs"), "output was: {output}");
+    assert!(!output.contains("opened bugs2"), "output was: {output}");
+}

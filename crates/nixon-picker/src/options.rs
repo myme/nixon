@@ -50,6 +50,9 @@ pub struct PickerOptions {
     /// fzf's `-1`: a query matching exactly one row selects it without
     /// drawing anything.
     pub select_one: bool,
+    /// A query equal to a candidate's value takes that candidate, whatever
+    /// else it also matches.
+    pub select_exact: bool,
     /// Flags shown in a row of their own, toggled while picking.
     pub options: Vec<PickerOption>,
 }
@@ -101,6 +104,13 @@ impl PickerOptions {
     #[must_use]
     pub const fn select_one(mut self, select_one: bool) -> Self {
         self.select_one = select_one;
+        self
+    }
+
+    /// Lets a query equal to a candidate's value settle the pick.
+    #[must_use]
+    pub const fn select_exact(mut self, select_exact: bool) -> Self {
+        self.select_exact = select_exact;
         self
     }
 }
