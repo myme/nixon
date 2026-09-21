@@ -60,7 +60,7 @@ mod tests {
     use rstest::rstest;
 
     use super::{parse, parse_config_file};
-    use crate::command::{Command, CommandLocation, DescSpan, Description};
+    use crate::command::{ArgSpec, Command, CommandLocation, DescSpan, Description};
     use crate::language::Language;
     use crate::placeholder::{Placeholder, PlaceholderFormat, PlaceholderType};
 
@@ -361,6 +361,117 @@ mod tests {
         ]);
         assert_eq!(parsed[0].name, "remove");
         assert_eq!(parsed[0].options.len(), 1);
+    }
+
+    /// Options and placeholders may be declared in different places: the
+    /// heading names what the user toggles, the info string what the source
+    /// reads.
+    #[test]
+    fn an_option_in_the_heading_and_a_placeholder_in_the_info_string() {
+        let parsed = commands(&[
+            "# `build --release`",
+            "",
+            "- `--release`: on",
+            "",
+            "```bash ${_files}",
+            "cargo build \"$@\"",
+            "```",
+        ]);
+
+        assert_eq!(parsed[0].options.len(), 1);
+        assert!(parsed[0].options[0].default);
+        assert_eq!(parsed[0].placeholders().count(), 1);
+        // Heading first, then the info string.
+        assert!(matches!(parsed[0].args[0], ArgSpec::Option(0)));
+        assert!(matches!(&parsed[0].args[1], ArgSpec::Placeholder(p) if p.name == "_files"));
+    }
+
+    #[test]
+    fn options_in_both_places_are_kept_in_order() {
+        let parsed = commands(&[
+            "# `build --release`",
+            "",
+            "```bash -v ${_files}",
+            "true",
+            "```",
+        ]);
+        assert_eq!(
+            parsed[0]
+                .options
+                .iter()
+                .map(|o| o.name.as_str())
+                .collect::<Vec<_>>(),
+            ["release", "v"]
+        );
+        assert!(matches!(parsed[0].args[0], ArgSpec::Option(0)));
+        assert!(matches!(parsed[0].args[1], ArgSpec::Option(1)));
+    }
+
+    #[test]
+    fn the_same_option_in_both_places_is_an_error() {
+        let err = parse(
+            FILE,
+            &md(&[
+                "# `build --release`",
+                "",
+                "```bash --release",
+                "true",
+                "```",
+            ]),
+        )
+        .unwrap_err();
+        assert_eq!(err.message, "Duplicate option: release");
+    }
+
+    /// A list item that reads as prose is prose, even when it starts with
+    /// inline code and a colon.
+    #[test]
+    fn a_prose_list_item_naming_an_unknown_flag_is_not_a_declaration() {
+        let parsed = commands(&[
+            "# `show`",
+            "",
+            "- `-v`: increases verbosity",
+            "",
+            "```bash",
+            "true",
+            "```",
+        ]);
+        assert!(parsed[0].options.is_empty());
+    }
+
+    /// The same shape with an on/off value is a declaration, and naming an
+    /// option that does not exist is a mistake.
+    #[test]
+    fn an_on_off_list_item_for_an_unknown_option_is_still_an_error() {
+        let err = parse(
+            FILE,
+            &md(&["# `show`", "", "- `-v`: on", "", "```bash", "true", "```"]),
+        )
+        .unwrap_err();
+        assert_eq!(err.message, "Undeclared option: v");
+    }
+
+    /// A declared option with prose where its value should be is a mistake
+    /// too: the author meant a declaration.
+    #[test]
+    fn a_declared_option_with_a_prose_value_is_an_error() {
+        let err = parse(
+            FILE,
+            &md(&[
+                "# `show -v`",
+                "",
+                "- `-v`: increases verbosity",
+                "",
+                "```bash",
+                "true",
+                "```",
+            ]),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.message,
+            "Option -v is set to increases verbosity; only on and off are supported"
+        );
     }
 
     #[test]

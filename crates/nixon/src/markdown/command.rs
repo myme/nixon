@@ -2,7 +2,10 @@
 
 use super::MarkdownError;
 use super::extract::Node;
-use crate::command::{Command, DescSpan, Description, option_name, parse_args, parse_command_name};
+use crate::command::{
+    ArgSpec, Command, CommandOption, DescSpan, Description, option_name, parse_args,
+    parse_command_name,
+};
 
 /// Parses one command, returning it and the nodes it did not consume.
 ///
@@ -18,11 +21,11 @@ pub fn parse_command<'n>(
 ) -> Result<(Command, &'n [Node]), MarkdownError> {
     let fail = |message: String| MarkdownError::new(file, Some(line), message);
 
-    let (name, header_args, mut options) =
+    let (name, header_args, header_options) =
         parse_command_name(heading).map_err(|err| fail(err.to_string()))?;
 
     let mut desc: Option<Description> = None;
-    let mut declarations: Vec<Declaration> = Vec::new();
+    let mut items: Vec<Description> = Vec::new();
     let mut rest = nodes;
 
     loop {
@@ -33,10 +36,10 @@ pub fn parse_command<'n>(
                 }
                 rest = &rest[1..];
             }
+            // Kept until the options are known: whether an item declares
+            // one depends on what was declared.
             Some(Node::ListItem(item)) => {
-                if let Some(declaration) = parse_declaration(item) {
-                    declarations.push(declaration.map_err(&fail)?);
-                }
+                items.push(item.clone());
                 rest = &rest[1..];
             }
             Some(Node::End { .. }) => rest = &rest[1..],
@@ -54,20 +57,24 @@ pub fn parse_command<'n>(
     let (source_args, source_options) =
         parse_args(&attrs.join(" ")).map_err(|err| fail(err.to_string()))?;
 
-    if !header_args.is_empty() && !source_args.is_empty() {
+    // Placeholders belong in one place or the other; options may be in
+    // either, since a heading names what the user toggles and an info
+    // string names what the source reads.
+    if header_args.iter().any(is_placeholder) && source_args.iter().any(is_placeholder) {
         return Err(fail(format!(
             "{file}:{line} {name} uses placeholders in both command header and source code block"
         )));
     }
 
-    let args = if header_args.is_empty() {
-        options = source_options;
-        source_args
-    } else {
-        header_args
-    };
+    let (args, options) = combine(header_args, header_options, source_args, source_options)
+        .map_err(|name| fail(format!("Duplicate option: {name}")))?;
 
-    for declaration in declarations {
+    let mut options = options;
+    for item in &items {
+        let Some(declaration) = parse_declaration(item, &options) else {
+            continue;
+        };
+        let declaration = declaration.map_err(&fail)?;
         let Some(option) = options
             .iter_mut()
             .find(|option| option.name == declaration.name)
@@ -92,6 +99,40 @@ pub fn parse_command<'n>(
     Ok((command, &rest[1..]))
 }
 
+/// Whether an argument is a placeholder rather than an option.
+const fn is_placeholder(arg: &ArgSpec) -> bool {
+    matches!(arg, ArgSpec::Placeholder(_))
+}
+
+/// Joins the heading's arguments with the info string's, heading first.
+///
+/// Option indices from the info string shift past the heading's, and a name
+/// declared in both places is an error as it is within one.
+fn combine(
+    header_args: Vec<ArgSpec>,
+    header_options: Vec<CommandOption>,
+    source_args: Vec<ArgSpec>,
+    source_options: Vec<CommandOption>,
+) -> Result<(Vec<ArgSpec>, Vec<CommandOption>), String> {
+    if let Some(clash) = source_options
+        .iter()
+        .find(|option| header_options.iter().any(|other| other.name == option.name))
+    {
+        return Err(clash.name.clone());
+    }
+
+    let shift = header_options.len();
+    let mut args = header_args;
+    args.extend(source_args.into_iter().map(|arg| match arg {
+        ArgSpec::Option(index) => ArgSpec::Option(index + shift),
+        placeholder @ ArgSpec::Placeholder(_) => placeholder,
+    }));
+
+    let mut options = header_options;
+    options.extend(source_options);
+    Ok((args, options))
+}
+
 /// What a declaration list item says about one option.
 struct Declaration {
     name: String,
@@ -101,9 +142,14 @@ struct Declaration {
 
 /// Reads an option declaration from a list item, if it is one.
 ///
-/// The shape is `` `--token`: on — what it does ``. A list item that does not
-/// start with inline code followed by `:` is ordinary prose and is ignored.
-fn parse_declaration(item: &Description) -> Option<Result<Declaration, String>> {
+/// The shape is `` `--token`: on — what it does ``. An item is a declaration
+/// only when its token names an option the command declared, or its value is
+/// literally `on` or `off` — so `` - `-v`: increases verbosity `` is prose,
+/// while `` - `-v`: on `` with no `-v` anywhere is a mistake worth reporting.
+fn parse_declaration(
+    item: &Description,
+    options: &[CommandOption],
+) -> Option<Result<Declaration, String>> {
     let (first, rest) = item.spans.split_first()?;
     let DescSpan::Code(token) = first else {
         return None;
@@ -117,14 +163,18 @@ fn parse_declaration(item: &Description) -> Option<Result<Declaration, String>> 
     let text = text.strip_prefix(':')?;
 
     let (value, description) = split_description(text, tail);
+    let known = options.iter().any(|option| option.name == name);
     let default = match value.trim() {
         "on" => true,
         "off" => false,
-        other => {
+        // Prose unless the command has an option by that name, in which
+        // case the author meant a declaration and got the value wrong.
+        other if known => {
             return Some(Err(format!(
                 "Option {token} is set to {other}; only on and off are supported"
             )));
         }
+        _ => return None,
     };
     Some(Ok(Declaration {
         name,
