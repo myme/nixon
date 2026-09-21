@@ -76,11 +76,16 @@ nixon project [-i] [-I] [-l] [-s] [PROJECT] [COMMAND] [ARGS]...
 Selects a project, then a command in it. `PROJECT` is a query, with two
 special cases:
 
-- `.` means the project containing the current directory, falling back to an
-  unfiltered picker when there is none.
+- `.` means the project **containing** the current directory, falling back to
+  an unfiltered picker when there is none.
 - Anything containing `/`, or starting with `~`, `./` or `../`, is a
   directory: nixon resolves it directly, with no discovery and no picker, and
   reports a path that is not there rather than searching for it.
+
+Those two differ outside a project. `.` walks up to find one, so from a
+subdirectory it gives the project root; `./` names the current directory
+itself, whether or not anything recognises it as a project. Relative paths are
+resolved against the directory nixon was invoked in.
 
 A `COMMAND` naming a command exactly runs it without the picker, hidden
 `_names` included.

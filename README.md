@@ -122,6 +122,10 @@ command line has a few deliberate differences.
 - **Git worktrees are discovered**, including those of bare repositories and
   those living outside `project_dirs`. Set `git_worktrees: false` in the
   config block to turn it off.
+- **Any `-x`/`--x` token in a command heading is now an option** the user can
+  toggle at the prompt. A v1 heading that carried a command line for
+  decoration — `` ### `show git log --oneline -n 20` `` — declares those
+  flags as options; move the command line into the code block.
 
 ## Some history, inspirations & similar projects
 

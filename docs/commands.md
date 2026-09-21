@@ -57,6 +57,10 @@ git worktree remove "$@"
 ```
 ````
 
+- **Any** `-x` or `--x` token in a heading is an option, including one written
+  for decoration. `` ### `show git log --oneline -n 20` `` declares `oneline`
+  and `n`, and shows them in the prompt; put such a command line in the code
+  block rather than the heading.
 - The token is written as the command should receive it. `--depth=1` parses,
   but the value is not read yet; see the note below.
 - The name is the token without its dashes and without any `=…`, so `--force`
