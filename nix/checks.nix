@@ -39,12 +39,20 @@ in
   };
 
   # --no-deps: documenting dependencies as well raced on the shared
-  # target/doc tree and failed intermittently.
+  # target/doc tree and failed intermittently. -j1 for the same reason a
+  # level down — rustdoc's own workers raced each other on macOS, failing
+  # to write a file into a directory another had not finished creating:
+  #
+  #   error: ".../target/doc/nixon/config/enum.LogLevel.html": No such file
+  #   error: couldn't generate documentation: I/O error
+  #
+  # Serial is slower and always works. A target dir of its own is the
+  # fallback if this ever comes back.
   doc = craneLib.cargoDoc (
     commonArgs
     // {
       inherit cargoArtifacts;
-      cargoDocExtraArgs = "--no-deps";
+      cargoDocExtraArgs = "--no-deps -j1";
       env.RUSTDOCFLAGS = "-D warnings";
     }
   );
