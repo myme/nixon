@@ -87,7 +87,14 @@ Fixture rules, each learned from a failure:
   for those rows only.
 - The kitty keyboard protocol is an improvement, not a requirement: the legacy
   encoding carries the whole keymap, and both spellings of a key reach us as
-  the same `KeyCode`.
+  the same `KeyCode`. It is asked for unconditionally and never detected —
+  crossterm's detection writes its query to **stdout** (its `/dev/tty` handle
+  is opened read-only, so the write to it always fails and the fallback always
+  runs), which corrupts every `$(nixon …)` and then stalls two seconds waiting
+  for a reply a captured stdout can never carry.
+- Nothing meant for the terminal may reach stdout. A PTY test asserts it by
+  redirecting stdout to a file while stdin and stderr stay on the pty, which
+  is the only way to tell the streams apart when both are the same terminal.
 - The options row sits between the header and the query: it belongs to the
   command, not to the list. `Alt-1`…`Alt-9` toggle from anywhere; `Alt-o`
   focuses the row, where `Space` toggles and the arrows move, walking off

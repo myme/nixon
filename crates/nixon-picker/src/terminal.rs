@@ -8,7 +8,6 @@ use crossterm::event::{
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
-    supports_keyboard_enhancement,
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
@@ -43,11 +42,19 @@ impl Drop for Restore {
 impl TerminalGuard {
     /// Takes the terminal, installing a panic hook that gives it back.
     ///
-    /// Where the terminal supports the kitty keyboard protocol, it is asked
-    /// for disambiguated escape codes so `Ctrl-H`, `Alt-Enter` and
-    /// `Alt-Backspace` arrive as distinct events rather than as whatever
-    /// legacy byte they collide with. Terminals without it fall back to the
-    /// legacy encoding, which the keymap also accepts.
+    /// The kitty keyboard protocol is asked for unconditionally, so that
+    /// `Ctrl-H`, `Alt-Enter` and `Alt-Backspace` arrive as distinct events
+    /// rather than as whatever legacy byte they collide with. A terminal
+    /// without it ignores the sequence and sends the legacy encoding, which
+    /// the keymap also accepts.
+    ///
+    /// Asking is better than detecting. crossterm's detection writes its
+    /// query to **stdout** — `File::open("/dev/tty")` is read-only, so the
+    /// write to it always fails and the fallback always runs — which puts
+    /// escape bytes in front of nixon's own output. `cd "$(nixon project
+    /// -s)"` got `cd: no such file or directory: ^[[?u^[[c/Users/…`. It then
+    /// waits two seconds for a reply that a captured stdout can never carry,
+    /// on every single pick.
     pub fn new() -> io::Result<Self> {
         install_panic_hook();
         enable_raw_mode().map_err(|_| no_terminal())?;
@@ -56,12 +63,10 @@ impl TerminalGuard {
 
         let mut stderr = io::stderr();
         execute!(stderr, EnterAlternateScreen)?;
-        if supports_keyboard_enhancement().unwrap_or(false) {
-            let _ = execute!(
-                stderr,
-                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
-            );
-        }
+        let _ = execute!(
+            stderr,
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+        );
         Ok(Self {
             terminal: Terminal::new(CrosstermBackend::new(stderr))?,
             _restore: restore,

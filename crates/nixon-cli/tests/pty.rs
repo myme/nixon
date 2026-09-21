@@ -69,9 +69,55 @@ impl Pty {
             .into_owned()
     }
 
+    /// Spawns nixon on a PTY with its stdout redirected to a file.
+    ///
+    /// stdin and stderr stay on the pty, so the picker draws and reads as
+    /// usual while stdout is captured — which is what a shell widget does
+    /// with `$(nixon …)`, and the only way to tell the two streams apart
+    /// when both are the same pty.
+    fn spawn_capturing(&self, args: &[&str]) -> OsSession {
+        let quoted: Vec<String> = args
+            .iter()
+            .map(|arg| format!("'{}'", arg.replace('\'', "'\\''")))
+            .collect();
+        let script = format!(
+            "exec {} {} > {}/stdout",
+            Self::binary(),
+            quoted.join(" "),
+            self.temp.path().display()
+        );
+
+        let mut command = std::process::Command::new("sh");
+        command.arg("-c").arg(script);
+        self.apply(&mut command);
+        let mut session = Session::spawn(command).unwrap();
+        session.get_process_mut().set_window_size(80, 24).unwrap();
+        session.set_expect_timeout(Some(Duration::from_secs(20)));
+        session
+    }
+
+    /// What the captured run wrote to stdout.
+    fn captured_stdout(&self) -> String {
+        std::fs::read_to_string(self.temp.child("stdout").path()).unwrap_or_default()
+    }
+
     /// Spawns nixon on a PTY with the host environment cleared.
     fn spawn(&self, args: &[&str]) -> OsSession {
         let mut command = std::process::Command::new(Self::binary());
+        self.apply(&mut command);
+        command.args(args);
+
+        let mut session = Session::spawn(command).unwrap();
+        // A real terminal size, so the picker actually draws. A fresh pty is
+        // 0x0, where ratatui renders nothing and the tests measure far less
+        // than they look like they do.
+        session.get_process_mut().set_window_size(80, 24).unwrap();
+        session.set_expect_timeout(Some(Duration::from_secs(20)));
+        session
+    }
+
+    /// The environment every spawn runs with.
+    fn apply(&self, command: &mut std::process::Command) {
         command
             .env_clear()
             .env("PATH", std::env::var("PATH").unwrap_or_default())
@@ -81,16 +127,7 @@ impl Pty {
             .env("XDG_CACHE_HOME", self.temp.child("cache").path())
             .env("SHELL", "/bin/bash")
             .env("EDITOR", self.fake_editor())
-            .current_dir(self.temp.child("project").path())
-            .args(args);
-
-        let mut session = Session::spawn(command).unwrap();
-        // A real terminal size, so the picker actually draws. A fresh pty is
-        // 0x0, where ratatui renders nothing and the tests measure far less
-        // than they look like they do.
-        session.get_process_mut().set_window_size(80, 24).unwrap();
-        session.set_expect_timeout(Some(Duration::from_secs(20)));
-        session
+            .current_dir(self.temp.child("project").path());
     }
 
     /// An `$EDITOR` that records its arguments instead of opening anything.
@@ -713,4 +750,46 @@ fn enter_confirms_from_the_options_row() {
         output.contains("gwr args: /tmp/wt-one"),
         "output was: {output}"
     );
+}
+
+/// Nothing nixon writes for the terminal may reach stdout.
+///
+/// `cd "$(nixon project -s)"` broke on this: crossterm's keyboard-detection
+/// query went to stdout — its `/dev/tty` handle is opened read-only, so the
+/// write to it always fails and the fallback always runs — and `cd` was
+/// handed `^[[?u^[[c/Users/…`.
+#[test]
+fn stdout_carries_no_escape_sequences() {
+    let pty = Pty::with_config("# `files`\n\n```bash\nprintf 'a.txt\\nb.txt\\n'\n```\n");
+    let mut session = pty.spawn_capturing(&["run", "-s", "files"]);
+
+    settle();
+    // Two candidates and multi-select, so the picker really opens.
+    session.send("\r").unwrap();
+    assert_eq!(wait_code(&mut session), 0);
+
+    let stdout = pty.captured_stdout();
+    assert!(
+        !stdout.contains('\u{1b}'),
+        "an escape sequence reached stdout: {stdout:?}"
+    );
+    assert_eq!(stdout, "a.txt\n\n");
+}
+
+/// The same for the two other things a widget captures.
+#[test]
+fn insert_and_project_select_keep_stdout_clean() {
+    let pty = Pty::new();
+    let mut session = pty.spawn_capturing(&["run", "-i"]);
+
+    settle();
+    session.send("\r").unwrap();
+    assert_eq!(wait_code(&mut session), 0);
+
+    let stdout = pty.captured_stdout();
+    assert!(
+        !stdout.contains('\u{1b}'),
+        "an escape sequence reached stdout: {stdout:?}"
+    );
+    assert_eq!(stdout, "echo ran-alpha\n");
 }
