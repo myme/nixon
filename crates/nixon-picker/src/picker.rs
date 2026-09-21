@@ -1,0 +1,728 @@
+//! The picker interface and its implementations.
+
+use std::io;
+use std::sync::Arc;
+use std::time::Duration;
+
+use crossterm::event::{self, Event};
+
+use crate::candidate::Candidate;
+use crate::confirm;
+use crate::filter::filter;
+use crate::options::PickerOptions;
+use crate::selection::{Selection, SelectionType};
+use crate::stream::CandidateStream;
+use crate::terminal::TerminalGuard;
+use crate::ui::{App, render};
+
+/// Anything that can turn candidates into a selection.
+pub trait Picker {
+    /// Presents `candidates` and returns what was chosen.
+    fn pick(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<Selection<Candidate>>;
+
+    /// Presents candidates that are still arriving.
+    ///
+    /// The default collects them and falls back to [`Picker::pick`], which is
+    /// right for any picker that cannot draw while it waits.
+    fn pick_stream(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<Selection<Candidate>> {
+        let candidates = stream.collect();
+        self.pick(options, candidates)
+    }
+
+    /// Picks, and reports where the toggles ended up.
+    ///
+    /// The default leaves them as they were given, which is right for every
+    /// picker that draws nothing. Every implementation must first honour
+    /// [`exact_selection`] and [`unique_selection`], so a query that names
+    /// or uniquely matches a candidate gets the same answer whichever
+    /// picker is in play.
+    fn pick_options(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        if let Some(selection) = settled(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
+        let selection = self.pick(options, candidates)?;
+        Ok((selection, option_state(options)))
+    }
+
+    /// The same for a stream.
+    ///
+    /// The default collects, so exactness is decided over the whole list
+    /// rather than as candidates arrive; a picker that draws while it waits
+    /// overrides this and decides as soon as it sees the candidate.
+    fn pick_stream_options(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        let candidates = stream.collect();
+        if let Some(selection) = settled(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
+        let selection = self.pick(options, candidates)?;
+        Ok((selection, option_state(options)))
+    }
+
+    /// Asks only about the toggles: no list, no query.
+    ///
+    /// `None` means the user cancelled. The default accepts them unchanged,
+    /// so a picker that cannot draw runs with the defaults rather than
+    /// failing — the same principle as `-1`.
+    fn confirm(&mut self, options: &PickerOptions) -> io::Result<Option<Vec<bool>>> {
+        Ok(Some(option_state(options)))
+    }
+}
+
+/// What the contract settles before anything is drawn, if anything.
+fn settled(options: &PickerOptions, candidates: &[Candidate]) -> Option<Selection<Candidate>> {
+    exact_selection(options, candidates).or_else(|| unique_selection(options, candidates))
+}
+
+/// The toggles as the caller set them.
+fn option_state(options: &PickerOptions) -> Vec<bool> {
+    options.options.iter().map(|option| option.on).collect()
+}
+
+/// The real picker: a terminal UI on stderr.
+#[derive(Debug, Default)]
+pub struct TuiPicker;
+
+impl Picker for TuiPicker {
+    fn pick(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<Selection<Candidate>> {
+        Ok(self.pick_options(options, candidates)?.0)
+    }
+
+    fn pick_stream(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<Selection<Candidate>> {
+        Ok(self.pick_stream_options(options, stream)?.0)
+    }
+
+    fn pick_options(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        // With an exact or unique match there is nothing to ask, and the
+        // toggles stay as they were given.
+        if let Some(selection) = settled(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
+
+        let mut app = App::new(candidates, options.clone());
+        let selection = run_loop(&mut app, options, None)?;
+        Ok((selection, app.option_state()))
+    }
+
+    fn pick_stream_options(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        // The picker opens on an empty list and fills as the producer runs.
+        let mut app = App::empty(options.clone());
+        let selection = run_loop(&mut app, options, Some(stream))?;
+        if matches!(selection, Selection::Canceled) {
+            stream.cancel();
+        }
+        Ok((selection, app.option_state()))
+    }
+
+    /// Draws the toggles and waits for `Enter` or `Esc`.
+    ///
+    /// Without a terminal there is nothing to ask with, so the defaults
+    /// stand: a command with options is runnable from a script.
+    fn confirm(&mut self, options: &PickerOptions) -> io::Result<Option<Vec<bool>>> {
+        if options.options.is_empty() {
+            return Ok(Some(Vec::new()));
+        }
+        confirm::run(options)
+    }
+}
+
+/// Catches `^C` for as long as the picker owns a producer.
+///
+/// Until the terminal is taken, `^C` is a real SIGINT: nothing has turned
+/// off the terminal's own signal generation yet. Its default action ends
+/// nixon without unwinding, so the stream is never dropped and the producer
+/// — which leads its own process group, and so is not signalled with us —
+/// goes on running. Setting a flag instead leaves the loop to notice, stop
+/// the producer and report a cancellation.
+#[cfg(unix)]
+struct InterruptGuard {
+    id: Option<signal_hook::SigId>,
+    flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+#[cfg(unix)]
+impl InterruptGuard {
+    fn install() -> Self {
+        let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let id = signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&flag)).ok();
+        Self { id, flag }
+    }
+
+    fn interrupted(&self) -> bool {
+        self.flag.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+#[cfg(unix)]
+impl Drop for InterruptGuard {
+    fn drop(&mut self) {
+        if let Some(id) = self.id.take() {
+            signal_hook::low_level::unregister(id);
+        }
+    }
+}
+
+/// Nixon targets Linux and macOS; elsewhere there is nothing to install.
+#[cfg(not(unix))]
+struct InterruptGuard;
+
+#[cfg(not(unix))]
+impl InterruptGuard {
+    const fn install() -> Self {
+        Self
+    }
+
+    const fn interrupted(&self) -> bool {
+        false
+    }
+}
+
+/// The draw/read loop, shared by the ready and streaming entry points.
+///
+/// With a stream, events are polled rather than waited on, so newly arrived
+/// candidates are drawn even while the user types nothing.
+fn run_loop(
+    app: &mut App,
+    options: &PickerOptions,
+    mut stream: Option<&mut CandidateStream>,
+) -> io::Result<Selection<Candidate>> {
+    // Taken lazily. `-1` and streaming pull against each other: `-1` needs the
+    // whole list to know a match is unique, and a script piping `nixon run`
+    // with an unambiguous command has no terminal to take at all. So while
+    // `-1` could still apply, nothing is drawn and no terminal is claimed;
+    // the moment a second candidate matches it cannot apply, and the picker
+    // opens — which for a command listing thousands of files is at once.
+    let mut guard: Option<TerminalGuard> = None;
+    // `-1` is decided once, on the query the picker opened with. Once the
+    // user has typed, narrowing to a single row must not select it for them.
+    let mut untouched = true;
+    let interrupt = InterruptGuard::install();
+
+    while !app.is_done() {
+        // Before anything else: the producer must not outlive the pick.
+        if interrupt.interrupted() {
+            if let Some(stream) = stream.as_mut() {
+                stream.cancel();
+            }
+            return Ok(Selection::Canceled);
+        }
+
+        let arrived = stream
+            .as_mut()
+            .map(|stream| (stream.drain(), stream.is_finished()));
+        let streaming = match arrived {
+            Some((candidates, finished)) => {
+                for candidate in candidates {
+                    // An exact answer needs no more of the stream.
+                    if untouched && let Some(selection) = exact_match(options, &candidate) {
+                        return Ok(selection);
+                    }
+                    app.push(candidate);
+                }
+                !finished
+            }
+            None => false,
+        };
+
+        // Let the background matcher make progress, then draw what it has.
+        app.tick();
+
+        if untouched && options.select_one && app.matched_count() <= 1 {
+            if streaming {
+                // Still arriving, and still possibly unique: wait it out.
+                std::thread::sleep(Duration::from_millis(10));
+                continue;
+            }
+            // The producer is done, but the matcher may not have caught up
+            // with its last candidates; deciding on a partial count would
+            // report "no matches" for a list that has one.
+            app.tick_until_settled();
+            if let Some(selection) = short_circuit_app(app) {
+                return Ok(selection);
+            }
+        }
+
+        let terminal = match guard {
+            Some(ref mut guard) => guard.terminal(),
+            None => guard.insert(TerminalGuard::new()?).terminal(),
+        };
+        terminal.draw(|frame| render(app, frame))?;
+
+        // Blocking only once there is nothing left to do. nucleo publishes
+        // its results on a tick, and a search that outlives one frame's
+        // budget would otherwise wait for a keystroke to be seen at all —
+        // on a long list the picker sat showing an old count until the user
+        // typed again.
+        if (streaming || app.is_matching()) && !event::poll(Duration::from_millis(30))? {
+            // Nothing typed; loop round for more candidates or more matches.
+            continue;
+        }
+
+        if let Event::Key(key) = event::read()?
+            && key.kind == event::KeyEventKind::Press
+        {
+            untouched = false;
+            app.handle(key);
+        }
+    }
+
+    Ok(app.outcome.take().unwrap_or(Selection::Empty))
+}
+
+/// `-1` applied to what the matcher has settled on.
+fn short_circuit_app(app: &App) -> Option<Selection<Candidate>> {
+    match app.matched_count() {
+        0 => Some(Selection::Empty),
+        1 => app.current().map(|candidate| {
+            Selection::selected(crate::selection::SelectionType::Default, vec![candidate])
+        }),
+        _ => None,
+    }
+}
+
+/// Non-interactive matching, for `--list` and `| list`.
+///
+/// Returns every candidate that matched, in ranked order, so callers read
+/// their `value` — the same field an interactive pick hands back. It never
+/// touches the terminal and never returns [`Selection::Canceled`].
+#[derive(Debug, Default)]
+pub struct FilterPicker;
+
+impl Picker for FilterPicker {
+    fn pick(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<Selection<Candidate>> {
+        let query = options.initial_query.as_deref().unwrap_or_default();
+        let matched = filter(query, &candidates, options.matching);
+        Ok(Selection::selected(
+            crate::selection::SelectionType::Default,
+            matched,
+        ))
+    }
+}
+
+/// The candidate `select_exact` settles the pick with, if there is one.
+///
+/// Part of the [`Picker`] contract: every implementation honours it, so the
+/// answer does not depend on which picker is in play.
+pub fn exact_selection(
+    options: &PickerOptions,
+    candidates: &[Candidate],
+) -> Option<Selection<Candidate>> {
+    candidates
+        .iter()
+        .find_map(|candidate| exact_match(options, candidate))
+}
+
+/// A candidate whose value is exactly the query.
+///
+/// Unlike `-1` this does not need the whole list: nothing later can be a
+/// better answer than an exact one, so it settles the pick as soon as the
+/// candidate is seen — which is what lets it work on a stream.
+fn exact_match(options: &PickerOptions, candidate: &Candidate) -> Option<Selection<Candidate>> {
+    if !options.select_exact {
+        return None;
+    }
+    let query = options.initial_query.as_deref()?;
+    (candidate.value == query)
+        .then(|| Selection::selected(SelectionType::Default, vec![candidate.clone()]))
+}
+
+/// The candidate `select_one` settles the pick with, if there is one.
+///
+/// fzf's `-1`: a query matching exactly one row selects it without drawing,
+/// and a query matching none settles as [`Selection::Empty`]. Part of the
+/// [`Picker`] contract, like [`exact_selection`], so the answer does not
+/// depend on which picker is in play.
+pub fn unique_selection(
+    options: &PickerOptions,
+    candidates: &[Candidate],
+) -> Option<Selection<Candidate>> {
+    if !options.select_one {
+        return None;
+    }
+    let query = options.initial_query.as_deref().unwrap_or_default();
+    let matched = filter(query, candidates, options.matching);
+    match matched.len() {
+        0 => Some(Selection::Empty),
+        1 => Some(Selection::selected(
+            crate::selection::SelectionType::Default,
+            matched,
+        )),
+        _ => None,
+    }
+}
+
+/// A picker that answers from a queue, for tests.
+#[cfg(any(test, feature = "test-util"))]
+#[derive(Debug, Default)]
+pub struct ScriptedPicker {
+    answers: std::collections::VecDeque<Selection<Candidate>>,
+    /// Every `(options, candidates)` it was asked, in order.
+    pub calls: Vec<(PickerOptions, Vec<Candidate>)>,
+    /// Toggles to flip on the next pick, as a key press would.
+    pub toggles: std::collections::VecDeque<Vec<usize>>,
+    /// Whether `confirm` should cancel rather than accept.
+    pub cancel_confirm: bool,
+}
+
+#[cfg(any(test, feature = "test-util"))]
+impl ScriptedPicker {
+    /// Builds a picker that returns `answers` in order.
+    pub fn new(answers: Vec<Selection<Candidate>>) -> Self {
+        Self {
+            answers: answers.into(),
+            calls: Vec::new(),
+            toggles: std::collections::VecDeque::new(),
+            cancel_confirm: false,
+        }
+    }
+
+    /// Flips these toggles on the next pick, as `Alt-<n>` would.
+    #[must_use]
+    pub fn toggling(mut self, indices: &[usize]) -> Self {
+        self.toggles.push_back(indices.to_vec());
+        self
+    }
+
+    /// The state after applying whatever this pick was scripted to toggle.
+    fn toggled(&mut self, options: &PickerOptions) -> Vec<bool> {
+        let mut state = option_state(options);
+        for index in self.toggles.pop_front().unwrap_or_default() {
+            if let Some(on) = state.get_mut(index) {
+                *on = !*on;
+            }
+        }
+        state
+    }
+
+    /// Builds a picker that always selects the row at `index`.
+    pub fn selecting(indices: &[usize]) -> SelectingPicker {
+        SelectingPicker {
+            indices: indices.to_vec(),
+            calls: Vec::new(),
+        }
+    }
+}
+
+#[cfg(any(test, feature = "test-util"))]
+impl Picker for ScriptedPicker {
+    /// Honours the contract before answering, or a fixture the real picker
+    /// would never have drawn for would consume a scripted answer.
+    fn pick(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<Selection<Candidate>> {
+        if let Some(selection) = settled(options, &candidates) {
+            return Ok(selection);
+        }
+        self.calls.push((options.clone(), candidates));
+        Ok(self.answers.pop_front().unwrap_or(Selection::Empty))
+    }
+
+    fn pick_options(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        if let Some(selection) = settled(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
+        let state = self.toggled(options);
+        let selection = self.pick(options, candidates)?;
+        Ok((selection, state))
+    }
+
+    fn pick_stream_options(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
+        let mut candidates = Vec::new();
+        loop {
+            for candidate in stream.drain() {
+                // An exact answer needs no more of the stream, exactly as
+                // in the real picker's loop.
+                if let Some(selection) = exact_selection(options, std::slice::from_ref(&candidate))
+                {
+                    return Ok((selection, option_state(options)));
+                }
+                candidates.push(candidate);
+            }
+            if stream.is_finished() {
+                break;
+            }
+            std::thread::yield_now();
+        }
+
+        if let Some(selection) = unique_selection(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
+
+        let state = self.toggled(options);
+        self.calls.push((options.clone(), candidates));
+        Ok((self.answers.pop_front().unwrap_or(Selection::Empty), state))
+    }
+
+    fn confirm(&mut self, options: &PickerOptions) -> io::Result<Option<Vec<bool>>> {
+        if self.cancel_confirm {
+            return Ok(None);
+        }
+        let state = self.toggled(options);
+        self.calls.push((options.clone(), Vec::new()));
+        Ok(Some(state))
+    }
+
+    /// Consumes candidates as they arrive, as the real picker does.
+    ///
+    /// The default would block on `collect`, which hides every ordering
+    /// question the streaming path raises.
+    fn pick_stream(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<Selection<Candidate>> {
+        let mut candidates = Vec::new();
+        loop {
+            candidates.extend(stream.drain());
+            if stream.is_finished() {
+                break;
+            }
+            std::thread::yield_now();
+        }
+        self.pick(options, candidates)
+    }
+}
+
+/// A picker that picks candidates by position, for tests.
+#[cfg(any(test, feature = "test-util"))]
+#[derive(Debug, Default)]
+pub struct SelectingPicker {
+    indices: Vec<usize>,
+    /// Every `(options, candidates)` it was asked, in order.
+    pub calls: Vec<(PickerOptions, Vec<Candidate>)>,
+}
+
+#[cfg(any(test, feature = "test-util"))]
+impl Picker for SelectingPicker {
+    fn pick(
+        &mut self,
+        options: &PickerOptions,
+        candidates: Vec<Candidate>,
+    ) -> io::Result<Selection<Candidate>> {
+        if let Some(selection) = settled(options, &candidates) {
+            return Ok(selection);
+        }
+        let picked: Vec<Candidate> = self
+            .indices
+            .iter()
+            .filter_map(|i| candidates.get(*i).cloned())
+            .collect();
+        self.calls.push((options.clone(), candidates));
+        Ok(Selection::selected(
+            crate::selection::SelectionType::Default,
+            picked,
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FilterPicker, Picker, ScriptedPicker, TuiPicker};
+    use crate::candidate::Candidate;
+    use crate::options::PickerOptions;
+    use crate::selection::{Selection, SelectionType};
+
+    fn candidates(items: &[&str]) -> Vec<Candidate> {
+        items.iter().map(|s| Candidate::identity(*s)).collect()
+    }
+
+    fn values(selection: &Selection<Candidate>) -> Vec<String> {
+        selection.items().iter().map(|c| c.value.clone()).collect()
+    }
+
+    #[test]
+    fn the_filter_picker_returns_every_match() {
+        let mut picker = FilterPicker;
+        let options = PickerOptions::default().query("fil");
+        let selection = picker
+            .pick(&options, candidates(&["git-files", "rg-files", "deploy"]))
+            .unwrap();
+        assert_eq!(values(&selection), ["git-files", "rg-files"]);
+    }
+
+    #[test]
+    fn the_filter_picker_returns_empty_when_nothing_matches() {
+        let mut picker = FilterPicker;
+        let options = PickerOptions::default().query("zzz");
+        let selection = picker.pick(&options, candidates(&["one"])).unwrap();
+        assert_eq!(selection, Selection::Empty);
+    }
+
+    #[test]
+    fn select_one_takes_a_unique_match_without_a_terminal() {
+        let mut picker = TuiPicker;
+        let options = PickerOptions::default().query("deploy").select_one(true);
+        let selection = picker
+            .pick(&options, candidates(&["git-files", "deploy"]))
+            .unwrap();
+        assert_eq!(values(&selection), ["deploy"]);
+    }
+
+    #[test]
+    fn select_one_is_empty_when_nothing_matches() {
+        let mut picker = TuiPicker;
+        let options = PickerOptions::default().query("zzz").select_one(true);
+        let selection = picker.pick(&options, candidates(&["one", "two"])).unwrap();
+        assert_eq!(selection, Selection::Empty);
+    }
+
+    #[test]
+    fn the_scripted_picker_answers_in_order_and_records_its_calls() {
+        let mut picker = ScriptedPicker::new(vec![Selection::selected(
+            SelectionType::Default,
+            candidates(&["two"]),
+        )]);
+        let options = PickerOptions::default().header("Select command");
+        let selection = picker.pick(&options, candidates(&["one", "two"])).unwrap();
+
+        assert_eq!(values(&selection), ["two"]);
+        assert_eq!(picker.calls.len(), 1);
+        assert_eq!(picker.calls[0].0.header.as_deref(), Some("Select command"));
+        assert_eq!(picker.calls[0].1.len(), 2);
+    }
+
+    #[test]
+    fn the_scripted_picker_runs_out_as_empty() {
+        let mut picker = ScriptedPicker::new(Vec::new());
+        let selection = picker
+            .pick(&PickerOptions::default(), candidates(&["one"]))
+            .unwrap();
+        assert_eq!(selection, Selection::Empty);
+    }
+
+    #[test]
+    fn the_selecting_picker_picks_by_position() {
+        let mut picker = ScriptedPicker::selecting(&[1]);
+        let selection = picker
+            .pick(&PickerOptions::default(), candidates(&["one", "two"]))
+            .unwrap();
+        assert_eq!(values(&selection), ["two"]);
+    }
+}
+
+#[cfg(test)]
+mod contract {
+    use std::io;
+
+    use super::{Picker, exact_selection};
+    use crate::candidate::Candidate;
+    use crate::options::PickerOptions;
+    use crate::selection::Selection;
+    use crate::stream::CandidateStream;
+
+    /// A picker that implements the two required methods and nothing else.
+    #[derive(Default)]
+    struct Minimal {
+        /// Every list it was shown, so a short circuit is visible.
+        calls: usize,
+    }
+
+    impl Picker for Minimal {
+        fn pick(
+            &mut self,
+            _: &PickerOptions,
+            candidates: Vec<Candidate>,
+        ) -> io::Result<Selection<Candidate>> {
+            self.calls += 1;
+            Ok(Selection::selected(
+                crate::selection::SelectionType::Default,
+                candidates.into_iter().take(1).collect(),
+            ))
+        }
+    }
+
+    fn options() -> PickerOptions {
+        PickerOptions::default().query("bugs").select_exact(true)
+    }
+
+    fn candidates() -> Vec<Candidate> {
+        ["bugs2", "bugs", "other"]
+            .into_iter()
+            .map(Candidate::identity)
+            .collect()
+    }
+
+    /// The contract is the trait's, not one implementation's: a picker that
+    /// writes only `pick` still answers an exact query without being asked.
+    #[test]
+    fn a_minimal_picker_honours_an_exact_query() {
+        let mut picker = Minimal::default();
+        let (selection, _) = picker.pick_options(&options(), candidates()).unwrap();
+
+        assert_eq!(selection.items()[0].value, "bugs");
+        assert_eq!(picker.calls, 0, "the picker was asked");
+    }
+
+    /// And the same over a stream, which the default collects.
+    #[test]
+    fn a_minimal_picker_honours_an_exact_query_on_a_stream() {
+        let mut picker = Minimal::default();
+        let mut stream = CandidateStream::of(candidates());
+        let (selection, _) = picker.pick_stream_options(&options(), &mut stream).unwrap();
+
+        assert_eq!(selection.items()[0].value, "bugs");
+        assert_eq!(picker.calls, 0, "the picker was asked");
+    }
+
+    /// Without an exact match it is asked, as usual.
+    #[test]
+    fn a_minimal_picker_is_asked_when_nothing_matches_exactly() {
+        let mut picker = Minimal::default();
+        let options = PickerOptions::default().query("bug").select_exact(true);
+        let (selection, _) = picker.pick_options(&options, candidates()).unwrap();
+
+        assert_eq!(selection.items()[0].value, "bugs2");
+        assert_eq!(picker.calls, 1);
+    }
+
+    #[test]
+    fn exact_selection_is_off_unless_asked_for() {
+        let options = PickerOptions::default().query("bugs");
+        assert!(exact_selection(&options, &candidates()).is_none());
+    }
+}

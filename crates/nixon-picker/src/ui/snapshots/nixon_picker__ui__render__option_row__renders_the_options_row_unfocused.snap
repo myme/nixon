@@ -1,0 +1,14 @@
+---
+source: crates/nixon-picker/src/ui/render.rs
+expression: draw(&mut app())
+---
+"Select command                                                                  "
+"[ ] --force  [x] -v                                                             "
+">                                                                            2/2"
+"▌ remove - Remove a worktree                                                    "
+"  add - Add a worktree                                                          "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "

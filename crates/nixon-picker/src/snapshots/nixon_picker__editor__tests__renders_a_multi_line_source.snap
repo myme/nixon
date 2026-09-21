@@ -1,0 +1,10 @@
+---
+source: crates/nixon-picker/src/editor.rs
+expression: "draw(&TextArea::new(\"set -e\\necho one\\necho two\"))"
+---
+">                                       "
+"set -e                                  "
+"echo one                                "
+"echo two                                "
+"                                        "
+"                                        "

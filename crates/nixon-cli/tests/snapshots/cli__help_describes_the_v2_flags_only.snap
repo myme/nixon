@@ -1,0 +1,30 @@
+---
+source: crates/nixon-cli/tests/cli.rs
+expression: help
+---
+Command & environment launcher
+
+Usage: nixon [OPTIONS] [COMMAND]
+
+Commands:
+  edit     Edit a command in `$EDITOR`
+  eval     Evaluate an expression
+  gc       Garbage collect cached scripts
+  history  Show what has been run, and run it again
+  new      Insert a new command into a config file
+  project  Select a project and run a command in it
+  run      Select and run a command
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+  -C, --config <CONFIG>      Path to config file [default: ~/config/nixon.md]
+  -e, --exact                Exact match in the selector
+  -i, --ignore-case          Case-insensitive match in the selector
+  -p, --path <PATH>          Project directory, repeatable
+  -d, --direnv               Run commands through `direnv exec`
+  -n, --nix                  Run commands through `nix-shell`
+  -L, --loglevel <LOGLEVEL>  Log level
+  -h, --help                 Print help
+  -V, --version              Print version
+
+See nixon.md(5), nixon-picker(7), nixon-shell(7).

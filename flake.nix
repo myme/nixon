@@ -1,44 +1,57 @@
 {
-  description = "Nixon nix flake";
+  description = "Nixon — project environment and command launcher";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    utils.url = "github:numtide/flake-utils";
+    flake-utils.url = "github:numtide/flake-utils";
+    crane.url = "github:ipetkov/crane";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      utils,
+      flake-utils,
+      crane,
+      rust-overlay,
     }:
-    {
-      overlay = (
-        final: prev: {
-          nixon = final.haskell.lib.compose.justStaticExecutables final.haskellPackages.nixon;
-          haskellPackages = prev.haskellPackages // {
-            nixon = import ./default.nix {
-              pkgs = final;
-              inherit (final) haskellPackages;
-            };
-          };
-        }
-      );
-    }
-    // (utils.lib.eachDefaultSystem (
+    flake-utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ self.overlay ];
+          overlays = [ (import rust-overlay) ];
         };
+
+        # One toolchain for nix, CI and a bare cargo on a rustup machine.
+        toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+
+        package = import ./nix/package.nix { inherit pkgs craneLib; };
       in
       {
-        defaultPackage = pkgs.nixon;
-        devShell = import ./shell.nix {
-          inherit pkgs;
-          inherit (pkgs) haskellPackages;
+        packages = {
+          default = package.nixon;
+          inherit (package) nixon;
         };
+
+        checks = import ./nix/checks.nix {
+          inherit pkgs craneLib;
+          inherit (package) nixon commonArgs cargoArtifacts;
+        };
+
+        devShells.default = import ./nix/shell.nix { inherit pkgs craneLib toolchain; };
+
+        formatter = pkgs.nixfmt;
       }
-    ));
+    )
+    // {
+      overlays.default = final: _prev: {
+        nixon = self.packages.${final.system}.nixon;
+      };
+    };
 }

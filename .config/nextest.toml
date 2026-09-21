@@ -1,0 +1,25 @@
+[profile.default]
+retries = 0
+
+[profile.ci]
+retries = { backoff = "fixed", count = 2, delay = "1s" }
+fail-fast = false
+
+# PTY tests drive a real terminal and are the slowest and least deterministic;
+# `--profile no-pty` skips them on constrained runners. They run in CI.
+#
+# A PTY test that hangs is not slow, it is stuck: it is waiting on a child
+# that will never exit. Without a terminate-after it takes the whole job with
+# it — six hours once, against seven minutes for a good run.
+[[profile.default.overrides]]
+filter = "binary(pty)"
+retries = 2
+slow-timeout = { period = "60s", terminate-after = 3 }
+
+[[profile.ci.overrides]]
+filter = "binary(pty)"
+retries = 3
+slow-timeout = { period = "60s", terminate-after = 3 }
+
+[profile.no-pty]
+default-filter = "not binary(pty)"

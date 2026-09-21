@@ -1,25 +1,138 @@
+# nixon readline widgets.
+#
+# Alt-h  run something nixon ran before
+# Alt-H  insert it at the prompt instead
+# Alt-i  insert a selection from a command's output
+# Alt-I  insert a command's source
+# Alt-p  cd into a project
+# Alt-P  insert a project path
+#
+# Source this from ~/.bashrc.
+
+# `IFS=` keeps each value's bytes: `read` would otherwise trim the spaces
+# at either end before quoting. An empty line is a separator, never a value.
 nixon-insert-selection() {
-  local selected="$(nixon -b fzf -T run -s | while read -r item; do printf '%q ' "$item"; done)"
+  local selected
+  selected="$(nixon run -s | while IFS= read -r item; do
+    [[ -n $item ]] && printf '%q ' "$item"
+  done)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
-  READLINE_POINT=$(( READLINE_POINT + ${#selected} ))
+  READLINE_POINT=$((READLINE_POINT + ${#selected}))
 }
 
-bind -x '"\ei": "nixon-insert-selection"'
-
-nixon-insert-command ()
-{
-    local command="$(nixon -b fzf -T run -i)"
-    READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$command${READLINE_LINE:$READLINE_POINT}";
-    READLINE_POINT=$(( READLINE_POINT + ${#command} ))
+nixon-insert-history() {
+  local invocation
+  invocation="$(nixon history -s)"
+  READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$invocation${READLINE_LINE:$READLINE_POINT}"
+  READLINE_POINT=$((READLINE_POINT + ${#invocation}))
 }
 
+nixon-insert-command() {
+  local command
+  command="$(nixon run -i)"
+  READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$command${READLINE_LINE:$READLINE_POINT}"
+  READLINE_POINT=$((READLINE_POINT + ${#command}))
+}
+
+nixon-insert-project() {
+  local project
+  # Quoted like a selection, and read the same way: a project path may hold
+  # spaces, at either end as much as in the middle.
+  project="$(nixon project -s | while IFS= read -r item; do
+    [[ -n $item ]] && printf '%q ' "$item"
+  done)"
+  READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$project${READLINE_LINE:$READLINE_POINT}"
+  READLINE_POINT=$((READLINE_POINT + ${#project}))
+}
+
+# Prints the `cd` for the chosen project, or nothing if none was chosen.
+#
+# `bind -x` cannot do this: a function that changes directory leaves the
+# prompt showing the old one. The macro below types the command instead, so
+# readline runs it and redraws, which is how fzf's Alt-C works.
+__nixon_cd__() {
+  local dir
+  dir="$(nixon project -s | head -n 1)" &&
+    [[ -n $dir ]] &&
+    printf 'builtin cd -- %q' "$(builtin unset CDPATH && builtin cd -- "$dir" && builtin pwd)"
+}
+
+# Prints the invocation to run, or nothing if none was chosen. The same
+# macro types it, for the same reason: `bind -x` cannot submit a line.
+__nixon_history_run__() {
+  nixon history -s | head -n 1
+}
+
+# Puts what nixon ran into this shell's history, so Ctrl-R finds it.
+#
+# Cheap when nothing has happened: one `wc -c` against a remembered byte
+# count, and no work at all until the log exists.
+NIXON_HISTORY_FILE="${NIXON_HISTORY_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/nixon/history}"
+
+__nixon_history_size__() {
+  local size=0
+  [[ -f $NIXON_HISTORY_FILE ]] && size=$(wc -c <"$NIXON_HISTORY_FILE")
+  printf '%s' "${size// /}"
+}
+
+# Whatever is already logged counts as read, so sourcing this does not
+# replay everything that ever ran. Taken now rather than at the first
+# prompt, or the first command of the session would be swallowed with it.
+__nixon_history_seen=$(__nixon_history_size__)
+
+__nixon_history__() {
+  local size
+  size=$(__nixon_history_size__)
+  [[ $size == "$__nixon_history_seen" ]] && return 0
+
+  # The log escapes `\`, tab and newline so one run is one line; awk puts
+  # them back and separates the results with NUL, since an unescaped
+  # invocation may itself span lines.
+  local line
+  while IFS= read -r -d "" line; do
+    builtin history -s "$line"
+  done < <(tail -c "+$((__nixon_history_seen + 1))" "$NIXON_HISTORY_FILE" | awk -F'\t' '{ line = $3; out = ""; for (i = 1; i <= length(line); i++) { c = substr(line, i, 1); if (c == "\\") { i++; n = substr(line, i, 1); if (n == "t") out = out "\t"; else if (n == "n") out = out "\n"; else out = out n } else out = out c } if (out != "") printf "%s%c", out, 0 }')
+  __nixon_history_seen=$size
+}
+
+case "${PROMPT_COMMAND-}" in
+  *__nixon_history__*) ;;
+  "") PROMPT_COMMAND="__nixon_history__" ;;
+  *) PROMPT_COMMAND="${PROMPT_COMMAND%;};__nixon_history__" ;;
+esac
+
+bind -x '"\eH": nixon-insert-history'
+bind -x '"\ei": nixon-insert-selection'
 bind -x '"\eI": nixon-insert-command'
+bind -x '"\eP": nixon-insert-project'
 
-nixon-insert-project () 
-{
-    local project="$(nixon -b fzf -T project -s)"
-    READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$project${READLINE_LINE:$READLINE_POINT}";
-    READLINE_POINT=$(( READLINE_POINT + ${#project} ))
-}
+# fzf's Alt-C macro, less one sequence. `\C-k`/`\C-u` save whatever was
+# already typed and the tail after `\C-m` puts it back.
+#
+# The `cd` does land in history here, as it does with fzf. The macro's
+# leading space cannot prevent that: it is killed by the `\C-b\C-k` that
+# saves the old line, and a space printed by __nixon_cd__ instead does not
+# survive either, because `\e\C-e` expands the line as words and drops
+# leading whitespace. zsh and fish do keep it out; see the docs.
+#
+# fzf has `\C-\e(` between the expansion and `\C-m`. In bash 5.3 that is an
+# unbound sequence, and readline abandons the rest of a macro when it hits
+# one: the `cd` is typed out and never run. Dropping it is what makes this
+# work, and the line is otherwise fzf's.
+#
+# shellcheck disable=SC2016  # the macro is literal readline input, not shell
+bind -m emacs-standard '"\ep": " \C-b\C-k \C-u`__nixon_cd__`\e\C-e\C-m\C-y\C-h\e \C-y\ey\C-x\C-x\C-d\C-y\ey\C-_"'
 
-bind -x '"\ep": nixon-insert-project'
+# `Alt-h` runs what it picked, so it is the same macro. Readline binds
+# `\eH` to do-lowercase-version by default, which is why `Alt-H` has to be
+# bound outright above: unbound, it is just another `Alt-h`.
+#
+# shellcheck disable=SC2016  # the macro is literal readline input, not shell
+bind -m emacs-standard '"\eh": " \C-b\C-k \C-u`__nixon_history_run__`\e\C-e\C-m\C-y\C-h\e \C-y\ey\C-x\C-x\C-d\C-y\ey\C-_"'
+bind -m vi-command '"\C-z": emacs-editing-mode'
+bind -m vi-insert '"\C-z": emacs-editing-mode'
+bind -m emacs-standard '"\C-z": vi-editing-mode'
+bind -m vi-command '"\ep": "\C-z\ep\C-z"'
+bind -m vi-insert '"\ep": "\C-z\ep\C-z"'
+bind -m vi-command '"\eh": "\C-z\eh\C-z"'
+bind -m vi-insert '"\eh": "\C-z\eh\C-z"'

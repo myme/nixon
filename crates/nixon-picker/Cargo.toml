@@ -1,0 +1,32 @@
+[package]
+name = "nixon-picker"
+description = "Generic fuzzy picker UI, with no knowledge of nixon's domain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+ansi-to-tui.workspace = true
+crossterm.workspace = true
+nucleo.workspace = true
+nucleo-matcher.workspace = true
+ratatui.workspace = true
+signal-hook.workspace = true
+strip-ansi-escapes.workspace = true
+
+[features]
+test-util = []
+
+[dev-dependencies]
+insta.workspace = true
+rstest.workspace = true
+
+[[bench]]
+name = "profile"
+harness = false
+
+[lints]
+workspace = true

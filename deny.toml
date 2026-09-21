@@ -1,0 +1,43 @@
+[graph]
+all-features = true
+
+[advisories]
+ignore = []
+
+# Permissive only: MIT, Apache-2.0, BSD-*, MPL-2.0 (nucleo), Unicode-3.0.
+[licenses]
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "ISC",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+# Transitive dependencies of comrak. Both licences are permissive; they are
+# listed per-crate rather than added to the allow-list above so the policy
+# keeps meaning what it says.
+[[licenses.exceptions]]
+name = "fmt2io"
+allow = ["MITNFA"]
+
+[[licenses.exceptions]]
+name = "finl_unicode"
+allow = ["Unicode-DFS-2016"]
+
+# ratatui-core -> kasuari -> hashbrown. Zlib is permissive.
+[[licenses.exceptions]]
+name = "foldhash"
+allow = ["Zlib"]

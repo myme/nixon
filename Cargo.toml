@@ -1,0 +1,75 @@
+[workspace]
+members = ["crates/nixon", "crates/nixon-cli", "crates/nixon-picker"]
+resolver = "3"
+
+# crane reads the package name from here; without it every build warns
+# about a placeholder name.
+[workspace.metadata.crane]
+name = "nixon"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+repository = "https://github.com/myme/nixon"
+authors = ["Martin Øinæs Myrseth"]
+
+[workspace.dependencies]
+nixon = { path = "crates/nixon", version = "0.2.0" }
+nixon-picker = { path = "crates/nixon-picker", version = "0.2.0" }
+
+serde = { version = "1", features = ["derive"] }
+serde-saphyr = "1"
+serde_json = "1"
+thiserror = "2"
+winnow = "1"
+
+clap = { version = "4", features = ["derive"] }
+clap_complete = { version = "4", features = ["unstable-dynamic"] }
+clap_mangen = "0.2"
+comrak = { version = "0.55", default-features = false }
+ansi-to-tui = "8"
+crossterm = "0.29"
+etcetera = "0.11"
+glob = "0.3"
+sha1 = "0.10"
+shell-words = "1"
+strip-ansi-escapes = "0.2"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+signal-hook = "0.3"
+nix = { version = "0.30", features = ["signal"] }
+nucleo = "0.5"
+nucleo-matcher = "0.3"
+ratatui = "0.30"
+shellexpand = "3"
+assert_cmd = "2"
+expectrl = "0.9"
+assert_fs = "1"
+predicates = "3"
+tempfile = "3"
+insta = "1"
+proptest = "1"
+rstest = { version = "0.27", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+dbg_macro = "deny"
+todo = "deny"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"

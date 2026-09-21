@@ -2,112 +2,49 @@
 
 Project environment and command launcher.
 
-## Configuration
+`nixon` reads `nixon.md` files, finds the commands in them, lets you pick one
+with a built-in fuzzy picker, and runs it — optionally inside `direnv` or
+`nix-shell`. It has no external dependencies: the picker is built in, so there
+is no `fzf` or `rofi` to install.
 
-`nixon` bases its configuration around `nixon.md` files. The configuration files
-are generic markdown files, with some syntactic markers to indicate which part
-of the file is supposed to be treated as either commands or configuration by
-`nixon`.
+## Install
 
-General configuration may be done by placing a `nixon.md` in
-`$XDG_CONFIG_DIRS/nixon`. Project specific configuration may be done by placing
-a `nixon.md` (or `.nixon.md`) in the root of the project.
+With flakes:
 
-Following is an example configuration. There is also an inspirational
-configuration under [./extra/config.md](./extra/config.md).
+``` shell
+nix run github:myme/nixon
+nix profile install github:myme/nixon
+```
 
-Example configuration:
+Or build from a checkout:
+
+``` shell
+nix build
+./result/bin/nixon --help
+```
+
+## Quick start
+
+Write a `nixon.md` in a project:
 
 ~~~~~~markdown
-
-# Nixon
+# My project
 
 ## Config
 
-The following source code block defines a `nixon` configuration using `YAML`:
-
 ``` yaml config
-exact_match: true
-ignore_case: true
 use_direnv: true
-use_nix: true
 project_dirs:
   - ~/src
-project_types:
-  - name: cabal
-    test: ["cabal.project"]
-    desc: Cabal new-style project,
-  - name: npm
-    test: ["package.json"]
-    desc: NPM project,
-  - name: nix
-    test: ["default.nix", "shell.nix"]
-    desc: Nix project,
-  - name: git
-    test: [".git"]
-    desc: Git repository,
-  - name: project
-    desc: Generic project
 ```
 
-`JSON` is also supported:
+### `hello`
 
-``` json config
-{
-  "exact_match": true,
-  "ignore_case": true,
-  "use_direnv":true,
-  "use_nix":true,
-  "project_dirs": [
-    "~/src"
-  ],
-  "project_types": [
-    { "name": "cabal", "test": ["cabal.project"], "desc": "Cabal new-style project"},
-    { "name": "npm", "test": ["package.json"], "desc": "NPM project"},
-    { "name": "nix", "test": ["default.nix", "shell.nix"], "desc": "Nix project"},
-    { "name": "git", "test": [".git"], "desc": "Git repository"},
-    { "name": "project", "desc": "Generic project"}
-  ]
-}
-```
-
-Please note that only one configuration source code block is allowed per file,
-to avoid misconfiguration.
-
-## Commands
-
-Commands are defined as markdown sections with titles in inline code tags.
-
-### `hello-sh`
-
-This is a basic shell command with a description.
-
-```
-echo "Hello, World!"
-```
-
-### `hello-python`
-
-This is a Python command (note the `python` language annotation):
-
-```python
-print("Hello, World!")
-```
-
-### `terminal &`
-
-Spawn a terminal as a background task.
+Says hello.
 
 ```bash
-x-terminal-emulator
+echo "Hello, World!"
 ```
-
-## Git stuff {type="git"}
-
-Markdown headers can indicate what kind of projects commands are associated
-with. Commands under this "Git stuff" heading are only available within projects
-detected as `git` projects. That is determined by the `name: git` test in the
-`project_types`, testing for a `.git` directory (or file) in the project root.
 
 ### `git-files`
 
@@ -117,138 +54,78 @@ git ls-files
 
 ### `vim-file`
 
-This `vim-file` command references the `git-files` command as an argument
-placeholder. In this case `nixon` will first execute the `git-files` command to
-list all the tracked files within the project. It will then present the user
-with an interactive, fuzzy-finding prompt. Once the user makes their selection
-the selected file will be passed as `$1` (first argument) to the `vim-file`
-command.
+Picks a tracked file and opens it.
 
 ```bash ${git-files}
 vim "$1"
 ```
-
-### `vim-files`
-
-It's possible to specify a multi-selection modifier to let the user select
-multiple files to pass to `vim`. In the `fzf` interface marking files for
-selection is done using `<tab>`.
-
-```bash ${git-files | multi}
-vim -p "$@"
-```
-
-### `vim-files-m`
-
-There's a shorthand `:m` if typing ` | multi` is too long.
-
-```bash ${git-files:m}
-vim -p "$@"
-```
-
-### `vim-stdin`
-
-The `stdin` placeholder may be used to select candidates that will be passed to
-the command's `stdin`. Here we're using the `xargs` command to relay that as
-positional arguments to `vim`.
-
-```bash <{git-files | multi}
-xargs vim -p
-```
-
-### `vim-env`
-
-The `environment variable` placeholder places the selection of a placeholder
-into an environmental variable. The `environment variable` is named after the
-placeholder action with `-` *(dashes)* replaced by `_` *(underscore)*,
-`git_files` in this case.
-
-```bash ={git-files | multi}
-vim -p $git_files
-```
-
-### `vim-env-alias`
-
-It is possible to give the environment variable an explicit name by placing and
-alias before the `=`, in this case `FILES`.
-
-```bash FILES={git-files | multi}
-vim -p $FILES
-```
-
 ~~~~~~
 
-## Usage
-
-Run a command from the current directory:
+Then pick a command and run it:
 
 ``` shell
 nixon
 ```
 
-Query for a project and command:
+Run one by name — a name matching exactly one command skips the picker:
+
+``` shell
+nixon hello
+```
+
+Pick a project first, then a command in it:
 
 ``` shell
 nixon project
 ```
 
-Help text:
+## Documentation
 
-```
-❯ nixon --help
-Command & environment launcher
+- [Configuration](docs/configuration.md) — where config files live, how they
+  merge, and every setting.
+- [Commands](docs/commands.md) — how a markdown heading becomes a runnable
+  command.
+- [Placeholders](docs/placeholders.md) — commands that feed other commands.
+- [Command line](docs/cli.md) — every subcommand and flag.
+- [The picker](docs/picker.md) — keys, matching and auto-selection.
+- [Shell integration](docs/shell-integration.md) — widgets, completion and
+  scripting.
 
-Usage: nixon [-C|--config CONFIG] [-b|--backend BACKEND]
-             [(-e|--exact) | --no-exact] [(-i|--ignore-case) | --no-ignore-case]
-             [(-T|--force-tty) | --no-force-tty] [-p|--path PATH]
-             [(-d|--direnv) | --no-direnv] [(-n|--nix) | --no-nix]
-             [-t|--terminal TERMINAL] [-L|--loglevel LOGLEVEL]
-             [edit | eval | gc | new | project | run | [command] [args...]
-               [-i|--insert] [-l|--list] [-s|--select]]
+There is also an inspirational configuration under
+[extra/config.md](./extra/config.md).
 
-Available options:
-  -h,--help                Show this help text
-  -C,--config CONFIG       Path to configuration file (default:
-                           /home/myme/.config/nixon.md)
-  -b,--backend BACKEND     Backend to use: fzf, rofi
-  -e,--exact               Enable exact match
-  -i,--ignore-case         Case-insensitive match
-  -T,--force-tty           Never fork or spawn off separate processes
-  -p,--path PATH           Project directory
-  -d,--direnv              Evaluate .envrc files using `direnv exec`
-  -n,--nix                 Invoke nix-shell if *.nix files are found
-  -t,--terminal TERMINAL   Terminal emultor for non-GUI commands
-  -L,--loglevel LOGLEVEL   Loglevel: debug, info, warning, error
-  command                  Command to run
-  args...                  Arguments to command
-  -i,--insert              Select a command and output its source
-  -l,--list                List commands
-  -s,--select              Output command selection on stdout
+Installed as man pages: `nixon(1)`, `nixon.md(5)`, `nixon-picker(7)` and
+`nixon-shell(7)`.
 
-Available commands:
-  edit                     Edit a command in $EDITOR
-  eval                     Evaluate expression
-  gc                       Garbage collect cached items
-  new                      Create a new command
-  project                  Project actions
-  run                      Run command
-```
+## Changes from v1
 
-### FZF selection bindings
+v2 is a rewrite in Rust. Configuration files carry over unchanged; the
+command line has a few deliberate differences.
 
-There are some additional bindings available when selection commands through the
-`fzf` interface:
-
- <dl>
-  <dt>Return</dt>
-  <dd>Primary selection</dd>
-  <dt>Alt-Return</dt>
-  <dd>Edit selection before execution</dd>
-  <dt>F1</dt>
-  <dd>Print out the source of the selected command</dd>
-  <dt>F2</dt>
-  <dd>Jump to the selected command in `$EDITOR`</dd>
-</dl>
+- **The picker is built in.** `fzf` and `rofi` are no longer needed or used,
+  and the `rofi` GUI mode is gone with them.
+- **Removed flags.** `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went
+  with the backend concept. Passing one is now an ordinary argument error.
+  Commands run in the terminal you started them from; a command marked `&`
+  still detaches.
+- **Exit codes are propagated.** v1 always exited 0; v2 exits with the
+  command's status. Cancelling a selection exits 130.
+- **The shell widgets are not compatible with v1's** — they used `-b fzf -T`,
+  which no longer parse. Use the ones shipped with v2.
+- **A missing config file is no longer fatal.** v1 exited 1 when
+  `$XDG_CONFIG_HOME/nixon.md` did not exist; v2 treats it as empty.
+  Malformed configuration is still an error.
+- **A project found from a subdirectory** now resolves to the project root.
+  v1 reported its parent directory with an empty name.
+- **`type="…"` on a section heading** applies to the commands beneath it. v1
+  documented this but only honoured it on command headings.
+- **Git worktrees are discovered**, including those of bare repositories and
+  those living outside `project_dirs`. Set `git_worktrees: false` in the
+  config block to turn it off.
+- **Any `-x`/`--x` token in a command heading is now an option** the user can
+  toggle at the prompt. A v1 heading that carried a command line for
+  decoration — `` ### `show git log --oneline -n 20` `` — declares those
+  flags as options; move the command line into the code block.
 
 ## Some history, inspirations & similar projects
 
@@ -275,10 +152,11 @@ Org Model-inspired style, small commands in a file I could dump into my various
 projects. As the name indicates, it would also be `nix`-aware and run commands
 in a `nix-shell`, if configured to do so. It also gained support for `direnv`.
 
-Although this project is written in `Haskell` and one of the most popular
-`Haskell` libraries, [Pandoc](https://pandoc.org/), is a document parser that
-understand Org Mode syntax quite well, I eventually felt like `Markdown` was
-more appropriate simply due to its popularity.
+The first version of `nixon` was written in `Haskell`, where one of the most
+popular libraries, [Pandoc](https://pandoc.org/), is a document parser that
+understands Org Mode syntax quite well. I eventually felt like `Markdown` was
+more appropriate simply due to its popularity. v2 is a Rust rewrite, and parses
+Markdown with [comrak](https://github.com/kivikakk/comrak).
 
 After starting `nixon` I've become aware of various projects that has made
 similar approaches to markdown-based code evaluation. Here's a short-list of

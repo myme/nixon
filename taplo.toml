@@ -1,0 +1,6 @@
+exclude = [".direnv/**", "target/**"]
+
+[formatting]
+align_entries = false
+indent_string = "  "
+reorder_keys = false

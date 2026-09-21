@@ -1,0 +1,9 @@
+[files]
+extend-exclude = ["Cargo.lock", "flake.lock"]
+
+[default]
+# v1's help-text typo, quoted deliberately.
+extend-ignore-re = ["Terminal emultor"]
+
+[default.extend-words]
+ratatui = "ratatui"

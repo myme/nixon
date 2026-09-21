@@ -1,5 +1,4 @@
-.ghc.environment.*
-dist
-dist-newstyle
-result
-nixon.cabal
+/target
+/result
+/result-*
+.direnv/

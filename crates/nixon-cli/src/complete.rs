@@ -1,0 +1,190 @@
+//! Shell completion.
+//!
+//! `clap_complete`'s `CompleteEnv` re-invokes the binary at Tab time, which
+//! is what v1's optparse-applicative completer did.
+
+use std::ffi::OsStr;
+use std::path::PathBuf;
+
+use clap::CommandFactory as _;
+use clap_complete::CompletionCandidate;
+use nixon::app::{App, Environment};
+use nixon::config::{Config, load};
+use nixon::discover::find_project_commands;
+use nixon::fs::Dirs;
+use nixon::process::RealRunner;
+use nixon_picker::FilterPicker;
+
+use crate::cli::{Cli, Commands};
+
+/// Answers a completion request and exits, if this is one.
+///
+/// Must run before anything writes to stdout.
+pub fn maybe_complete() {
+    clap_complete::CompleteEnv::with_factory(Cli::command).complete();
+}
+
+/// Command names in the project the completion was requested from.
+///
+/// Completion runs in a fresh process with no state, so this rebuilds just
+/// enough config to answer, and answers nothing rather than failing.
+pub fn command_names(current: &OsStr) -> Vec<CompletionCandidate> {
+    let Some(mut app) = completion_app() else {
+        return Vec::new();
+    };
+    let project = completion_project(&mut app);
+    let Ok(config) = app.config_for(&project) else {
+        return Vec::new();
+    };
+
+    candidates(
+        find_project_commands(&config, &project)
+            .into_iter()
+            .map(|command| command.name),
+        current,
+    )
+}
+
+/// `run`'s single positional: the command name, then its own arguments.
+pub fn run_args(current: &OsStr) -> Vec<CompletionCandidate> {
+    if named_command().is_none() {
+        return command_names(current);
+    }
+    option_tokens(current)
+}
+
+/// `project`'s second positional: the command name, then its arguments.
+pub fn project_command_args(current: &OsStr) -> Vec<CompletionCandidate> {
+    run_args(current)
+}
+
+/// The option tokens of the command already named on the line.
+///
+/// `--no-<name>` is offered alongside each token, since that is how an
+/// option is turned off.
+pub fn option_tokens(current: &OsStr) -> Vec<CompletionCandidate> {
+    let Some(name) = named_command() else {
+        return Vec::new();
+    };
+    let Some(mut app) = completion_app() else {
+        return Vec::new();
+    };
+    let project = completion_project(&mut app);
+    let Ok(config) = app.config_for(&project) else {
+        return Vec::new();
+    };
+
+    let Some(command) = find_project_commands(&config, &project)
+        .into_iter()
+        .find(|command| command.name == name)
+    else {
+        return Vec::new();
+    };
+
+    candidates(
+        command
+            .options
+            .iter()
+            .flat_map(|option| [option.token.clone(), format!("--no-{}", option.name)]),
+        current,
+    )
+}
+
+/// The project whose commands the line is asking about.
+///
+/// `nixon project other <TAB>` means the commands of `other`, not of
+/// wherever the cursor happens to be. Anything that does not resolve falls
+/// back to the current project rather than offering nothing.
+fn completion_project(app: &mut App<FilterPicker, RealRunner>) -> nixon::project::Project {
+    let named = match partial_cli().and_then(|cli| cli.command) {
+        Some(Commands::Project(args)) => args.project,
+        _ => None,
+    };
+    let Some(name) = named else {
+        return app.current_project();
+    };
+    app.project_for_query(Some(&name))
+        .unwrap_or_else(|_| app.current_project())
+}
+
+/// The command `run` or `project` was given on the line being completed.
+fn named_command() -> Option<String> {
+    match partial_cli()?.command? {
+        Commands::Run(args) => args.args.into_iter().next(),
+        Commands::Project(args) => args.args.into_iter().next(),
+        Commands::External(args) => args.into_iter().next(),
+        _ => None,
+    }
+}
+
+/// Names of the projects discovery finds.
+pub fn project_names(current: &OsStr) -> Vec<CompletionCandidate> {
+    let Some(app) = completion_app() else {
+        return Vec::new();
+    };
+    candidates(
+        app.projects()
+            .into_iter()
+            .map(|project| project.name.to_string_lossy().into_owned()),
+        current,
+    )
+}
+
+/// Keeps the names that start with what has been typed.
+fn candidates(names: impl Iterator<Item = String>, current: &OsStr) -> Vec<CompletionCandidate> {
+    let prefix = current.to_string_lossy();
+    names
+        .filter(|name| name.starts_with(prefix.as_ref()))
+        .map(CompletionCandidate::new)
+        .collect()
+}
+
+/// A minimal app for answering a completion, or nothing if it cannot be built.
+///
+/// `-C` and `-p` on the completion line are honoured by re-parsing what the
+/// shell passed, so `nixon -C other.md run <TAB>` completes against that
+/// file.
+fn completion_app() -> Option<App<FilterPicker, RealRunner>> {
+    let dirs = Dirs::from_env().ok()?;
+    let cli = partial_cli();
+
+    let config_path = cli
+        .as_ref()
+        .and_then(|cli| cli.global.config.clone())
+        .unwrap_or_else(|| dirs.global_config());
+    let file_config = load::load_global(&config_path).unwrap_or_default();
+
+    let cli_config = cli.map_or_else(Config::default, |cli| cli.global.to_config());
+    let config = Config::defaults().merge(file_config).merge(cli_config);
+
+    let env = Environment {
+        cwd: std::env::current_dir().ok()?,
+        ..Environment::default()
+    };
+    Some(App::new(config, dirs, env, FilterPicker, RealRunner))
+}
+
+/// Re-parses the words the shell is completing, for `-C` and `-p`.
+///
+/// The protocol puts the line being completed *after* `--`; what comes
+/// before is the completion request itself. The word under the cursor is
+/// dropped, since it is half-typed and not yet part of the command line.
+///
+/// The line is normally incomplete even so, and a parse failure just means
+/// falling back to the defaults.
+fn partial_cli() -> Option<Cli> {
+    let mut args = std::env::args_os().skip_while(|word| word != "--");
+    args.next()?;
+
+    let mut words: Vec<PathBuf> = args.map(PathBuf::from).collect();
+    match std::env::var("_CLAP_COMPLETE_INDEX")
+        .ok()
+        .and_then(|index| index.parse::<usize>().ok())
+    {
+        Some(index) if index <= words.len() => words.truncate(index),
+        _ => {
+            words.pop();
+        }
+    }
+    Cli::try_parse_from_words(&words)
+}
