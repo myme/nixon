@@ -112,6 +112,21 @@ too, read from git's own layout rather than by running `git`. This picks up
 worktrees of bare repositories, and worktrees that live outside `project_dirs`
 entirely.
 
+It also picks up the *container* layout, where a directory holds its bare
+repository in a dot-subdirectory and its worktrees beside it:
+
+```text
+~/code/gaia/.bare/     the repository
+~/code/gaia/bugs/      a worktree
+~/code/gaia/claims/    another
+```
+
+Such a container has no `.git` of its own, so marker-based discovery walks
+past it; the worktree scan recognises it by the repository layout rather than
+by the `.bare` name, and lists each worktree. A container that does carry a
+`.git` file pointing at its repository works the same way. Whether the
+container itself is listed is up to its own markers, as for any directory.
+
 ## Environments
 
 A command can be wrapped in a project environment. `direnv` is tried first, and
