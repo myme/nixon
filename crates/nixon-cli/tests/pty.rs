@@ -13,7 +13,6 @@
     clippy::literal_string_with_formatting_args
 )]
 
-use std::io::Read as _;
 use std::time::Duration;
 
 use assert_fs::TempDir;
@@ -86,6 +85,10 @@ impl Pty {
             .args(args);
 
         let mut session = Session::spawn(command).unwrap();
+        // A real terminal size, so the picker actually draws. A fresh pty is
+        // 0x0, where ratatui renders nothing and the tests measure far less
+        // than they look like they do.
+        session.get_process_mut().set_window_size(80, 24).unwrap();
         session.set_expect_timeout(Some(Duration::from_secs(20)));
         session
     }
@@ -114,15 +117,39 @@ impl Pty {
     }
 }
 
-/// Reads everything left on the PTY after the child exits.
+/// Reads the PTY until the child closes it, and returns its exit code.
+///
+/// The read is what makes the wait terminate. A pty buffer holds about a
+/// kilobyte on macOS against 64 KiB on Linux, so a child drawing a full
+/// screen fills it long before it exits; waiting for the child without
+/// reading leaves it blocked in `write` and the wait never returns. On
+/// Linux the whole session fits in the buffer and the bug is invisible.
+///
+/// Bounded by the session's expect timeout rather than by `read_to_end`, so
+/// a child that really does hang fails the test instead of the run.
+fn finish(session: &mut OsSession) -> (i32, String) {
+    let found = match session.expect(expectrl::Eof) {
+        Ok(found) => found,
+        Err(err) => panic!("the child never closed the pty: {err}"),
+    };
+    let output = String::from_utf8_lossy(found.as_bytes()).into_owned();
+
+    let status = session.get_process_mut().wait().unwrap();
+    let code = match status {
+        WaitStatus::Exited(_, code) => code,
+        WaitStatus::Signaled(_, signal, _) => 128 + signal as i32,
+        other => panic!("unexpected wait status: {other:?}"),
+    };
+    (code, output)
+}
+
+/// Everything the child wrote, once it has finished.
 ///
 /// Assertions go here rather than against the drawn screen: ratatui redraws
 /// with cursor-positioning escapes between characters, so on-screen text
 /// rarely appears as one contiguous byte string.
 fn drain(session: &mut OsSession) -> String {
-    let mut out = String::new();
-    let _ = session.read_to_string(&mut out);
-    out
+    finish(session).1
 }
 
 /// Gives the picker time to draw before the next key is sent.
@@ -188,10 +215,9 @@ fn cancelling_leaves_no_raw_mode_residue() {
 
     settle();
     session.send("\u{1b}").unwrap();
-    wait_code(&mut session);
+    let (_, output) = finish(&mut session);
 
     // Leaving the alternate screen is the last thing the guard does.
-    let output = drain(&mut session);
     assert!(
         output.contains("\u{1b}[?1049l") || output.is_empty(),
         "expected the alternate screen to be left, got: {output:?}"
@@ -283,12 +309,7 @@ echo \"picked: $@\"
 
 /// Waits for the child and returns its exit code, `128 + signal` if killed.
 fn wait_code(session: &mut OsSession) -> i32 {
-    let status = session.get_process_mut().wait().unwrap();
-    match status {
-        WaitStatus::Exited(_, code) => code,
-        WaitStatus::Signaled(_, signal, _) => 128 + signal as i32,
-        other => panic!("unexpected wait status: {other:?}"),
-    }
+    finish(session).0
 }
 
 #[test]
