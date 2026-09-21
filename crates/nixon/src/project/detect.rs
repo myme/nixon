@@ -20,13 +20,14 @@ pub fn find_project_types(path: &Path, ptypes: &[ProjectType]) -> Vec<ProjectTyp
 
 /// Whether one marker holds for a directory.
 ///
-/// A `.git` path marker is also satisfied by a bare repository, so the usual
-/// `test: [".git"]` classifies one as a git project without new config.
+/// A `.git` path marker is also satisfied by a repository that keeps its
+/// metadata elsewhere — a bare repository, or a container holding one in a
+/// dot-subdirectory — so the usual `test: [".git"]` classifies both as git
+/// projects without new config.
 pub fn test_marker(path: &Path, marker: &ProjectMarker) -> bool {
     match marker {
         ProjectMarker::Path(p) => {
-            path.join(p).exists()
-                || (p.as_os_str() == ".git" && super::worktree::is_bare_repo(path))
+            path.join(p).exists() || (p.as_os_str() == ".git" && super::worktree::is_git_dir(path))
         }
         ProjectMarker::File(p) => path.join(p).is_file(),
         ProjectMarker::Dir(p) => path.join(p).is_dir(),
@@ -365,5 +366,79 @@ mod tests {
             inspect(&projects),
             "Name: one\nPath: /a/one\nTypes: \n\nName: two\nPath: /a/two\nTypes: \n"
         );
+    }
+}
+
+#[cfg(test)]
+mod git_marker {
+    use assert_fs::TempDir;
+    use assert_fs::prelude::*;
+
+    use super::{ProjectMarker, test_marker};
+
+    fn git(path: &std::path::Path) -> bool {
+        test_marker(path, &ProjectMarker::Path(".git".into()))
+    }
+
+    fn bare_repo(at: &assert_fs::fixture::ChildPath) {
+        at.create_dir_all().unwrap();
+        at.child("HEAD")
+            .write_str("ref: refs/heads/main\n")
+            .unwrap();
+        at.child("objects").create_dir_all().unwrap();
+        at.child("refs").create_dir_all().unwrap();
+        at.child("config")
+            .write_str("[core]\n\tbare = true\n")
+            .unwrap();
+    }
+
+    #[test]
+    fn a_working_tree_matches() {
+        let temp = TempDir::new().unwrap();
+        temp.child(".git/HEAD").write_str("ref: x\n").unwrap();
+        assert!(git(temp.path()));
+    }
+
+    #[test]
+    fn a_bare_repository_matches() {
+        let temp = TempDir::new().unwrap();
+        let repo = temp.child("repo.git");
+        bare_repo(&repo);
+        assert!(git(repo.path()));
+    }
+
+    /// The container layout: no `.git` of its own, the repository beside the
+    /// worktrees. `test: [".git"]` should call it a git project too.
+    #[test]
+    fn a_container_holding_a_bare_repository_matches() {
+        let temp = TempDir::new().unwrap();
+        let gaia = temp.child("gaia");
+        gaia.create_dir_all().unwrap();
+        bare_repo(&gaia.child(".bare"));
+
+        assert!(!gaia.child(".git").path().exists());
+        assert!(git(gaia.path()));
+    }
+
+    #[test]
+    fn an_ordinary_directory_does_not() {
+        let temp = TempDir::new().unwrap();
+        let plain = temp.child("plain");
+        plain.create_dir_all().unwrap();
+        assert!(!git(plain.path()));
+    }
+
+    /// Only `.git` is widened; another marker is taken literally.
+    #[test]
+    fn another_marker_is_not_widened() {
+        let temp = TempDir::new().unwrap();
+        let gaia = temp.child("gaia");
+        gaia.create_dir_all().unwrap();
+        bare_repo(&gaia.child(".bare"));
+
+        assert!(!test_marker(
+            gaia.path(),
+            &ProjectMarker::Path("Cargo.toml".into())
+        ));
     }
 }

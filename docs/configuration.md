@@ -121,11 +121,14 @@ repository in a dot-subdirectory and its worktrees beside it:
 ~/code/gaia/claims/    another
 ```
 
-Such a container has no `.git` of its own, so marker-based discovery walks
-past it; the worktree scan recognises it by the repository layout rather than
-by the `.bare` name, and lists each worktree. A container that does carry a
-`.git` file pointing at its repository works the same way. Whether the
-container itself is listed is up to its own markers, as for any directory.
+The worktree scan recognises such a container by the repository layout rather
+than by the `.bare` name, and lists each worktree. A container that does carry
+a `.git` file pointing at its repository works the same way.
+
+A `test: [".git"]` marker matches a container too, and a bare repository, so
+the container is listed alongside its worktrees without any extra
+configuration. Only `.git` is read that widely; every other marker is a path
+that has to exist.
 
 ## Environments
 
