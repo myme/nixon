@@ -6,8 +6,9 @@ let
   # different tree than `cargo test` does: .snap files, or insta finds no
   # stored snapshot and every snapshot test is "new"; docs/, which pandoc
   # renders into man pages and a test reads to prove the documented --help has
-  # not drifted.
-  keep = path: builtins.match ".*(\\.snap|/docs/.*\\.md)$" path != null;
+  # not drifted; and extra/, which a test sources into a real bash to drive
+  # the shell widget.
+  keep = path: builtins.match ".*(\\.snap|/docs/.*\\.md|/extra/nixon-widget\\..*)$" path != null;
 
   src = pkgs.lib.cleanSourceWith {
     src = ./..;
@@ -24,6 +25,11 @@ let
       pkgs.util-linux
       # The worktree fixtures are checked against real git once.
       pkgs.git
+      # A bash with readline, and the terminfo it needs. stdenv's bash is
+      # built without readline, so the widget test's key binding arrives as
+      # literal text rather than triggering anything.
+      pkgs.bashInteractive
+      pkgs.ncurses
     ];
   };
 

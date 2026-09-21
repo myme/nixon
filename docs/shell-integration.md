@@ -12,7 +12,11 @@ you are already typing rather than in a subshell.
 |---|---|
 | `Alt-i` | Run a command and insert what you pick from its output |
 | `Alt-I` | Insert a command's source at the cursor |
-| `Alt-p` | Insert a project's path |
+| `Alt-p` | Pick a project and change directory into it |
+| `Alt-P` | Insert a project's path at the cursor |
+
+`Alt-p` is fzf's `Alt-C` for projects: nothing is typed, the prompt is redrawn
+in the new directory, and cancelling leaves everything as it was.
 
 Source the one for your shell:
 
@@ -27,8 +31,26 @@ source /path/to/share/nixon/nixon-widget.zsh
 source /path/to/share/nixon/nixon-widget.fish
 ```
 
-Each is three lines of shell around `nixon run -s`, `nixon run -i` and
+Each is a few lines of shell around `nixon run -s`, `nixon run -i` and
 `nixon project -s`, so they are worth reading and rebinding to taste.
+
+### `Alt-p` and shell history
+
+Changing directory has to go through the shell itself, and each one allows a
+different amount of discretion about it:
+
+- **fish** runs `cd` inside the function. Nothing is typed and nothing is
+  recorded.
+- **zsh** types ` builtin cd -- <path>` with a leading space, so
+  `setopt HIST_IGNORE_SPACE` keeps it out of history. Without that option it
+  is recorded, as it is with fzf.
+- **bash** records it. The `cd` is produced by readline's `shell-expand-line`,
+  which expands the line as words and drops leading whitespace, so
+  `HISTCONTROL=ignorespace` has nothing to act on. fzf's `Alt-C` behaves the
+  same way. Add `HISTIGNORE='builtin cd -- *'` to suppress it.
+
+A recorded `cd` is not purely a nuisance — it is the jump, repeatable from
+anywhere, which is why fzf keeps it.
 
 The v1 widgets do not work with v2: they passed `-b fzf -T`, which no longer
 parse.

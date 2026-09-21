@@ -128,6 +128,15 @@ impl Pty {
             .env("SHELL", "/bin/bash")
             .env("EDITOR", self.fake_editor())
             .current_dir(self.temp.child("project").path());
+
+        // The environment is cleared, but bash needs terminfo to turn line
+        // editing on at all: without it the widget's key binding arrives as
+        // literal text.
+        for name in ["TERMINFO", "TERMINFO_DIRS"] {
+            if let Ok(value) = std::env::var(name) {
+                command.env(name, value);
+            }
+        }
     }
 
     /// An `$EDITOR` that records its arguments instead of opening anything.
@@ -792,4 +801,79 @@ fn insert_and_project_select_keep_stdout_clean() {
         "an escape sequence reached stdout: {stdout:?}"
     );
     assert_eq!(stdout, "echo ran-alpha\n");
+}
+
+/// The bash `Alt-p` widget changes directory and leaves no history entry.
+///
+/// Driven through a real interactive bash so the readline macro is what is
+/// tested, not a reimplementation of it.
+#[test]
+#[cfg(unix)]
+fn the_bash_widget_cds_into_a_project_without_a_history_entry() {
+    let pty = Pty::new();
+    let projects = pty.temp.child("code");
+    for name in ["alpha-project", "beta-project"] {
+        projects.child(name).child(".git").create_dir_all().unwrap();
+    }
+    pty.temp
+        .child("config/nixon.md")
+        .write_str(&format!(
+            "```json config\n{{\"project_dirs\": [\"{}\"], \"project_types\": [{{\"name\": \"git\", \"test\": [\".git\"], \"desc\": \"Git\"}}]}}\n```\n",
+            projects.path().display()
+        ))
+        .unwrap();
+
+    // nixon has to be on PATH for the widget to find it.
+    let bin_dir = pty.temp.child("bin");
+    bin_dir.create_dir_all().unwrap();
+    std::os::unix::fs::symlink(Pty::binary(), bin_dir.child("nixon").path()).unwrap();
+
+    let rc = pty.temp.child("bashrc");
+    rc.write_str(&format!(
+        "PATH={}:$PATH\nHISTCONTROL=ignoreboth\nHISTFILE=\nPS1='ready> '\nsource {}\n",
+        bin_dir.path().display(),
+        std::fs::canonicalize("../../extra/nixon-widget.bash")
+            .unwrap()
+            .display()
+    ))
+    .unwrap();
+
+    let mut command = std::process::Command::new("bash");
+    command.args([
+        "--noprofile",
+        "--rcfile",
+        &rc.path().to_string_lossy(),
+        "-i",
+    ]);
+    pty.apply(&mut command);
+
+    let mut session = Session::spawn(command).unwrap();
+    session.get_process_mut().set_window_size(80, 24).unwrap();
+    session.set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("ready> ").unwrap();
+    // Alt-p, then narrow to the one project and take it.
+    session.send("\u{1b}p").unwrap();
+    settle();
+    session.send("alpha").unwrap();
+    settle();
+    session.send("\r").unwrap();
+    settle();
+
+    session.send("echo PWD=$PWD\r").unwrap();
+    let want = format!("PWD={}", projects.child("alpha-project").path().display());
+    if session.expect(want.as_str()).is_err() {
+        session.send("exit\r").unwrap();
+        let (_, seen) = finish(&mut session);
+        panic!("the widget did not change directory.\nwanted {want}\nsaw {seen:?}");
+    }
+
+    // The prior line comes back untouched: the macro saves and restores it.
+    session.send("echo BACK=[$READLINE_LINE]\r").unwrap();
+    session
+        .expect("BACK=[]")
+        .expect("the widget left something on the command line");
+
+    session.send("exit\r").unwrap();
+    let _ = finish(&mut session);
 }

@@ -145,6 +145,13 @@ Fixture rules, each learned from a failure:
   is ignored.
 - A missing or empty global config is not an error. A parse error is.
 
+- The shell widgets are fzf's mechanics, not reimplementations: `Alt-p` is
+  its `Alt-C` macro, because a `bind -x` function that changes directory
+  leaves the prompt showing the old one. fzf's macro has one sequence,
+  `\C-\e(`, that bash 5.3 does not bind — readline abandons the rest of a
+  macro at an unbound sequence, so the `cd` is typed and never run. It is
+  dropped here.
+
 ## Prose
 
 - Comments only where the code cannot say it itself. No commentary that

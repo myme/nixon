@@ -114,6 +114,12 @@ in
         touch $out
       '';
 
+  # Only the bash widget: shellcheck has no zsh or fish support, and
+  # checking those as bash reports their own syntax as errors.
+  shellcheck = runCheck "shellcheck" [
+    pkgs.shellcheck
+  ] "shellcheck --shell=bash extra/*.bash";
+
   typos = runCheck "typos" [ pkgs.typos ] "typos";
   statix = runCheck "statix" [ pkgs.statix ] "statix check .";
   deadnix = runCheck "deadnix" [ pkgs.deadnix ] "deadnix --fail .";
