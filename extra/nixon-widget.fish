@@ -79,8 +79,12 @@ function __nixon_history__ --on-event fish_prompt
     set -l size (__nixon_history_size__)
     test "$size" = "$__nixon_history_seen"; and return 0
 
-    for entry in (tail -c +(math $__nixon_history_seen + 1) $NIXON_HISTORY_FILE)
-        set -l line (string split -m 2 \t -- $entry)[3]
+    # The log escapes `\`, tab and newline so one run is one line; awk puts
+    # them back and separates the results with NUL, since an unescaped
+    # invocation may itself span lines.
+    set -l lines (tail -c +(math $__nixon_history_seen + 1) $NIXON_HISTORY_FILE \
+        | awk -F'\t' '{ line = $3; out = ""; for (i = 1; i <= length(line); i++) { c = substr(line, i, 1); if (c == "\\") { i++; n = substr(line, i, 1); if (n == "t") out = out "\t"; else if (n == "n") out = out "\n"; else out = out n } else out = out c } if (out != "") printf "%s%c", out, 0 }' | string split0)
+    for line in $lines
         test -n "$line"; and history append -- $line 2>/dev/null
     end
     set -g __nixon_history_seen $size

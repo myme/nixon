@@ -975,6 +975,84 @@ fn the_command_picker_keeps_discovery_order_under_a_query() {
     );
 }
 
+/// The hook unescapes what the log stores.
+///
+/// A multi-line eval is one physical record, escaped; put into the shell's
+/// history as it stands it would read as a literal `\n`.
+#[test]
+#[cfg(unix)]
+fn the_bash_hook_unescapes_a_multiline_entry() {
+    let pty = Pty::with_config("# `greet`\n\n```bash\necho hello\n```\n");
+
+    let bin_dir = pty.temp.child("bin");
+    bin_dir.create_dir_all().unwrap();
+    std::os::unix::fs::symlink(Pty::binary(), bin_dir.child("nixon").path()).unwrap();
+
+    let log = pty.temp.child("state/nixon/history");
+    let rc = pty.temp.child("bashrc");
+    rc.write_str(&format!(
+        "PATH={}:$PATH\nHISTFILE=\nNIXON_HISTORY_FILE={}\nPS1='ready> '\nsource {}\n",
+        bin_dir.path().display(),
+        log.path().display(),
+        std::fs::canonicalize("../../extra/nixon-widget.bash")
+            .unwrap()
+            .display()
+    ))
+    .unwrap();
+
+    let mut command = std::process::Command::new("bash");
+    command.args([
+        "--noprofile",
+        "--rcfile",
+        &rc.path().to_string_lossy(),
+        "-i",
+    ]);
+    pty.apply(&mut command);
+
+    let mut session = Session::spawn(command).unwrap();
+    session.get_process_mut().set_window_size(80, 24).unwrap();
+    session.set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("ready> ").unwrap();
+
+    // Appended from here rather than typed, so no backslash ever passes
+    // through the terminal and the assertion below can be about the log.
+    log.write_str("1700000000\t/tmp\tnixon eval -l bash 'echo AAA\\necho BBB'\n")
+        .unwrap();
+
+    // An empty line, to reach the next prompt and run the hook.
+    session.send("\r").unwrap();
+    session.expect("ready> ").unwrap();
+    session.send("history\r").unwrap();
+    if session.expect("echo AAA").is_err() {
+        session.send("exit\r").unwrap();
+        let (_, seen) = finish(&mut session);
+        panic!("the entry did not reach the shell's history: {seen:?}");
+    }
+    let rest = drain_briefly(&mut session);
+    assert!(
+        !rest.starts_with("\\n"),
+        "the escaped form reached shell history: {rest:?}"
+    );
+    assert!(
+        rest.contains("echo BBB"),
+        "the second line was lost: {rest:?}"
+    );
+
+    session.send("exit\r").unwrap();
+    let _ = finish(&mut session);
+}
+
+/// Whatever has been printed by now, without waiting for the session to end.
+#[cfg(unix)]
+fn drain_briefly(session: &mut OsSession) -> String {
+    settle();
+    let mut buf = vec![0u8; 8192];
+    let read = session.try_read(&mut buf).unwrap_or(0);
+    buf.truncate(read);
+    String::from_utf8_lossy(&buf).into_owned()
+}
+
 /// `^C` while the picker is still waiting must stop the producer too.
 ///
 /// Until `-1` is settled nothing is drawn and no terminal is taken, so the

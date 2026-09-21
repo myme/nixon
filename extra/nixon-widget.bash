@@ -85,10 +85,13 @@ __nixon_history__() {
   size=$(__nixon_history_size__)
   [[ $size == "$__nixon_history_seen" ]] && return 0
 
+  # The log escapes `\`, tab and newline so one run is one line; awk puts
+  # them back and separates the results with NUL, since an unescaped
+  # invocation may itself span lines.
   local line
-  while IFS=$'\t' read -r _ _ line; do
-    [[ -n $line ]] && builtin history -s "$line"
-  done < <(tail -c "+$((__nixon_history_seen + 1))" "$NIXON_HISTORY_FILE")
+  while IFS= read -r -d "" line; do
+    builtin history -s "$line"
+  done < <(tail -c "+$((__nixon_history_seen + 1))" "$NIXON_HISTORY_FILE" | awk -F'\t' '{ line = $3; out = ""; for (i = 1; i <= length(line); i++) { c = substr(line, i, 1); if (c == "\\") { i++; n = substr(line, i, 1); if (n == "t") out = out "\t"; else if (n == "n") out = out "\n"; else out = out n } else out = out c } if (out != "") printf "%s%c", out, 0 }')
   __nixon_history_seen=$size
 }
 

@@ -243,6 +243,24 @@ chosen value. Values rather than queries, so a replayed line
 and asks nothing. A command run in another project is recorded as
 `nixon project <path> <name>`, so the line means the same thing from anywhere.
 
+One run is one line. The directory and the command line are escaped for it —
+`\\` for a backslash, `\t` for a tab, `\n` for a newline — because shell
+quoting makes a value safe for a shell, not for a line-oriented file: it
+leaves a newline inside a quoted word where it was. Anything reading the log
+by hand has to put those back; the shell hooks do.
+
+An `eval` is recorded as its source, in the language it ran in, followed by
+the placeholders as they were written:
+
+```text
+1700000000	/home/me/code	nixon eval -l python 'print(files)' '${git-files}'
+```
+
+Its placeholders are the one thing that does not replay settled. `eval` reads
+the words after its source as placeholders, and a chosen value has no spelling
+there, so a replayed `eval` asks again. A project chosen with `--project` is
+recorded as `--project=<path>`.
+
 Set `history: false` to record nothing. The shell widgets can put these lines
 into your shell's own history; see
 [shell integration](shell-integration.md#shell-history).

@@ -32,16 +32,18 @@ impl Entry {
 
     /// The line as it is stored: three tab-separated fields.
     ///
-    /// A path may hold a tab or a newline, so the field is escaped rather
-    /// than trusted; the invocation is shell-quoted and holds neither.
+    /// Both variable fields are escaped. Shell quoting makes an argument
+    /// safe for a shell, not for a line-oriented file: it leaves a newline
+    /// inside a quoted word exactly as it was, which split an eval of a
+    /// multi-line script across several records and lost every one of them.
     pub fn line(&self) -> String {
         format!(
             "{}\t{}\t{}\n",
             self.at,
             escape(&self.cwd),
-            shell_words::join(
+            escape(&shell_words::join(
                 std::iter::once("nixon").chain(self.invocation.iter().map(String::as_str))
-            )
+            ))
         )
     }
 }
@@ -91,7 +93,7 @@ fn parse(line: &str) -> Option<Entry> {
     let mut fields = line.splitn(3, '\t');
     let at = fields.next()?.parse().ok()?;
     let cwd = unescape(fields.next()?);
-    let mut invocation = shell_words::split(fields.next()?).ok()?;
+    let mut invocation = shell_words::split(&unescape(fields.next()?)).ok()?;
     // Stored with the program name, held without it: the field is a command
     // line, the struct is the arguments.
     if invocation.first().is_some_and(|word| word == "nixon") {
@@ -288,6 +290,20 @@ mod tests {
             entry(&["run", "hello"]).line(),
             "1700000000\t/home/me/code\tnixon run hello\n"
         );
+    }
+
+    /// One record is one physical line, whatever is in the arguments.
+    ///
+    /// Shell quoting keeps a newline inside a quoted word, so an eval of a
+    /// multi-line script wrote several lines and `parse` dropped all of
+    /// them.
+    #[test]
+    fn a_multiline_argument_stays_on_one_line() {
+        let original = entry(&["eval", "echo first\necho second\twith a tab"]);
+        let line = original.line();
+
+        assert_eq!(line.matches('\n').count(), 1, "stored as {line:?}");
+        assert_eq!(super::parse(line.trim_end_matches('\n')), Some(original));
     }
 
     #[test]
