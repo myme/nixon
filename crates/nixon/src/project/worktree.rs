@@ -99,28 +99,46 @@ fn read_gitdir_pointer(file: &Path) -> Option<PathBuf> {
     Some(resolved)
 }
 
-/// Every worktree registered with the repository at `dir`.
+/// Every checkout of the repository at `dir`.
 ///
-/// Reads `<gitdir>/worktrees/<name>/gitdir`, each of which holds the path of
+/// Reads `<common>/worktrees/<name>/gitdir`, each of which holds the path of
 /// that worktree's own `.git` file; its parent is the worktree root. Entries
-/// whose root has gone are stale and skipped. The main working tree is not
-/// included: ordinary discovery already finds it.
+/// whose root has gone are stale and skipped.
+///
+/// The main working tree is included too. Ordinary discovery finds it when
+/// it is under `project_dirs`, but entering through a linked worktree is
+/// exactly the case where it is not, and a checkout should not be reachable
+/// in one direction only. Duplicates are dropped here and again upstream.
 pub fn worktrees_of(dir: &Path) -> Vec<PathBuf> {
     let Some(git_dir) = git_dir(dir) else {
         return Vec::new();
     };
-    let Ok(entries) = std::fs::read_dir(common_dir(&git_dir).join("worktrees")) else {
+    let common = common_dir(&git_dir);
+    let Ok(entries) = std::fs::read_dir(common.join("worktrees")) else {
         return Vec::new();
     };
 
     let mut found: Vec<PathBuf> = entries
         .filter_map(Result::ok)
         .filter_map(|entry| worktree_root(&entry.path()))
+        .chain(main_worktree(&common))
         .filter(|root| root.is_dir())
         .collect();
     found.sort();
     found.dedup();
     found
+}
+
+/// The working tree the common git directory belongs to, if it has one.
+///
+/// `<root>/.git` is a directory in a normal clone; a bare repository has no
+/// working tree, and its own directory is not one.
+fn main_worktree(common: &Path) -> Option<PathBuf> {
+    if is_bare_repo(common) {
+        return None;
+    }
+    let root = common.parent()?;
+    root.join(".git").is_dir().then(|| root.to_path_buf())
 }
 
 /// The repository's shared git directory.
@@ -136,8 +154,31 @@ fn common_dir(git_dir: &Path) -> PathBuf {
     if target.is_absolute() {
         target.to_path_buf()
     } else {
-        git_dir.join(target)
+        lexically_clean(&git_dir.join(target))
     }
+}
+
+/// Resolves `.` and `..` textually, without touching the filesystem.
+///
+/// `commondir` is relative, so joining it leaves `..` components behind, and
+/// `Path::parent` would then strip one of those rather than climb — the
+/// parent of `a/b/..` is `a/b`, not `a`. Canonicalising instead would also
+/// resolve symlinks, and these paths are compared against ones that have
+/// not been.
+fn lexically_clean(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                if !out.pop() {
+                    out.push("..");
+                }
+            }
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 /// The working directory an administrative `worktrees/<name>` entry points at.
@@ -154,7 +195,8 @@ mod tests {
     use assert_fs::prelude::*;
 
     use super::{
-        Path, declares_bare, git_dir, is_bare_repo, is_git_dir, nested_bare_repo, worktrees_of,
+        Path, PathBuf, declares_bare, git_dir, is_bare_repo, is_git_dir, nested_bare_repo,
+        worktrees_of,
     };
 
     /// Builds the layout git would, without running git.
@@ -252,14 +294,19 @@ mod tests {
             &outside.path().to_string_lossy(),
         ]);
 
-        let found = worktrees_of(first.path());
         let canonical = |path: &Path| std::fs::canonicalize(path).unwrap();
-        assert!(
-            found
-                .iter()
-                .any(|root| canonical(root) == canonical(outside.path())),
-            "the sibling worktree was not found from a linked one: {found:?}"
-        );
+        let mut found: Vec<PathBuf> = worktrees_of(first.path())
+            .iter()
+            .map(|r| canonical(r))
+            .collect();
+        found.sort();
+        let mut want = vec![
+            canonical(main.path()),
+            canonical(first.path()),
+            canonical(outside.path()),
+        ];
+        want.sort();
+        assert_eq!(found, want, "entering through a linked worktree");
     }
 
     #[test]
@@ -436,9 +483,10 @@ mod tests {
         register_worktree(&repo.child(".git"), "one", &one);
         register_worktree(&repo.child(".git"), "two", &two);
 
+        // The main working tree is a checkout like the others.
         assert_eq!(
             worktrees_of(repo.path()),
-            vec![one.to_path_buf(), two.to_path_buf()]
+            vec![repo.to_path_buf(), one.to_path_buf(), two.to_path_buf()]
         );
     }
 
@@ -464,7 +512,10 @@ mod tests {
         register_worktree(&repo.child(".git"), "gone", &gone);
         std::fs::remove_dir_all(gone.path()).unwrap();
 
-        assert_eq!(worktrees_of(repo.path()), vec![live.to_path_buf()]);
+        assert_eq!(
+            worktrees_of(repo.path()),
+            vec![repo.to_path_buf(), live.to_path_buf()]
+        );
     }
 
     #[test]
