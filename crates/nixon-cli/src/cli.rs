@@ -171,14 +171,15 @@ pub enum Internal {
 /// `nixon run`.
 #[derive(Debug, Default, Args)]
 pub struct RunArgs {
-    /// Command to run.
-    #[arg(add = clap_complete::ArgValueCompleter::new(crate::complete::command_names))]
-    pub command: Option<String>,
-    /// Arguments to the command: option tokens, and queries for its
-    /// placeholders.
+    /// The command to run, then its own arguments.
+    // One positional rather than two, so everything after the name belongs
+    // to the command and `nixon run c -i` means what `nixon c -i` means.
+    // nixon's own flags go before the name.
     #[arg(
+        value_name = "COMMAND",
+        trailing_var_arg = true,
         allow_hyphen_values = true,
-        add = clap_complete::ArgValueCompleter::new(crate::complete::option_tokens)
+        add = clap_complete::ArgValueCompleter::new(crate::complete::run_args)
     )]
     pub args: Vec<String>,
     /// Select a command and output its source.
@@ -207,7 +208,10 @@ pub struct ProjectArgs {
     pub command: Option<String>,
     /// Arguments to the command: option tokens, and queries for its
     /// placeholders.
+    // Unlike `run`, the command is its own positional here, so a flag
+    // written directly after the project name is still nixon's.
     #[arg(
+        trailing_var_arg = true,
         allow_hyphen_values = true,
         add = clap_complete::ArgValueCompleter::new(crate::complete::option_tokens)
     )]

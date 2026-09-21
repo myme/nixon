@@ -45,6 +45,14 @@ pub fn command_names(current: &OsStr) -> Vec<CompletionCandidate> {
     )
 }
 
+/// `run`'s single positional: the command name, then its own arguments.
+pub fn run_args(current: &OsStr) -> Vec<CompletionCandidate> {
+    if named_command().is_none() {
+        return command_names(current);
+    }
+    option_tokens(current)
+}
+
 /// The option tokens of the command already named on the line.
 ///
 /// `--no-<name>` is offered alongside each token, since that is how an
@@ -80,7 +88,7 @@ pub fn option_tokens(current: &OsStr) -> Vec<CompletionCandidate> {
 /// The command `run` or `project` was given on the line being completed.
 fn named_command() -> Option<String> {
     match partial_cli()?.command? {
-        Commands::Run(args) => args.command,
+        Commands::Run(args) => args.args.into_iter().next(),
         Commands::Project(args) => args.command,
         Commands::External(args) => args.into_iter().next(),
         _ => None,

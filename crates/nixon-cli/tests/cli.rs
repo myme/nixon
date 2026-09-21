@@ -873,3 +873,63 @@ fn an_exact_placeholder_value_runs_without_a_terminal() {
         .success()
         .stdout("opened bugs\n");
 }
+
+const CLASHING_MD: &str = "\
+# `clash -i -l -s`
+
+- `-i`: off
+- `-l`: off
+- `-s`: off
+
+```bash
+echo \"args: $*\"
+```
+";
+
+/// Everything after the command name belongs to the command, so the two
+/// spellings agree rather than one of them meaning `--insert`.
+#[test]
+fn a_flag_after_the_command_name_reaches_the_command() {
+    let expected = "args: -i\n";
+    for args in [
+        ["run", "clash", "-i"].as_slice(),
+        ["clash", "-i"].as_slice(),
+    ] {
+        Fixture::with_config(CLASHING_MD)
+            .nixon()
+            .args(args)
+            .assert()
+            .success()
+            .stdout(expected);
+    }
+}
+
+/// `-l` and `-s` after the name are the command's too.
+#[test]
+fn list_and_select_flags_after_the_name_are_the_commands() {
+    Fixture::with_config(CLASHING_MD)
+        .nixon()
+        .args(["run", "clash", "-l", "-s"])
+        .assert()
+        .success()
+        .stdout("args: -l -s\n");
+}
+
+/// nixon's own flags still work, before the command name.
+#[test]
+fn nixons_flags_still_work_before_the_command_name() {
+    Fixture::new()
+        .nixon()
+        .args(["run", "-l", "hello"])
+        .assert()
+        .success()
+        .stdout(contains("hello"));
+
+    // One line, so the unique match settles it without a terminal.
+    Fixture::with_config("# `one`\n\n```bash\nprintf 'only.txt\\n'\n```\n")
+        .nixon()
+        .args(["run", "-s", "one"])
+        .assert()
+        .success()
+        .stdout("only.txt\n\n");
+}

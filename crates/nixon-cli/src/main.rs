@@ -105,15 +105,14 @@ fn run() -> Result<i32> {
 
 fn run_opts(args: RunArgs) -> RunOpts {
     RunOpts {
-        command: args.command,
-        args: args.args,
         insert: args.insert,
         list: args.list,
         select: args.select,
+        ..external_opts(args.args)
     }
 }
 
-/// `nixon foo bar` is `nixon run foo bar`.
+/// `nixon foo bar` is `nixon run foo bar`: the first word is the command.
 fn external_opts(args: Vec<String>) -> RunOpts {
     let mut args = args.into_iter();
     RunOpts {
