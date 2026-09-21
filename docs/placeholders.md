@@ -145,5 +145,16 @@ runs `git-files`, opens the picker with `main.rs` already typed, and — since
 the picker auto-selects a unique match — runs `vim` on it without stopping if
 exactly one file matches.
 
+An argument equal to a candidate's **value** is taken as that candidate
+without the picker appearing at all, even when it also fuzzy-matches others.
+`nixon open bugs` picks `bugs` rather than asking between `bugs` and `bugs2`,
+and for a `| multi` placeholder it selects just that one item. This is what
+makes a placeholder command scriptable.
+
+The comparison is literal, against the value the placeholder produces. Paths
+are the case to watch: `nixon project -l` prints them with `~` for `$HOME`, so
+a script that feeds them back should pass them in that form, or go through a
+hidden `_command` that produces exactly what is wanted.
+
 Arguments beyond the placeholders are passed through as positional arguments
 unchanged.

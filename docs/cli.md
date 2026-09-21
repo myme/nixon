@@ -51,9 +51,12 @@ nixon run [-i] [-l] [-s] [COMMAND] [ARGS]...
 ```
 
 Selects a command in the current project and runs it. `COMMAND` is a search
-query for the picker, not an exact name — if it matches exactly one command,
-that command runs without the picker appearing. `ARGS` are queries for the
-command's [placeholders](placeholders.md), in order.
+query for the picker; a name matching a command exactly runs it without the
+picker, hidden `_names` included, and so does a query matching exactly one
+command. `ARGS` are queries for the command's
+[placeholders](placeholders.md), in order — and an argument equal to a
+candidate's value takes that candidate outright, so a fully specified command
+line never stops to ask.
 
 | Flag | Effect |
 |---|---|
