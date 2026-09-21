@@ -22,6 +22,12 @@ pub struct Resolved {
     pub args: Vec<String>,
     /// Environment variables, each selection space-joined.
     pub env: Vec<(String, String)>,
+    /// The arguments that would run this again: the options as they ended
+    /// up, then every placeholder's chosen values, then the overflow.
+    ///
+    /// Values rather than queries: an exact value settles a placeholder
+    /// without a prompt, so a replayed line asks nothing.
+    pub replay: Vec<String>,
 }
 
 /// One JSON candidate: a bare string, or a title and a value.
@@ -128,6 +134,18 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
             resolved
                 .env
                 .push((option.env_var(), if set { "1" } else { "" }.to_owned()));
+            // Only what the defaults do not already say.
+            if set != option.default {
+                resolved.replay.push(if set {
+                    option.token.clone()
+                } else {
+                    format!("--no-{}", option.name)
+                });
+            }
+        }
+
+        for (_, values) in &picked {
+            resolved.replay.extend(values.iter().cloned());
         }
 
         let mut picked = picked.into_iter();

@@ -40,6 +40,41 @@ __nixon_cd__() {
     printf 'builtin cd -- %q' "$(builtin unset CDPATH && builtin cd -- "$dir" && builtin pwd)"
 }
 
+# Puts what nixon ran into this shell's history, so Ctrl-R finds it.
+#
+# Cheap when nothing has happened: one `wc -c` against a remembered byte
+# count, and no work at all until the log exists.
+NIXON_HISTORY_FILE="${NIXON_HISTORY_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/nixon/history}"
+
+__nixon_history_size__() {
+  local size=0
+  [[ -f $NIXON_HISTORY_FILE ]] && size=$(wc -c <"$NIXON_HISTORY_FILE")
+  printf '%s' "${size// /}"
+}
+
+# Whatever is already logged counts as read, so sourcing this does not
+# replay everything that ever ran. Taken now rather than at the first
+# prompt, or the first command of the session would be swallowed with it.
+__nixon_history_seen=$(__nixon_history_size__)
+
+__nixon_history__() {
+  local size
+  size=$(__nixon_history_size__)
+  [[ $size == "$__nixon_history_seen" ]] && return 0
+
+  local line
+  while IFS=$'\t' read -r _ _ line; do
+    [[ -n $line ]] && builtin history -s "$line"
+  done < <(tail -c "+$((__nixon_history_seen + 1))" "$NIXON_HISTORY_FILE")
+  __nixon_history_seen=$size
+}
+
+case "${PROMPT_COMMAND-}" in
+  *__nixon_history__*) ;;
+  "") PROMPT_COMMAND="__nixon_history__" ;;
+  *) PROMPT_COMMAND="${PROMPT_COMMAND%;};__nixon_history__" ;;
+esac
+
 bind -x '"\ei": nixon-insert-selection'
 bind -x '"\eI": nixon-insert-command'
 bind -x '"\eP": nixon-insert-project'

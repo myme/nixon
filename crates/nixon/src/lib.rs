@@ -21,6 +21,7 @@ pub mod error;
 pub mod eval;
 pub mod format;
 pub mod fs;
+pub mod history;
 pub mod language;
 pub mod markdown;
 pub mod output;

@@ -29,6 +29,8 @@ pub struct ConfigBlock {
     pub use_nix: Option<bool>,
     /// Whether discovery also finds git worktrees.
     pub git_worktrees: Option<bool>,
+    /// Whether executed commands are recorded.
+    pub history: Option<bool>,
 }
 
 /// One entry of `project_types`. `name` and `desc` are required.

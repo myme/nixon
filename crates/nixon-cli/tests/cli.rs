@@ -73,6 +73,7 @@ impl Fixture {
             .env("HOME", self.temp.path())
             .env("XDG_CONFIG_HOME", self.temp.child("config").path())
             .env("XDG_CACHE_HOME", self.temp.child("cache").path())
+            .env("XDG_STATE_HOME", self.temp.child("state").path())
             .env("SHELL", "/bin/bash")
             .current_dir(self.temp.child("project").path());
     }
@@ -997,4 +998,33 @@ fn a_double_dash_does_not_reach_the_command() {
             .success()
             .stdout("args: -i\n");
     }
+}
+
+/// The log records what ran, in the form that runs it again.
+#[test]
+fn running_a_command_is_recorded_in_the_log() {
+    let fixture = Fixture::with_config("# `greet`\n\n```bash\necho hello\n```\n");
+    fixture
+        .nixon()
+        .arg("greet")
+        .assert()
+        .success()
+        .stdout("hello\n");
+
+    let log = std::fs::read_to_string(fixture.temp.child("state/nixon/history").path()).unwrap();
+    let fields: Vec<&str> = log.trim_end().split('\t').collect();
+    assert_eq!(fields.len(), 3, "log line was {log:?}");
+    assert!(fields[0].parse::<u64>().unwrap() > 1_700_000_000);
+    assert_eq!(fields[2], "nixon run greet");
+}
+
+/// `history: false` writes nothing.
+#[test]
+fn the_log_can_be_turned_off() {
+    let fixture = Fixture::with_config(
+        "```json config\n{\"history\": false}\n```\n\n# `greet`\n\n```bash\necho hello\n```\n",
+    );
+    fixture.nixon().arg("greet").assert().success();
+
+    assert!(!fixture.temp.child("state/nixon/history").path().exists());
 }

@@ -125,6 +125,7 @@ impl Pty {
             .env("TERM", "xterm-256color")
             .env("XDG_CONFIG_HOME", self.temp.child("config").path())
             .env("XDG_CACHE_HOME", self.temp.child("cache").path())
+            .env("XDG_STATE_HOME", self.temp.child("state").path())
             .env("SHELL", "/bin/bash")
             .env("EDITOR", self.fake_editor())
             .current_dir(self.temp.child("project").path());
@@ -873,6 +874,61 @@ fn the_bash_widget_cds_into_a_project_without_a_history_entry() {
     session
         .expect("BACK=[]")
         .expect("the widget left something on the command line");
+
+    session.send("exit\r").unwrap();
+    let _ = finish(&mut session);
+}
+
+/// What nixon ran turns up in the shell's own history.
+#[test]
+#[cfg(unix)]
+fn the_bash_hook_puts_what_nixon_ran_into_shell_history() {
+    let pty = Pty::with_config("# `greet`\n\n```bash\necho hello\n```\n");
+
+    let bin_dir = pty.temp.child("bin");
+    bin_dir.create_dir_all().unwrap();
+    std::os::unix::fs::symlink(Pty::binary(), bin_dir.child("nixon").path()).unwrap();
+
+    // The same file nixon writes, given XDG_STATE_HOME above.
+    let log = pty.temp.child("state/nixon/history");
+    let rc = pty.temp.child("bashrc");
+    rc.write_str(&format!(
+        "PATH={}:$PATH\nHISTFILE=\nNIXON_HISTORY_FILE={}\nPS1='ready> '\nsource {}\n",
+        bin_dir.path().display(),
+        log.path().display(),
+        std::fs::canonicalize("../../extra/nixon-widget.bash")
+            .unwrap()
+            .display()
+    ))
+    .unwrap();
+
+    let mut command = std::process::Command::new("bash");
+    command.args([
+        "--noprofile",
+        "--rcfile",
+        &rc.path().to_string_lossy(),
+        "-i",
+    ]);
+    pty.apply(&mut command);
+
+    let mut session = Session::spawn(command).unwrap();
+    session.get_process_mut().set_window_size(80, 24).unwrap();
+    session.set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("ready> ").unwrap();
+    session.send("nixon greet\r").unwrap();
+    session.expect("hello").unwrap();
+
+    // The hook runs at the next prompt, so the entry is there by the time
+    // a later command can ask. `history` itself does not mention it, so
+    // finding the string means the hook put it there.
+    session.expect("ready> ").unwrap();
+    session.send("history\r").unwrap();
+    if session.expect("nixon run greet").is_err() {
+        session.send("exit\r").unwrap();
+        let (_, seen) = finish(&mut session);
+        panic!("the run did not reach the shell's history: {seen:?}");
+    }
 
     session.send("exit\r").unwrap();
     let _ = finish(&mut session);

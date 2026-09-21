@@ -52,6 +52,39 @@ nixon-cd-project() {
   return $ret
 }
 
+# Puts what nixon ran into this shell's history, so Ctrl-R finds it.
+#
+# Cheap when nothing has happened: one stat against a remembered byte count,
+# and no work at all until the log exists.
+: "${NIXON_HISTORY_FILE:=${XDG_STATE_HOME:-$HOME/.local/state}/nixon/history}"
+zmodload -F zsh/stat b:zstat 2>/dev/null
+
+__nixon_history_size__() {
+  local size=0
+  [[ -f $NIXON_HISTORY_FILE ]] && size=$(zstat +size -- "$NIXON_HISTORY_FILE" 2>/dev/null)
+  print -r -- ${size:-0}
+}
+
+# Whatever is already logged counts as read, so sourcing this does not
+# replay everything that ever ran. Taken now rather than at the first
+# prompt, or the first command of the session would be swallowed with it.
+typeset -g __nixon_history_seen=$(__nixon_history_size__)
+
+__nixon_history__() {
+  local size
+  size=$(__nixon_history_size__)
+  [[ $size == $__nixon_history_seen ]] && return 0
+
+  local line
+  while IFS=$'\t' read -r _ _ line; do
+    [[ -n $line ]] && print -s -- "$line"
+  done < <(tail -c "+$((__nixon_history_seen + 1))" "$NIXON_HISTORY_FILE")
+  __nixon_history_seen=$size
+}
+
+typeset -ga precmd_functions
+(($precmd_functions[(I)__nixon_history__])) || precmd_functions+=(__nixon_history__)
+
 zle -N nixon-insert-selection
 zle -N nixon-insert-command
 zle -N nixon-insert-project

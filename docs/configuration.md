@@ -75,6 +75,9 @@ silently win.
 - **`use_direnv`** (bool, off) — run commands through `direnv exec`.
 - **`use_nix`** (bool, off) — run commands through `nix-shell`.
 - **`git_worktrees`** (bool, **on**) — also discover git worktrees.
+- **`history`** (bool, **on**) — record every command that runs. See
+  [the log](cli.md#the-log) and
+  [shell history](shell-integration.md#shell-history).
 
 An undefined `$VAR` in `project_dirs` expands to the empty string, and a glob
 that matches nothing contributes nothing.

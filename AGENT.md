@@ -144,6 +144,10 @@ Fixture rules, each learned from a failure:
   are never made executable; the interpreter is always explicit, so a shebang
   is ignored.
 - A missing or empty global config is not an error. A parse error is.
+- Every executed command is appended to `$XDG_STATE_HOME/nixon/history` as
+  `<epoch>\t<cwd>\t<replayable command line>`, one `write` per line so
+  concurrent nixons do not interleave. Recording never fails a command, and
+  the project's own config decides whether it happens at all.
 
 - The shell widgets are fzf's mechanics, not reimplementations: `Alt-p` is
   its `Alt-C` macro, because a `bind -x` function that changes directory

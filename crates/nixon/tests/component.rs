@@ -55,6 +55,7 @@ impl Fixture {
             home: self.temp.path().to_path_buf(),
             config: self.temp.child("config").to_path_buf(),
             cache: self.temp.child("cache").to_path_buf(),
+            state: self.temp.child("state").to_path_buf(),
         }
     }
 
@@ -1033,4 +1034,169 @@ fn a_parent_project_path_resolves_against_the_invocation_directory() {
 
     let up = app.pick_one_project(Some("../")).unwrap();
     assert_eq!(up.path(), fixture.temp.path().canonicalize().unwrap());
+}
+
+const HISTORY_MD: &str = "\
+# `_files`
+
+```bash
+printf 'a.txt\\nb c.txt\\n'
+```
+
+# `edit ${_files}`
+
+```bash
+vim \"$1\"
+```
+
+# `edit-many ${_files:m}`
+
+```bash
+vim -p \"$@\"
+```
+
+# `build --release`
+
+- `--release`: on
+
+```bash
+cargo build \"$@\"
+```
+";
+
+impl Fixture {
+    /// The lines recorded in the history log.
+    fn history(&self) -> Vec<String> {
+        std::fs::read_to_string(self.temp.child("state/nixon/history").path())
+            .unwrap_or_default()
+            .lines()
+            .map(|line| line.split('\t').nth(2).unwrap_or_default().to_owned())
+            .collect()
+    }
+}
+
+/// A run is recorded in the form that repeats it.
+#[test]
+fn running_a_command_records_a_replayable_line() {
+    let fixture = Fixture::new(HISTORY_MD);
+    let picker = picks(&[&["a.txt"]]);
+    let runner = FakeRunner::new().with_output(&["a.txt", "b c.txt"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts {
+        command: Some("edit".to_owned()),
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert_eq!(fixture.history(), ["nixon run edit a.txt"]);
+}
+
+/// A value with a space in it is quoted, so the line can be run again.
+#[test]
+fn a_recorded_value_is_shell_quoted() {
+    let fixture = Fixture::new(HISTORY_MD);
+    let picker = picks(&[&["b c.txt"]]);
+    let runner = FakeRunner::new().with_output(&["a.txt", "b c.txt"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts {
+        command: Some("edit".to_owned()),
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert_eq!(fixture.history(), ["nixon run edit 'b c.txt'"]);
+}
+
+/// Several values are consecutive arguments.
+#[test]
+fn a_multi_selection_records_every_value() {
+    let fixture = Fixture::new(HISTORY_MD);
+    let picker = picks(&[&["a.txt", "b c.txt"]]);
+    let runner = FakeRunner::new().with_output(&["a.txt", "b c.txt"]);
+    let mut app = fixture.app(picker, runner);
+
+    app.run(&RunOpts {
+        command: Some("edit-many".to_owned()),
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert_eq!(fixture.history(), ["nixon run edit-many a.txt 'b c.txt'"]);
+}
+
+/// Only options that differ from their default are recorded, and an option
+/// turned off against an `on` default is recorded as `--no-`.
+#[test]
+fn only_overridden_options_are_recorded() {
+    let fixture = Fixture::new(HISTORY_MD);
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    app.run(&RunOpts {
+        command: Some("build".to_owned()),
+        args: vec!["--no-release".to_owned()],
+        ..RunOpts::default()
+    })
+    .unwrap();
+    assert_eq!(fixture.history(), ["nixon run build --no-release"]);
+
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    app.run(&RunOpts {
+        command: Some("build".to_owned()),
+        args: vec!["--release".to_owned()],
+        ..RunOpts::default()
+    })
+    .unwrap();
+    assert_eq!(fixture.history()[1], "nixon run build");
+}
+
+/// `eval` has no name to look up, so the source is what repeats it.
+#[test]
+fn eval_records_its_expression() {
+    let fixture = Fixture::new(HISTORY_MD);
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+
+    app.eval(&nixon::app::eval::EvalOpts {
+        source: Some("echo hello".to_owned()),
+        ..nixon::app::eval::EvalOpts::default()
+    })
+    .unwrap();
+
+    assert_eq!(fixture.history(), ["nixon eval 'echo hello'"]);
+}
+
+/// Nothing that did not run is recorded.
+#[test]
+fn listing_and_selecting_record_nothing() {
+    let fixture = Fixture::new(HISTORY_MD);
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    let project = app.current_project();
+
+    app.list_commands(&project, None).unwrap();
+    assert!(fixture.history().is_empty());
+
+    let mut app = fixture.app(picks(&[&["build"]]), FakeRunner::new());
+    app.run(&RunOpts {
+        insert: true,
+        ..RunOpts::default()
+    })
+    .unwrap();
+    assert!(fixture.history().is_empty());
+}
+
+/// `history: false` writes nothing at all.
+#[test]
+fn the_history_can_be_turned_off() {
+    let mut fixture = Fixture::new(HISTORY_MD);
+    fixture.config.history = Some(false);
+
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    app.run(&RunOpts {
+        command: Some("build".to_owned()),
+        args: vec!["--no-release".to_owned()],
+        ..RunOpts::default()
+    })
+    .unwrap();
+
+    assert!(fixture.history().is_empty());
 }

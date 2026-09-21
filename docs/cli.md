@@ -188,6 +188,30 @@ without removing.
 While a foreground command runs, nixon ignores `SIGINT`, so `^C` reaches only
 the command.
 
+## The log
+
+Every command that actually runs is appended to
+`$XDG_STATE_HOME/nixon/history` — `~/.local/state/nixon/history` by default.
+Listing, `--select`, `--insert` and printing a source record nothing.
+
+Each line is three tab-separated fields: the time in seconds since the epoch,
+the directory nixon was invoked in, and the command line that runs it again.
+
+```text
+1700000000	/home/me/code/gaia	nixon run deploy --force staging
+```
+
+The third field is shell-quoted and complete: the options as they ended up —
+only where they differ from their declared defaults — then every placeholder's
+chosen value. Values rather than queries, so a replayed line
+[settles each placeholder outright](placeholders.md#arguments-on-the-command-line)
+and asks nothing. A command run in another project is recorded as
+`nixon project <path> <name>`, so the line means the same thing from anywhere.
+
+Set `history: false` to record nothing. The shell widgets can put these lines
+into your shell's own history; see
+[shell integration](shell-integration.md#shell-history).
+
 ## Output
 
 stdout carries data and nothing else: selections, listings, sources, paths.

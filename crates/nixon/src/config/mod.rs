@@ -66,6 +66,8 @@ pub struct Config {
     pub loglevel: Option<LogLevel>,
     /// Whether discovery also finds git worktrees.
     pub git_worktrees: Option<bool>,
+    /// Whether executed commands are recorded.
+    pub history: Option<bool>,
 }
 
 impl Config {
@@ -75,6 +77,7 @@ impl Config {
             loglevel: Some(LogLevel::Warning),
             // Worktree discovery is on unless turned off.
             git_worktrees: Some(true),
+            history: Some(true),
             ..Self::default()
         }
     }
@@ -82,6 +85,11 @@ impl Config {
     /// Whether to look for git worktrees.
     pub fn finds_worktrees(&self) -> bool {
         self.git_worktrees.unwrap_or(true)
+    }
+
+    /// Whether to record what was run.
+    pub fn records_history(&self) -> bool {
+        self.history.unwrap_or(true)
     }
 
     /// Merges `rhs` over `self`.
@@ -105,6 +113,7 @@ impl Config {
         self.use_nix = rhs.use_nix.or(self.use_nix);
         self.loglevel = rhs.loglevel.or(self.loglevel);
         self.git_worktrees = rhs.git_worktrees.or(self.git_worktrees);
+        self.history = rhs.history.or(self.history);
         self
     }
 }
@@ -122,6 +131,7 @@ impl From<schema::ConfigBlock> for Config {
             use_nix: block.use_nix,
             loglevel: None,
             git_worktrees: block.git_worktrees,
+            history: block.history,
         }
     }
 }

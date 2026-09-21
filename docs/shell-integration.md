@@ -34,6 +34,26 @@ source /path/to/share/nixon/nixon-widget.fish
 Each is a few lines of shell around `nixon run -s`, `nixon run -i` and
 `nixon project -s`, so they are worth reading and rebinding to taste.
 
+### Shell history
+
+The widgets also install a prompt hook that copies what nixon ran into the
+shell's own history, so `Ctrl-R` finds it like any other command. It reads
+[the log](cli.md#the-log), remembers how far it had got, and does nothing
+until the file grows — one `stat` per prompt.
+
+Point `NIXON_HISTORY_FILE` somewhere else to override the path.
+
+- **bash** and **zsh** add the line with `history -s` / `print -s`.
+- **fish** uses `history append`, which arrived in fish 3.2. An older fish
+  keeps the log but adds nothing to its own history.
+
+Whatever was logged before the shell started counts as read, so opening a
+terminal does not replay everything that ever ran.
+
+A `| multi` selection is recorded as consecutive values. Replaying it takes
+the first as the placeholder's exact value and the rest as ordinary
+arguments, which is not the same thing — that one does not round-trip.
+
 ### `Alt-p` and shell history
 
 Changing directory has to go through the shell itself, and each one allows a

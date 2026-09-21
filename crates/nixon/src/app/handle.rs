@@ -4,6 +4,7 @@ use nixon_picker::{Picker, PickerOption, PickerOptions, Selection, SelectionType
 
 use super::{App, RunOpts, context};
 use crate::command::{Command, Description};
+use crate::config::Config;
 use crate::error::{NixonError, Result};
 use crate::eval::{Evaluation, evaluate};
 use crate::output;
@@ -120,8 +121,10 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             resolver.resolve_with(command, &overrides.queries, &on)?
         };
 
+        let replay = resolved.replay.clone();
+
         let context = context(&self.env, &config, &cache);
-        evaluate(
+        let code = evaluate(
             &context,
             &mut self.runner,
             command,
@@ -132,7 +135,42 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
                 env: resolved.env,
                 stdin: resolved.stdin,
             },
-        )
+        )?;
+
+        // It ran, so it is worth recording — whatever it exited with.
+        self.record(&config, project, command, replay);
+        Ok(code)
+    }
+
+    /// Logs the run, in the form that repeats it.
+    ///
+    /// `nixon project <path> <name>` when the command ran somewhere other
+    /// than the project the current directory is in, so the line means the
+    /// same thing from anywhere.
+    fn record(&self, config: &Config, project: &Project, command: &Command, replay: Vec<String>) {
+        // The project's config, so a repository can turn recording off for
+        // itself.
+        if !config.records_history() {
+            return;
+        }
+
+        // An unnamed command is an `eval`; there is nothing to look up, so
+        // the source itself is what repeats it.
+        let mut invocation = if command.name.is_empty() {
+            vec!["eval".to_owned(), command.source.trim_end().to_owned()]
+        } else if project.path() == self.current_project().path() {
+            vec!["run".to_owned(), command.name.clone()]
+        } else {
+            vec![
+                "project".to_owned(),
+                project.path().to_string_lossy().into_owned(),
+                command.name.clone(),
+            ]
+        };
+        invocation.extend(replay);
+
+        let entry = crate::history::Entry::new(&self.env.cwd, invocation);
+        crate::history::record(&self.dirs.history_file(), &entry);
     }
 
     /// Runs a command and offers its output for selection.

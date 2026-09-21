@@ -12,6 +12,8 @@ pub struct Dirs {
     pub config: PathBuf,
     /// `$XDG_CACHE_HOME`.
     pub cache: PathBuf,
+    /// `$XDG_STATE_HOME`.
+    pub state: PathBuf,
 }
 
 impl Dirs {
@@ -24,6 +26,7 @@ impl Dirs {
             home: xdg.home_dir().to_path_buf(),
             config: xdg.config_dir(),
             cache: xdg.cache_dir(),
+            state: xdg.state_dir().unwrap_or_else(|| xdg.data_dir()),
         })
     }
 
@@ -35,6 +38,11 @@ impl Dirs {
     /// The script cache, `$XDG_CACHE_HOME/nixon`.
     pub fn cache_dir(&self) -> PathBuf {
         self.cache.join("nixon")
+    }
+
+    /// The log of what has been run, `$XDG_STATE_HOME/nixon/history`.
+    pub fn history_file(&self) -> PathBuf {
+        self.state.join("nixon").join("history")
     }
 }
 
@@ -146,16 +154,21 @@ mod tests {
     }
 
     #[test]
-    fn dirs_place_the_config_and_cache_under_their_xdg_roots() {
+    fn dirs_place_their_files_under_the_xdg_roots() {
         let dirs = Dirs {
             home: PathBuf::from("/home/me"),
             config: PathBuf::from("/home/me/.config"),
             cache: PathBuf::from("/home/me/.cache"),
+            state: PathBuf::from("/home/me/.local/state"),
         };
         assert_eq!(
             dirs.global_config(),
             PathBuf::from("/home/me/.config/nixon.md")
         );
         assert_eq!(dirs.cache_dir(), PathBuf::from("/home/me/.cache/nixon"));
+        assert_eq!(
+            dirs.history_file(),
+            PathBuf::from("/home/me/.local/state/nixon/history")
+        );
     }
 }
