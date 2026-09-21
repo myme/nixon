@@ -1,5 +1,6 @@
 # nixon readline widgets.
 #
+# Alt-h  insert something nixon ran before
 # Alt-i  insert a selection from a command's output
 # Alt-I  insert a command's source
 # Alt-p  cd into a project
@@ -12,6 +13,13 @@ nixon-insert-selection() {
   selected="$(nixon run -s | while read -r item; do printf '%q ' "$item"; done)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
   READLINE_POINT=$((READLINE_POINT + ${#selected}))
+}
+
+nixon-insert-history() {
+  local invocation
+  invocation="$(nixon history -s)"
+  READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$invocation${READLINE_LINE:$READLINE_POINT}"
+  READLINE_POINT=$((READLINE_POINT + ${#invocation}))
 }
 
 nixon-insert-command() {
@@ -75,6 +83,7 @@ case "${PROMPT_COMMAND-}" in
   *) PROMPT_COMMAND="${PROMPT_COMMAND%;};__nixon_history__" ;;
 esac
 
+bind -x '"\eh": nixon-insert-history'
 bind -x '"\ei": nixon-insert-selection'
 bind -x '"\eI": nixon-insert-command'
 bind -x '"\eP": nixon-insert-project'

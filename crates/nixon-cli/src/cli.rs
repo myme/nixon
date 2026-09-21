@@ -143,6 +143,9 @@ pub enum Commands {
         dry_run: bool,
     },
 
+    /// Show what has been run, and run it again.
+    History(HistoryArgs),
+
     /// Insert a new command into a config file.
     New(NewArgs),
 
@@ -246,6 +249,25 @@ pub struct EvalArgs {
     /// Select a project instead of using the current directory.
     #[arg(short = 'p', long)]
     pub project: bool,
+}
+
+/// `nixon history`.
+#[derive(Debug, Default, Args)]
+pub struct HistoryArgs {
+    /// Search query for the picker, or the filter for `--list`.
+    pub query: Option<String>,
+    /// Print matching invocations.
+    #[arg(short = 'l', long)]
+    pub list: bool,
+    /// Pick one and print it instead of running it.
+    #[arg(short = 's', long)]
+    pub select: bool,
+    /// Keep only the last N entries.
+    #[arg(short = 'n', long, value_name = "N")]
+    pub limit: Option<usize>,
+    /// Empty the log.
+    #[arg(long)]
+    pub clear: bool,
 }
 
 /// `nixon new`.

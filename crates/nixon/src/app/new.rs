@@ -104,7 +104,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         })?;
 
         let path = location.file_path.clone();
-        if confirm(&format!("Update {}? [y/N] ", path.display()))? {
+        if crate::output::confirm(&format!("Update {}? [y/N] ", path.display()))? {
             replace(&path, temp.path())?;
             tracing::info!("Updating {}…", path.display());
         } else {
@@ -113,24 +113,6 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
 
         Ok(0)
     }
-}
-
-/// Asks on stderr and reads the answer from stdin.
-///
-/// The prompt is for a person, so it goes where the picker goes; stdout
-/// carries data. Only a bare `y` or `Y` accepts; anything else, including
-/// end of input, leaves the file alone.
-fn confirm(prompt: &str) -> Result<bool> {
-    use std::io::{BufRead as _, Write as _};
-
-    let mut err = std::io::stderr().lock();
-    err.write_all(prompt.as_bytes())?;
-    err.flush()?;
-    drop(err);
-
-    let mut answer = String::new();
-    std::io::stdin().lock().read_line(&mut answer)?;
-    Ok(matches!(answer.trim(), "y" | "Y"))
 }
 
 /// Puts `source`'s contents in `path`, atomically and in place.

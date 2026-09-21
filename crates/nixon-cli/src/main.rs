@@ -15,6 +15,7 @@ use std::process::ExitCode;
 
 use clap::Parser as _;
 use nixon::app::eval::EvalOpts;
+use nixon::app::history::{HistoryOpts, Outcome};
 use nixon::app::new::NewOpts;
 use nixon::app::project::ProjectOpts;
 use nixon::app::{App, Environment, RunOpts};
@@ -24,7 +25,7 @@ use nixon::fs::Dirs;
 use nixon::process::RealRunner;
 use nixon_picker::TuiPicker;
 
-use cli::{Cli, Commands, EvalArgs, Internal, ProjectArgs, RunArgs};
+use cli::{Cli, Commands, EvalArgs, HistoryArgs, Internal, ProjectArgs, RunArgs};
 
 fn main() -> ExitCode {
     // Completion must answer before anything writes to stdout.
@@ -84,8 +85,12 @@ fn run() -> Result<i32> {
     };
 
     let mut app = App::new(config, dirs, env, TuiPicker, RealRunner);
+    dispatch(&mut app, parsed.command)
+}
 
-    match parsed.command {
+/// Runs one subcommand.
+fn dispatch(app: &mut App<TuiPicker, RealRunner>, command: Option<Commands>) -> Result<i32> {
+    match command {
         None => app.run(&RunOpts::default()),
         Some(Commands::Run(args)) => app.run(&run_opts(args)),
         Some(Commands::External(args)) => app.run(&external_opts(args)),
@@ -93,6 +98,10 @@ fn run() -> Result<i32> {
         Some(Commands::Eval(args)) => app.eval(&eval_opts(args)),
         Some(Commands::Edit { command }) => app.edit(command.as_deref()),
         Some(Commands::Gc { dry_run }) => app.gc(dry_run),
+        Some(Commands::History(args)) => match app.history(&history_opts(args))? {
+            Outcome::Done(code) => Ok(code),
+            Outcome::Rerun(words) => rerun(app, words),
+        },
         Some(Commands::Internal(Internal::Mangen)) => mangen::write_man_page(),
         Some(Commands::New(args)) => app.new_command(&NewOpts {
             name: args.name,
@@ -100,6 +109,34 @@ fn run() -> Result<i32> {
             lang: args.lang,
             src: args.src,
         }),
+    }
+}
+
+/// Runs a line from the history as if it had been typed.
+///
+/// Through the same parser, so the recorded options and values mean what
+/// they meant the first time. A recorded `history` is refused rather than
+/// looped: the picker is already open.
+fn rerun(app: &mut App<TuiPicker, RealRunner>, recorded: Vec<String>) -> Result<i32> {
+    let line = std::iter::once("nixon".to_owned()).chain(recorded);
+    let parsed = Cli::try_parse_from(line)
+        .map_err(|err| NixonError::NothingSelected(err.to_string().trim_end().to_owned()))?;
+
+    if matches!(parsed.command, Some(Commands::History(_))) {
+        return Err(NixonError::NothingSelected(
+            "Refusing to run history from history.".to_owned(),
+        ));
+    }
+    dispatch(app, parsed.command)
+}
+
+fn history_opts(args: HistoryArgs) -> HistoryOpts {
+    HistoryOpts {
+        query: args.query,
+        list: args.list,
+        select: args.select,
+        limit: args.limit,
+        clear: args.clear,
     }
 }
 

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
+use nixon::app::history::HistoryOpts;
 use nixon::app::new::NewOpts;
 use nixon::app::project::ProjectOpts;
 use nixon::app::{App, Environment, RunOpts};
@@ -1199,4 +1200,132 @@ fn the_history_can_be_turned_off() {
     .unwrap();
 
     assert!(fixture.history().is_empty());
+}
+
+/// Seeds the log with lines as nixon would have written them.
+fn seed_history(fixture: &Fixture, lines: &[(u64, &str)]) {
+    use std::fmt::Write as _;
+
+    let cwd = fixture.project_path().display().to_string();
+    let mut log = String::new();
+    for (at, invocation) in lines {
+        let _ = writeln!(log, "{at}\t{cwd}\t{invocation}");
+    }
+    fixture
+        .temp
+        .child("state/nixon/history")
+        .write_str(&log)
+        .unwrap();
+}
+
+/// Newest first, and a run of the same command shown once.
+#[test]
+fn the_history_picker_shows_newest_first_without_repeats() {
+    let fixture = Fixture::new(HISTORY_MD);
+    seed_history(
+        &fixture,
+        &[
+            (1, "nixon run build"),
+            (2, "nixon run edit a.txt"),
+            (3, "nixon run edit a.txt"),
+        ],
+    );
+
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    let _ = app.history(&HistoryOpts::default());
+
+    let offered: Vec<String> = app.picker.calls[0]
+        .1
+        .iter()
+        .map(|candidate| candidate.value.clone())
+        .collect();
+    assert_eq!(offered, ["run edit a.txt", "run build"]);
+}
+
+/// `-n` keeps the newest.
+#[test]
+fn the_history_limit_keeps_the_newest() {
+    let fixture = Fixture::new(HISTORY_MD);
+    seed_history(
+        &fixture,
+        &[
+            (1, "nixon run one"),
+            (2, "nixon run two"),
+            (3, "nixon run three"),
+        ],
+    );
+
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    let _ = app.history(&HistoryOpts {
+        limit: Some(2),
+        ..HistoryOpts::default()
+    });
+
+    assert_eq!(app.picker.calls[0].1.len(), 2);
+}
+
+/// Choosing a line hands it back for the caller to run.
+#[test]
+fn choosing_a_history_line_asks_for_it_to_be_rerun() {
+    let fixture = Fixture::new(HISTORY_MD);
+    seed_history(&fixture, &[(1, "nixon run build --no-release")]);
+
+    let picker = picks(&[&["run build --no-release"]]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    match app.history(&HistoryOpts::default()).unwrap() {
+        nixon::app::history::Outcome::Rerun(argv) => {
+            assert_eq!(argv, ["run", "build", "--no-release"]);
+        }
+        nixon::app::history::Outcome::Done(_) => panic!("expected a rerun"),
+    }
+}
+
+/// `--select` prints rather than running.
+#[test]
+fn selecting_a_history_line_runs_nothing() {
+    let fixture = Fixture::new(HISTORY_MD);
+    seed_history(&fixture, &[(1, "nixon run build")]);
+
+    let picker = picks(&[&["run build"]]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    match app
+        .history(&HistoryOpts {
+            select: true,
+            ..HistoryOpts::default()
+        })
+        .unwrap()
+    {
+        nixon::app::history::Outcome::Done(code) => assert_eq!(code, 0),
+        nixon::app::history::Outcome::Rerun(_) => panic!("it should not have run"),
+    }
+    assert!(app.runner.calls.is_empty());
+}
+
+/// With recording off there is nothing to show.
+#[test]
+fn the_history_command_needs_recording_to_be_on() {
+    let mut fixture = Fixture::new(HISTORY_MD);
+    fixture.config.history = Some(false);
+
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    let err = app.history(&HistoryOpts::default()).unwrap_err();
+
+    assert!(matches!(err, NixonError::HistoryDisabled), "got {err:?}");
+    assert_eq!(err.exit_code(), 1);
+}
+
+/// Cancelling the picker is a cancel.
+#[test]
+fn cancelling_the_history_picker_exits_130() {
+    let fixture = Fixture::new(HISTORY_MD);
+    seed_history(&fixture, &[(1, "nixon run build")]);
+
+    let picker = ScriptedPicker::new(vec![Selection::Canceled]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    let err = app.history(&HistoryOpts::default()).unwrap_err();
+    assert!(matches!(err, NixonError::Canceled));
+    assert_eq!(err.exit_code(), 130);
 }

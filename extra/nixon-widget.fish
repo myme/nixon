@@ -1,5 +1,6 @@
 # nixon fish widgets.
 #
+# Alt-h  insert something nixon ran before
 # Alt-i  insert a selection from a command's output
 # Alt-I  insert a command's source
 # Alt-p  cd into a project
@@ -10,6 +11,11 @@
 function nixon-insert-selection
     # Escaped per item: a selection may hold spaces or shell characters.
     commandline -i (nixon run -s | string escape | string join ' ')
+    commandline -f repaint
+end
+
+function nixon-insert-history
+    commandline -i (nixon history -s)
     commandline -f repaint
 end
 
@@ -62,6 +68,7 @@ function __nixon_history__ --on-event fish_prompt
     set -g __nixon_history_seen $size
 end
 
+bind \eh nixon-insert-history
 bind \ei nixon-insert-selection
 bind \eI nixon-insert-command
 bind \eP nixon-insert-project

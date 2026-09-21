@@ -4,6 +4,7 @@ pub mod edit;
 pub mod eval;
 pub mod gc;
 pub mod handle;
+pub mod history;
 pub mod new;
 pub mod project;
 pub mod run;

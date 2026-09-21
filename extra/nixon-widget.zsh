@@ -1,5 +1,6 @@
 # nixon zle widgets.
 #
+# Alt-h  insert something nixon ran before
 # Alt-i  insert a selection from a command's output
 # Alt-I  insert a command's source
 # Alt-p  cd into a project
@@ -9,6 +10,13 @@
 
 nixon-insert-selection() {
   LBUFFER="${LBUFFER}$(nixon run -s)"
+  local ret=$?
+  zle reset-prompt
+  return $ret
+}
+
+nixon-insert-history() {
+  LBUFFER="${LBUFFER}$(nixon history -s)"
   local ret=$?
   zle reset-prompt
   return $ret
@@ -85,11 +93,13 @@ __nixon_history__() {
 typeset -ga precmd_functions
 (($precmd_functions[(I)__nixon_history__])) || precmd_functions+=(__nixon_history__)
 
+zle -N nixon-insert-history
 zle -N nixon-insert-selection
 zle -N nixon-insert-command
 zle -N nixon-insert-project
 zle -N nixon-cd-project
 
+bindkey '\eh' nixon-insert-history
 bindkey '\ei' nixon-insert-selection
 bindkey '\eI' nixon-insert-command
 bindkey '\eP' nixon-insert-project

@@ -86,6 +86,43 @@ pub fn command_options(
     options
 }
 
+/// Candidates for the history picker.
+///
+/// The value is the invocation, which is what gets re-run or printed; the
+/// when and where are dimmed context in front of it.
+pub fn history_candidates(
+    entries: &[crate::history::Entry],
+    home: &Path,
+    now: u64,
+) -> Vec<Candidate> {
+    entries
+        .iter()
+        .map(|entry| {
+            let invocation = shell_words::join(entry.invocation.iter().map(String::as_str));
+            let display = format!(
+                "{DIM}{:>4}  {}{RESET}  {invocation}",
+                crate::history::ago(entry.at, now),
+                implode_home(Path::new(&entry.cwd), home).display(),
+            );
+            Candidate::with_title(display, invocation)
+        })
+        .collect()
+}
+
+/// Options for the history picker.
+pub fn history_options(config: &Config, query: Option<&str>) -> PickerOptions {
+    let mut options = PickerOptions {
+        header: Some("Run again".to_owned()),
+        initial_query: query.map(ToOwned::to_owned),
+        matching: matcher_options(config),
+        ..PickerOptions::default()
+    }
+    // Newest first is the order; ranking would undo it.
+    .no_sort();
+    options.expect = vec![(key(KeyCode::F(1)), SelectionType::Show)];
+    options
+}
+
 /// Candidates for project selection: `~`-collapsed paths, sorted.
 pub fn project_candidates(projects: &[Project], home: &Path) -> Vec<Candidate> {
     let mut candidates: Vec<Candidate> = projects

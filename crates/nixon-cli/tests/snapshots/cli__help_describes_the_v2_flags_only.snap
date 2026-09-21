@@ -10,6 +10,7 @@ Commands:
   edit     Edit a command in `$EDITOR`
   eval     Evaluate an expression
   gc       Garbage collect cached scripts
+  history  Show what has been run, and run it again
   new      Insert a new command into a config file
   project  Select a project and run a command in it
   run      Select and run a command

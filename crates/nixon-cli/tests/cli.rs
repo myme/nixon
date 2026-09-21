@@ -1028,3 +1028,98 @@ fn the_log_can_be_turned_off() {
 
     assert!(!fixture.temp.child("state/nixon/history").path().exists());
 }
+
+/// Seeds the log with lines as nixon would have written them.
+fn seed_history(fixture: &Fixture, lines: &[&str]) {
+    use std::fmt::Write as _;
+
+    let path = fixture.temp.child("state/nixon/history");
+    let cwd = fixture.temp.child("project").path().display().to_string();
+    let mut log = String::new();
+    for (n, invocation) in lines.iter().enumerate() {
+        let at = 1_700_000_000 + n as u64;
+        let _ = writeln!(log, "{at}\t{cwd}\t{invocation}");
+    }
+    path.write_str(&log).unwrap();
+}
+
+/// `--list` prints the invocations, newest first.
+#[test]
+fn history_list_prints_the_invocations() {
+    let fixture = Fixture::new();
+    seed_history(&fixture, &["nixon run alpha", "nixon run beta"]);
+
+    fixture
+        .nixon()
+        .args(["history", "-l"])
+        .assert()
+        .success()
+        .stdout("run beta\nrun alpha\n");
+}
+
+/// The query filters, as the other listings do.
+#[test]
+fn history_list_filters_on_its_query() {
+    let fixture = Fixture::new();
+    seed_history(&fixture, &["nixon run alpha", "nixon run beta"]);
+
+    fixture
+        .nixon()
+        .args(["history", "-l", "alpha"])
+        .assert()
+        .success()
+        .stdout("run alpha\n");
+}
+
+/// `-n` keeps the newest.
+#[test]
+fn history_list_honours_the_limit() {
+    let fixture = Fixture::new();
+    seed_history(&fixture, &["nixon run alpha", "nixon run beta"]);
+
+    fixture
+        .nixon()
+        .args(["history", "-l", "-n", "1"])
+        .assert()
+        .success()
+        .stdout("run beta\n");
+}
+
+/// `--clear` asks first, and `n` leaves the log alone.
+#[test]
+fn history_clear_asks_before_emptying() {
+    let fixture = Fixture::new();
+    seed_history(&fixture, &["nixon run alpha"]);
+    let log = fixture.temp.child("state/nixon/history");
+
+    fixture
+        .nixon()
+        .args(["history", "--clear"])
+        .write_stdin("n\n")
+        .assert()
+        .success()
+        .stderr(contains("Clear ").and(contains("? [y/N]")));
+    assert!(!std::fs::read_to_string(log.path()).unwrap().is_empty());
+
+    fixture
+        .nixon()
+        .args(["history", "--clear"])
+        .write_stdin("y\n")
+        .assert()
+        .success();
+    assert!(std::fs::read_to_string(log.path()).unwrap().is_empty());
+}
+
+/// With recording off there is nothing to show.
+#[test]
+fn history_needs_recording_to_be_on() {
+    Fixture::with_config(
+        "```json config\n{\"history\": false}\n```\n\n# `greet`\n\n```bash\necho hi\n```\n",
+    )
+    .nixon()
+    .args(["history", "-l"])
+    .assert()
+    .failure()
+    .code(1)
+    .stderr(contains("history is disabled in the configuration"));
+}

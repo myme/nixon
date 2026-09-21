@@ -933,3 +933,81 @@ fn the_bash_hook_puts_what_nixon_ran_into_shell_history() {
     session.send("exit\r").unwrap();
     let _ = finish(&mut session);
 }
+
+/// `Enter` in the history picker runs the line again.
+#[test]
+fn the_history_picker_runs_the_chosen_line_again() {
+    let pty = Pty::with_config("# `greet`\n\n```bash\necho hello\n```\n");
+    pty.temp
+        .child("state/nixon/history")
+        .write_str(&format!(
+            "1700000000\t{}\tnixon run greet\n",
+            pty.temp.child("project").path().display()
+        ))
+        .unwrap();
+
+    let mut session = pty.spawn(&["history"]);
+    settle();
+    session.send("\r").unwrap();
+
+    let output = drain(&mut session);
+    assert!(output.contains("hello"), "output was: {output}");
+}
+
+/// The bash `Alt-h` widget inserts a past invocation without running it.
+#[test]
+#[cfg(unix)]
+fn the_bash_widget_inserts_a_history_line() {
+    let pty = Pty::with_config("# `greet`\n\n```bash\necho hello\n```\n");
+    pty.temp
+        .child("state/nixon/history")
+        .write_str(&format!(
+            "1700000000\t{}\tnixon run greet\n",
+            pty.temp.child("project").path().display()
+        ))
+        .unwrap();
+
+    let bin_dir = pty.temp.child("bin");
+    bin_dir.create_dir_all().unwrap();
+    std::os::unix::fs::symlink(Pty::binary(), bin_dir.child("nixon").path()).unwrap();
+
+    let rc = pty.temp.child("bashrc");
+    rc.write_str(&format!(
+        "PATH={}:$PATH\nHISTFILE=\nPS1='ready> '\nsource {}\n",
+        bin_dir.path().display(),
+        std::fs::canonicalize("../../extra/nixon-widget.bash")
+            .unwrap()
+            .display()
+    ))
+    .unwrap();
+
+    let mut command = std::process::Command::new("bash");
+    command.args([
+        "--noprofile",
+        "--rcfile",
+        &rc.path().to_string_lossy(),
+        "-i",
+    ]);
+    pty.apply(&mut command);
+
+    let mut session = Session::spawn(command).unwrap();
+    session.get_process_mut().set_window_size(80, 24).unwrap();
+    session.set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("ready> ").unwrap();
+    session.send("\u{1b}h").unwrap();
+    settle();
+    session.send("\r").unwrap();
+    settle();
+
+    // Inserted, not run: prefix `echo` and the line comes back as text.
+    session.send("\u{1}echo LINE=\r").unwrap();
+    if session.expect("LINE=run greet").is_err() {
+        session.send("exit\r").unwrap();
+        let (_, seen) = finish(&mut session);
+        panic!("the widget did not insert the invocation: {seen:?}");
+    }
+
+    session.send("exit\r").unwrap();
+    let _ = finish(&mut session);
+}

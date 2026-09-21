@@ -10,6 +10,7 @@ you are already typing rather than in a subshell.
 
 | Key | Action |
 |---|---|
+| `Alt-h` | Insert something nixon ran before |
 | `Alt-i` | Run a command and insert what you pick from its output |
 | `Alt-I` | Insert a command's source at the cursor |
 | `Alt-p` | Pick a project and change directory into it |
@@ -17,6 +18,10 @@ you are already typing rather than in a subshell.
 
 `Alt-p` is fzf's `Alt-C` for projects: nothing is typed, the prompt is redrawn
 in the new directory, and cancelling leaves everything as it was.
+
+`Alt-h` picks from [the log](cli.md#the-log) and puts the line on the command
+line without running it — `nixon history -s` — so you can edit it first.
+`nixon history` on its own runs the chosen line straight away.
 
 Source the one for your shell:
 

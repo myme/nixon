@@ -14,7 +14,7 @@ pub struct Entry {
     pub at: u64,
     /// The directory nixon was invoked in.
     pub cwd: String,
-    /// The arguments after `nixon`, already shell-quoted.
+    /// The arguments after `nixon`, unquoted.
     pub invocation: Vec<String>,
 }
 
@@ -44,6 +44,80 @@ impl Entry {
             )
         )
     }
+}
+
+/// Parses one stored line back into an entry.
+///
+/// A line that is not three fields is from a future format or a damaged
+/// write; skipping it is better than refusing to show any history at all.
+fn parse(line: &str) -> Option<Entry> {
+    let mut fields = line.splitn(3, '\t');
+    let at = fields.next()?.parse().ok()?;
+    let cwd = fields.next()?.to_owned();
+    let mut invocation = shell_words::split(fields.next()?).ok()?;
+    // Stored with the program name, held without it: the field is a command
+    // line, the struct is the arguments.
+    if invocation.first().is_some_and(|word| word == "nixon") {
+        invocation.remove(0);
+    }
+    (!invocation.is_empty()).then_some(Entry {
+        at,
+        cwd,
+        invocation,
+    })
+}
+
+/// Every entry in the log, oldest first.
+///
+/// A log that cannot be read is an empty one: there is nothing to show, and
+/// nothing has gone wrong that the user can act on.
+pub fn read(path: &Path) -> Vec<Entry> {
+    std::fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(parse)
+        .collect()
+}
+
+/// The entries to show: newest first, runs of the same command collapsed,
+/// and at most `limit` of them.
+///
+/// Consecutive duplicates only. Running something, then something else,
+/// then the first again is three things the user did.
+pub fn recent(entries: Vec<Entry>, limit: Option<usize>) -> Vec<Entry> {
+    let mut out: Vec<Entry> = Vec::new();
+    for entry in entries.into_iter().rev() {
+        if out.last().is_some_and(|last: &Entry| {
+            last.invocation == entry.invocation && last.cwd == entry.cwd
+        }) {
+            continue;
+        }
+        out.push(entry);
+        if limit.is_some_and(|limit| out.len() >= limit) {
+            break;
+        }
+    }
+    out
+}
+
+/// Empties the log.
+pub fn clear(path: &Path) -> std::io::Result<()> {
+    match std::fs::write(path, "") {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    }
+}
+
+/// How long ago, in the roughest unit that still says something.
+pub fn ago(at: u64, now: u64) -> String {
+    let seconds = now.saturating_sub(at);
+    let (amount, unit) = match seconds {
+        0..=59 => (seconds, "s"),
+        60..=3599 => (seconds / 60, "m"),
+        3600..=86399 => (seconds / 3600, "h"),
+        _ => (seconds / 86400, "d"),
+    };
+    format!("{amount}{unit}")
 }
 
 /// Appends an entry to the log, or gives up quietly.
@@ -132,5 +206,112 @@ mod tests {
     fn an_entry_is_timestamped_now() {
         let entry = Entry::new(Path::new("/tmp"), vec!["run".to_owned()]);
         assert!(entry.at > 1_700_000_000, "got {}", entry.at);
+    }
+}
+
+#[cfg(test)]
+mod reading {
+    use assert_fs::TempDir;
+    use assert_fs::prelude::*;
+
+    use super::{Entry, ago, read, recent};
+
+    fn entry(at: u64, invocation: &[&str]) -> Entry {
+        Entry {
+            at,
+            cwd: "/home/me".to_owned(),
+            invocation: invocation.iter().map(|s| (*s).to_owned()).collect(),
+        }
+    }
+
+    #[test]
+    fn a_written_line_reads_back() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.child("history");
+        let original = entry(1_700_000_000, &["run", "edit", "a file.txt"]);
+        path.write_str(&original.line()).unwrap();
+
+        assert_eq!(read(path.path()), [original]);
+    }
+
+    #[test]
+    fn a_damaged_line_is_skipped_rather_than_fatal() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.child("history");
+        path.write_str("not a log line\n1700000000\t/home/me\tnixon run ok\n\n")
+            .unwrap();
+
+        let entries = read(path.path());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].invocation, ["run", "ok"]);
+    }
+
+    #[test]
+    fn a_missing_log_reads_as_empty() {
+        let temp = TempDir::new().unwrap();
+        assert!(read(temp.child("nothing").path()).is_empty());
+    }
+
+    #[test]
+    fn the_newest_comes_first() {
+        let entries = vec![
+            entry(1, &["run", "one"]),
+            entry(2, &["run", "two"]),
+            entry(3, &["run", "three"]),
+        ];
+        let shown: Vec<u64> = recent(entries, None).iter().map(|e| e.at).collect();
+        assert_eq!(shown, [3, 2, 1]);
+    }
+
+    #[test]
+    fn a_run_of_the_same_command_collapses_to_one() {
+        let entries = vec![
+            entry(1, &["run", "one"]),
+            entry(2, &["run", "two"]),
+            entry(3, &["run", "two"]),
+            entry(4, &["run", "two"]),
+        ];
+        let shown: Vec<Vec<String>> = recent(entries, None)
+            .into_iter()
+            .map(|e| e.invocation)
+            .collect();
+        assert_eq!(shown.len(), 2);
+        assert_eq!(shown[0], ["run", "two"]);
+        assert_eq!(shown[1], ["run", "one"]);
+    }
+
+    /// Only consecutive ones: doing something else in between makes it a
+    /// separate thing the user did.
+    #[test]
+    fn the_same_command_returned_to_is_kept() {
+        let entries = vec![
+            entry(1, &["run", "one"]),
+            entry(2, &["run", "two"]),
+            entry(3, &["run", "one"]),
+        ];
+        assert_eq!(recent(entries, None).len(), 3);
+    }
+
+    #[test]
+    fn a_limit_keeps_the_newest() {
+        let entries = vec![
+            entry(1, &["run", "one"]),
+            entry(2, &["run", "two"]),
+            entry(3, &["run", "three"]),
+        ];
+        let shown: Vec<u64> = recent(entries, Some(2)).iter().map(|e| e.at).collect();
+        assert_eq!(shown, [3, 2]);
+    }
+
+    #[test]
+    fn relative_times_use_the_roughest_useful_unit() {
+        let now = 10_000_000;
+        assert_eq!(ago(now, now), "0s");
+        assert_eq!(ago(now - 45, now), "45s");
+        assert_eq!(ago(now - 90, now), "1m");
+        assert_eq!(ago(now - 7200, now), "2h");
+        assert_eq!(ago(now - 86400 * 3, now), "3d");
+        // A clock that went backwards is not negative time.
+        assert_eq!(ago(now + 100, now), "0s");
     }
 }

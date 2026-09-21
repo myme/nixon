@@ -10,6 +10,7 @@ Commands:
   edit     Edit a command in `$EDITOR`
   eval     Evaluate an expression
   gc       Garbage collect cached scripts
+  history  Show what has been run, and run it again
   new      Insert a new command into a config file
   project  Select a project and run a command in it
   run      Select and run a command
@@ -58,9 +59,9 @@ on: `nixon run hello -- -i` gives `hello` the single argument `-i`.
 A bare argument that is not a subcommand is `run`'s, so `nixon hello` and
 `nixon run hello` are the same. A word that *is* a subcommand is always the
 subcommand: a command called `edit` has to be run as `nixon run edit`. The
-reserved words are `edit`, `eval`, `gc`, `new`, `project`, `run`, `help` and
-`internal` — the last of these is packaging machinery and is hidden from
-`--help`, but it shadows a command of that name like any other.
+reserved words are `edit`, `eval`, `gc`, `history`, `new`, `project`, `run`,
+`help` and `internal` — the last of these is packaging machinery and is hidden
+from `--help`, but it shadows a command of that name like any other.
 
 ## `run`
 
@@ -166,6 +167,28 @@ rather than a command to keep.
 
 A command that came from `bin_dirs` has no markdown location, so it cannot be
 inserted after.
+
+## `history`
+
+```
+nixon history [-l] [-n N] [--clear] [QUERY]
+```
+
+Picks from [the log](#the-log), newest first, and runs the chosen line again —
+through the same argument parser, so its options and values mean what they
+meant the first time, and the re-run is itself recorded. A run of the same
+command collapses to one row.
+
+| Flag | Effect |
+|---|---|
+| `-l`, `--list` | Print matching invocations and exit. |
+| `-s`, `--select` | Pick one and print it, running nothing. |
+| `-n`, `--limit` | Keep only the last N entries. |
+| `--clear` | Empty the log, after asking. |
+
+`F1` prints the invocation instead of running it, and `Esc` cancels. With
+`history: false` in the configuration there is nothing to show, and the
+command exits 1 saying so.
 
 ## `gc`
 

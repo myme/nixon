@@ -28,3 +28,21 @@ pub fn raw(text: &str) -> io::Result<()> {
     let mut stdout = io::stdout().lock();
     write!(stdout, "{text}")
 }
+
+/// Asks on stderr and reads the answer from stdin.
+///
+/// The prompt is for a person, so it goes where the picker goes; stdout
+/// carries data. Only a bare `y` or `Y` accepts; anything else, including
+/// end of input, means no.
+pub fn confirm(prompt: &str) -> crate::error::Result<bool> {
+    use std::io::{BufRead as _, Write as _};
+
+    let mut err = std::io::stderr().lock();
+    err.write_all(prompt.as_bytes())?;
+    err.flush()?;
+    drop(err);
+
+    let mut answer = String::new();
+    std::io::stdin().lock().read_line(&mut answer)?;
+    Ok(matches!(answer.trim(), "y" | "Y"))
+}

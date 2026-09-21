@@ -67,6 +67,10 @@ pub enum NixonError {
         path: String,
     },
 
+    /// `history` was asked for with recording turned off.
+    #[error("history is disabled in the configuration")]
+    HistoryDisabled,
+
     /// Nothing was selected.
     #[error("{0}")]
     NothingSelected(String),
