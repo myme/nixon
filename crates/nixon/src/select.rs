@@ -119,6 +119,8 @@ pub fn history_options(config: &Config, query: Option<&str>) -> PickerOptions {
         header: Some("Run again".to_owned()),
         initial_query: query.map(ToOwned::to_owned),
         matching: matcher_options(config),
+        // A query naming one line needs no picker, as everywhere else.
+        select_one: true,
         ..PickerOptions::default()
     }
     // Newest first is the order; ranking would undo it.

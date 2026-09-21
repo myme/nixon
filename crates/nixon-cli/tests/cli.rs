@@ -1123,3 +1123,23 @@ fn history_needs_recording_to_be_on() {
     .code(1)
     .stderr(contains("history is disabled in the configuration"));
 }
+
+/// A query matching one line needs no terminal, as everywhere else.
+#[test]
+#[cfg(unix)]
+fn history_select_with_a_unique_query_needs_no_terminal() {
+    let fixture = Fixture::new();
+    seed_history(&fixture, &["nixon run alpha", "nixon run beta"]);
+    let nixon = assert_cmd::cargo::cargo_bin("nixon");
+
+    let mut cmd = Command::new("setsid");
+    cmd.arg("--wait")
+        .arg(nixon)
+        .args(["history", "-s", "alpha"]);
+    fixture.apply(&mut cmd);
+
+    cmd.write_stdin("")
+        .assert()
+        .success()
+        .stdout("nixon run alpha\n");
+}
