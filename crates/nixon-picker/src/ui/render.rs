@@ -73,6 +73,11 @@ pub fn render(app: &mut App, frame: &mut Frame<'_>) {
     next += 1;
     let list_row = rows[next];
 
+    // The one place the list's height is decided. Computing it beside the
+    // layout instead of from it is how the options row came to be counted
+    // in one place and not the other.
+    app.set_height(usize::from(list_row.height).max(1));
+
     render_query(app, frame, query_row);
     render_list(app, frame, list_row);
 
@@ -367,15 +372,16 @@ mod tests {
         insta::assert_snapshot!(draw(&mut app));
     }
 
+    /// Drawn small enough that the list really has to scroll: the height
+    /// comes from the frame, so a tall terminal would fit every row.
     #[test]
     fn renders_a_scrolled_list() {
         let mut app = App::new(commands(), PickerOptions::default());
-        app.set_height(4);
+        let mut terminal = Terminal::new(TestBackend::new(80, 5)).unwrap();
+        terminal.draw(|frame| render(&mut app, frame)).unwrap();
         for _ in 0..6 {
             press(&mut app, KeyCode::Down);
         }
-        let backend = TestBackend::new(80, 20);
-        let mut terminal = Terminal::new(backend).unwrap();
         terminal.draw(|frame| render(&mut app, frame)).unwrap();
         insta::assert_snapshot!(format!("{}", terminal.backend()));
     }
@@ -764,6 +770,62 @@ mod option_row {
         let mut app = app();
         press(&mut app, KeyCode::Char('o'), KeyModifiers::ALT);
         insta::assert_snapshot!(draw(&mut app));
+    }
+
+    /// Every row of chrome costs the list one, and nothing else does.
+    #[test]
+    fn the_list_gets_the_rows_the_chrome_leaves() {
+        let items: Vec<Candidate> = (0..30)
+            .map(|n| Candidate::identity(format!("item{n:02}")))
+            .collect();
+        let shown = |options: PickerOptions| {
+            let mut app = App::new(items.clone(), options);
+            let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+            terminal.draw(|frame| render(&mut app, frame)).unwrap();
+            app.rows().len()
+        };
+
+        assert_eq!(shown(PickerOptions::default()), 19);
+        assert_eq!(shown(PickerOptions::default().header("x")), 18);
+        assert_eq!(
+            shown(
+                PickerOptions::default()
+                    .header("x")
+                    .options(vec![PickerOption::new("--force", false)])
+            ),
+            17
+        );
+    }
+
+    /// The height the list gets is whatever is left after the chrome.
+    ///
+    /// It used to be computed separately from the layout, and the copy
+    /// forgot the options row: the state machine thought one more candidate
+    /// fitted than the frame drew, and the cursor walked off the bottom.
+    #[test]
+    fn the_cursor_stays_inside_the_drawn_list_with_a_header_and_options() {
+        let items: Vec<Candidate> = (0..12)
+            .map(|n| Candidate::identity(format!("item{n:02}")))
+            .collect();
+        let options = PickerOptions::default()
+            .header("Select command")
+            .options(vec![PickerOption::new("--force", false)]);
+        let mut app = App::new(items, options);
+
+        // 6 rows: header, options, query, and three for the list.
+        let mut terminal = Terminal::new(TestBackend::new(80, 6)).unwrap();
+        terminal.draw(|frame| render(&mut app, frame)).unwrap();
+        for _ in 0..3 {
+            press(&mut app, KeyCode::Down, KeyModifiers::NONE);
+        }
+        terminal.draw(|frame| render(&mut app, frame)).unwrap();
+
+        let drawn = format!("{}", terminal.backend());
+        let selected = app.current().expect("nothing selected").value;
+        assert!(
+            drawn.contains(&selected),
+            "Enter would take {selected}, which is not on screen:\n{drawn}"
+        );
     }
 
     /// The cells of one row, with the style each carries.

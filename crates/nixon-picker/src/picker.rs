@@ -217,10 +217,7 @@ fn run_loop(
             Some(ref mut guard) => guard.terminal(),
             None => guard.insert(TerminalGuard::new()?).terminal(),
         };
-        terminal.draw(|frame| {
-            app.set_height(list_height(frame.area().height, options));
-            render(app, frame);
-        })?;
+        terminal.draw(|frame| render(app, frame))?;
 
         if streaming && !event::poll(Duration::from_millis(30))? {
             // Nothing typed; loop round to pick up more candidates.
@@ -322,12 +319,6 @@ pub fn unique_selection(
         )),
         _ => None,
     }
-}
-
-/// Rows available to the list, after the query line and any header.
-fn list_height(total: u16, options: &PickerOptions) -> usize {
-    let chrome = if options.header.is_some() { 2 } else { 1 };
-    usize::from(total).saturating_sub(chrome).max(1)
 }
 
 /// A picker that answers from a queue, for tests.
@@ -506,7 +497,7 @@ impl Picker for SelectingPicker {
 
 #[cfg(test)]
 mod tests {
-    use super::{FilterPicker, Picker, ScriptedPicker, TuiPicker, list_height};
+    use super::{FilterPicker, Picker, ScriptedPicker, TuiPicker};
     use crate::candidate::Candidate;
     use crate::options::PickerOptions;
     use crate::selection::{Selection, SelectionType};
@@ -586,16 +577,6 @@ mod tests {
             .pick(&PickerOptions::default(), candidates(&["one", "two"]))
             .unwrap();
         assert_eq!(values(&selection), ["two"]);
-    }
-
-    #[test]
-    fn the_list_height_leaves_room_for_the_query_and_header() {
-        let plain = PickerOptions::default();
-        assert_eq!(list_height(20, &plain), 19);
-
-        let with_header = PickerOptions::default().header("x");
-        assert_eq!(list_height(20, &with_header), 18);
-        assert_eq!(list_height(1, &with_header), 1);
     }
 }
 
