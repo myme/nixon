@@ -19,7 +19,7 @@ pub mod terminal;
 pub mod textbuf;
 pub mod ui;
 
-pub use candidate::Candidate;
+pub use candidate::{Candidate, strip_ansi};
 pub use filter::filter;
 pub use options::{PickerOption, PickerOptions};
 pub use picker::{FilterPicker, Picker, TuiPicker, exact_selection, unique_selection};

@@ -60,7 +60,10 @@ impl Candidate {
 }
 
 /// Removes ANSI escape sequences from `text`.
-fn strip_ansi(text: &str) -> String {
+///
+/// What is left is what the user sees, which is what matching, fields and
+/// columns are all counted in.
+pub fn strip_ansi(text: &str) -> String {
     String::from_utf8(strip_ansi_escapes::strip(text)).unwrap_or_else(|_| text.to_owned())
 }
 

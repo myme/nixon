@@ -2,6 +2,7 @@
 
 use nixon_picker::{
     Candidate, CandidateStream, FilterPicker, Picker, PickerOption, PickerOptions, Selection,
+    strip_ansi,
 };
 use serde::Deserialize;
 
@@ -321,17 +322,19 @@ fn candidates_for(
         PlaceholderFormat::Fields(fields) => captured
             .lines()
             .into_iter()
-            .map(|line| {
-                let words: Vec<String> = line.split_whitespace().map(ToOwned::to_owned).collect();
-                let value = pick_fields(fields, &words).join(" ");
-                Candidate::with_title(line, value)
-            })
+            .map(|line| line_candidate(&line, fields))
             .collect(),
 
         PlaceholderFormat::Columns { has_header, cols } => {
-            format_columns(*has_header, cols, &captured.lines())
-                .into_iter()
-                .map(|(title, value)| Candidate::with_title(title, value))
+            // Widths and columns are counted in what the user sees; the row
+            // is still shown as the command printed it.
+            let rows = captured.lines();
+            let plain: Vec<String> = rows.iter().map(|row| strip_ansi(row)).collect();
+            let titles = if *has_header { &rows[1..] } else { &rows[..] };
+            titles
+                .iter()
+                .zip(format_columns(*has_header, cols, &plain))
+                .map(|(title, (_, value))| Candidate::with_title(title, value))
                 .collect()
         }
 
@@ -349,11 +352,15 @@ fn candidates_for(
 }
 
 /// One output line as a candidate, for the line-oriented formats.
+///
+/// Fields are cut from the visible text: an escape sequence with spaces
+/// around it would otherwise count as a field of its own.
 fn line_candidate(line: &str, fields: &[usize]) -> Candidate {
     if fields.is_empty() {
         return Candidate::identity(line);
     }
-    let words: Vec<String> = line.split_whitespace().map(ToOwned::to_owned).collect();
+    let plain = strip_ansi(line);
+    let words: Vec<String> = plain.split_whitespace().map(ToOwned::to_owned).collect();
     Candidate::with_title(line, pick_fields(fields, &words).join(" "))
 }
 
@@ -962,6 +969,28 @@ mod tests {
         assert_eq!(candidates[0].value, "plain");
         assert_eq!(candidates[1].display, "Titled");
         assert_eq!(candidates[1].value, "v1");
+    }
+
+    /// Fields are counted in what the user sees. An escape sequence with
+    /// spaces around it is not a field of its own.
+    #[test]
+    fn fields_are_counted_in_the_visible_text() {
+        let harness = Harness::new(vec![command("colors", "ls\n", Vec::new())]);
+        let mut placeholder = arg("colors");
+        placeholder.format = PlaceholderFormat::Fields(vec![1]);
+        let outer = command("show", "echo\n", vec![placeholder]);
+
+        let mut picker = ScriptedPicker::new(vec![selected(&["alpha"])]);
+        // The colour is set before the word, with a space between.
+        let mut runner =
+            FakeRunner::new().with_output(&["\u{1b}[31m alpha beta", "\u{1b}[32m gamma delta"]);
+
+        let resolved = harness
+            .resolve(&outer, &[], &mut picker, &mut runner)
+            .unwrap();
+
+        assert_eq!(picker.calls[0].1[0].value, "alpha");
+        assert_eq!(resolved.args, ["alpha"]);
     }
 
     /// Colour is for the eye: a field picked out of a coloured line must
