@@ -24,6 +24,8 @@ pub struct EvalOpts {
     pub language: Option<Language>,
     /// Select a project instead of using the current directory.
     pub select_project: bool,
+    /// Run in the project at this path, rather than asking.
+    pub project: Option<String>,
 }
 
 impl<P: Picker, R: ProcessRunner> App<P, R> {
@@ -31,10 +33,10 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     pub fn eval(&mut self, opts: &EvalOpts) -> Result<ExitCode> {
         // Without --project, fall back to the current
         // directory as `run` does, rather than v1's interactive picker.
-        let project = if opts.select_project {
-            self.pick_one_project(None)?
-        } else {
-            self.current_project()
+        let project = match (&opts.project, opts.select_project) {
+            (Some(path), _) => self.project_for_query(Some(path))?,
+            (None, true) => self.pick_one_project(None)?,
+            (None, false) => self.current_project(),
         };
 
         let (source, detected) = match &opts.file {

@@ -373,6 +373,93 @@ fn completion_looks_in_the_project_the_line_names() {
     );
 }
 
+/// An eval must replay as the language it ran in.
+///
+/// The recorded line used to be `eval <source>` and nothing else, so the
+/// replay ran everything as Bash. `plain` is `cat`, so the source is also
+/// the output — and is not a command Bash could run.
+#[test]
+fn an_eval_replays_in_its_own_language() {
+    let fixture = Fixture::new();
+    fixture
+        .nixon()
+        .args(["eval", "-l", "plain", "hello there"])
+        .assert()
+        .success()
+        .stdout("hello there");
+
+    fixture
+        .nixon()
+        .args(["history", "-l"])
+        .assert()
+        .success()
+        .stdout(contains("-l plain"));
+
+    // Through the real parser and runner, not just the stored text.
+    fixture
+        .nixon()
+        .args(["history", "hello there"])
+        .assert()
+        .success()
+        .stdout("hello there");
+}
+
+/// And its placeholders replay as specs, which ask again.
+///
+/// They were recorded as the values they resolved to, which `eval` reads as
+/// more placeholders and rejects.
+#[test]
+fn an_eval_replays_its_placeholders_as_placeholders() {
+    let fixture = Fixture::with_config("# `_one`\n\n```bash\necho only\n```\n");
+
+    fixture
+        .nixon()
+        .args(["eval", "echo \"$1\"", "${_one}"])
+        .assert()
+        .success()
+        .stdout("only\n");
+
+    fixture
+        .nixon()
+        .args(["history", "-l"])
+        .assert()
+        .success()
+        .stdout(contains("${_one}"));
+
+    fixture
+        .nixon()
+        .args(["history", "_one"])
+        .assert()
+        .success()
+        .stdout("only\n");
+}
+
+/// A multi-line source is one record, and comes back whole.
+#[test]
+fn a_multiline_eval_is_one_history_entry() {
+    let fixture = Fixture::new();
+    fixture
+        .nixon()
+        .args(["eval", "echo first\necho second"])
+        .assert()
+        .success()
+        .stdout("first\nsecond\n");
+
+    fixture
+        .nixon()
+        .args(["history", "-l", "first"])
+        .assert()
+        .success()
+        .stdout(contains("first"));
+
+    fixture
+        .nixon()
+        .args(["history", "echo first"])
+        .assert()
+        .success()
+        .stdout("first\nsecond\n");
+}
+
 #[test]
 fn gc_reports_what_it_removes() {
     let fixture = Fixture::new();

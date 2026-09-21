@@ -153,9 +153,24 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         }
 
         // An unnamed command is an `eval`; there is nothing to look up, so
-        // the source itself is what repeats it.
+        // the source itself is what repeats it — in the language it ran in,
+        // and in the project it ran in.
         let mut invocation = if command.name.is_empty() {
-            vec!["eval".to_owned(), command.source.trim_end().to_owned()]
+            let mut eval = vec!["eval".to_owned()];
+            if project.path() != self.current_project().path() {
+                eval.push(format!("--project={}", project.path().display()));
+            }
+            eval.push("-l".to_owned());
+            eval.push(command.lang.to_string());
+            eval.push(command.source.trim_end().to_owned());
+            // The specs, not the values they resolved to: `eval` takes
+            // placeholders after its source, and a resolved value has no
+            // spelling there. A replay asks again.
+            eval.extend(command.args.iter().filter_map(|spec| match spec {
+                crate::command::ArgSpec::Placeholder(placeholder) => Some(placeholder.to_string()),
+                crate::command::ArgSpec::Option(_) => None,
+            }));
+            return self.write_record(eval);
         } else if project.path() == self.current_project().path() {
             vec!["run".to_owned(), command.name.clone()]
         } else {
@@ -167,6 +182,11 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         };
         invocation.extend(replay);
 
+        self.write_record(invocation);
+    }
+
+    /// Appends one invocation to the log.
+    fn write_record(&self, invocation: Vec<String>) {
         let entry = crate::history::Entry::new(&self.env.cwd, invocation);
         crate::history::record(&self.dirs.history_file(), &entry);
     }

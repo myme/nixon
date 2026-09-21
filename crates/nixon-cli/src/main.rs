@@ -208,7 +208,10 @@ fn eval_opts(args: EvalArgs) -> EvalOpts {
         file: args.file,
         placeholders,
         language: args.language,
-        select_project: args.project,
+        // `--project` with no value means "ask"; with one it names the
+        // project outright, which is what a recorded eval replays.
+        select_project: args.project.as_ref().is_some_and(String::is_empty),
+        project: args.project.filter(|path| !path.is_empty()),
     }
 }
 

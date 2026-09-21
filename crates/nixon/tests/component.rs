@@ -1186,7 +1186,8 @@ fn eval_records_its_expression() {
     })
     .unwrap();
 
-    assert_eq!(fixture.history(), ["nixon eval 'echo hello'"]);
+    // The language too, or a replay runs it as bash whatever it was.
+    assert_eq!(fixture.history(), ["nixon eval -l bash 'echo hello'"]);
 }
 
 /// Nothing that did not run is recorded.

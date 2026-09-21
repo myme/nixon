@@ -246,9 +246,14 @@ pub struct EvalArgs {
     /// Language of the expression.
     #[arg(short = 'l', long, value_parser = parse_language)]
     pub language: Option<Language>,
-    /// Select a project instead of using the current directory.
-    #[arg(short = 'p', long)]
-    pub project: bool,
+    /// Select a project instead of using the current directory, or name
+    /// one with `--project=<path>`.
+    ///
+    /// The value needs the `=`: without it, `nixon eval -p 'echo hi'` would
+    /// read the expression as the project.
+    #[arg(short = 'p', long, num_args = 0..=1, require_equals = true,
+          default_missing_value = "", value_name = "PROJECT")]
+    pub project: Option<String>,
 }
 
 /// `nixon history`.
