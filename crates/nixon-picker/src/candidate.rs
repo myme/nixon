@@ -46,10 +46,14 @@ impl Candidate {
     }
 
     /// A candidate shown as `display` but returning `value`.
+    ///
+    /// The value is stripped like an identity candidate's: a field picked
+    /// out of coloured output carries the escapes that surrounded it, and
+    /// they are no part of what was selected.
     pub fn with_title(display: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
             display: display.into(),
-            value: value.into(),
+            value: strip_ansi(&value.into()),
             id: Self::UNASSIGNED,
         }
     }
@@ -69,6 +73,15 @@ mod tests {
         let candidate = Candidate::identity("README.md");
         assert_eq!(candidate.display, candidate.value);
         assert_eq!(candidate.value, "README.md");
+    }
+
+    /// A field picked out of a coloured line brings its escapes with it.
+    #[test]
+    fn a_titled_value_is_stripped_too() {
+        let candidate =
+            Candidate::with_title("\u{1b}[31malpha\u{1b}[0m beta", "\u{1b}[31malpha\u{1b}[0m");
+        assert!(candidate.display.contains('\u{1b}'));
+        assert_eq!(candidate.value, "alpha");
     }
 
     #[test]

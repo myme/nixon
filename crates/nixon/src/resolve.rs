@@ -964,6 +964,68 @@ mod tests {
         assert_eq!(candidates[1].value, "v1");
     }
 
+    /// Colour is for the eye: a field picked out of a coloured line must
+    /// reach argv as the text, escapes and all removed.
+    #[test]
+    fn a_streamed_field_value_has_no_ansi_in_it() {
+        let harness = Harness::new(vec![command("colors", "ls\n", Vec::new())]);
+        let mut placeholder = arg("colors");
+        placeholder.format = PlaceholderFormat::Fields(vec![1]);
+        let outer = command("show", "echo\n", vec![placeholder]);
+
+        let mut picker = ScriptedPicker::new(vec![selected(&["alpha"])]);
+        let mut runner = FakeRunner::new().with_output(&[
+            "\u{1b}[31malpha\u{1b}[0m beta",
+            "\u{1b}[32mgamma\u{1b}[0m delta",
+        ]);
+
+        let resolved = harness
+            .resolve(&outer, &[], &mut picker, &mut runner)
+            .unwrap();
+
+        let offered = &picker.calls[0].1;
+        assert!(offered[0].display.contains('\u{1b}'), "colour was lost");
+        assert_eq!(offered[0].value, "alpha");
+        assert_eq!(resolved.args, ["alpha"]);
+    }
+
+    /// The buffered formats build the same way, through `with_title`.
+    #[test]
+    fn a_buffered_column_or_json_value_has_no_ansi_in_it() {
+        let harness = Harness::new(vec![command("items", "echo\n", Vec::new())]);
+        let mut columns = arg("items");
+        columns.format = PlaceholderFormat::Columns {
+            has_header: false,
+            cols: vec![1],
+        };
+        let outer = command("pick", "echo\n", vec![columns]);
+
+        let mut picker = ScriptedPicker::new(vec![selected(&["alpha"])]);
+        let mut runner = FakeRunner::new().with_output(&[
+            "\u{1b}[31malpha\u{1b}[0m beta",
+            "\u{1b}[32mgamma\u{1b}[0m delta",
+        ]);
+        harness
+            .resolve(&outer, &[], &mut picker, &mut runner)
+            .unwrap();
+        assert_eq!(picker.calls[0].1[0].value, "alpha");
+
+        let mut json = arg("items");
+        json.format = PlaceholderFormat::Json;
+        let outer = command("pick", "echo\n", vec![json]);
+
+        let mut picker = ScriptedPicker::new(vec![selected(&["v1"])]);
+        // Two, or `-1` answers it without asking.
+        let mut runner = FakeRunner::new().with_raw_output(
+            b"[{\"title\": \"\\u001b[31mTitled\\u001b[0m\", \"value\": \"\\u001b[31mv1\\u001b[0m\"}, \"plain\"]",
+        );
+        harness
+            .resolve(&outer, &[], &mut picker, &mut runner)
+            .unwrap();
+        assert!(picker.calls[0].1[0].display.contains('\u{1b}'));
+        assert_eq!(picker.calls[0].1[0].value, "v1");
+    }
+
     #[test]
     fn bad_json_is_a_typed_error_not_a_panic() {
         let items = command("items", "echo\n", Vec::new());
