@@ -56,12 +56,20 @@ pub trait Picker {
     }
 
     /// The same for a stream.
+    ///
+    /// The default collects, so exactness is decided over the whole list
+    /// rather than as candidates arrive; a picker that draws while it waits
+    /// overrides this and decides as soon as it sees the candidate.
     fn pick_stream_options(
         &mut self,
         options: &PickerOptions,
         stream: &mut CandidateStream,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
-        let selection = self.pick_stream(options, stream)?;
+        let candidates = stream.collect();
+        if let Some(selection) = exact_selection(options, &candidates) {
+            return Ok((selection, option_state(options)));
+        }
+        let selection = self.pick(options, candidates)?;
         Ok((selection, option_state(options)))
     }
 
@@ -568,5 +576,87 @@ mod tests {
         let with_header = PickerOptions::default().header("x");
         assert_eq!(list_height(20, &with_header), 18);
         assert_eq!(list_height(1, &with_header), 1);
+    }
+}
+
+#[cfg(test)]
+mod contract {
+    use std::io;
+
+    use super::{Picker, exact_selection};
+    use crate::candidate::Candidate;
+    use crate::options::PickerOptions;
+    use crate::selection::Selection;
+    use crate::stream::CandidateStream;
+
+    /// A picker that implements the two required methods and nothing else.
+    #[derive(Default)]
+    struct Minimal {
+        /// Every list it was shown, so a short circuit is visible.
+        calls: usize,
+    }
+
+    impl Picker for Minimal {
+        fn pick(
+            &mut self,
+            _: &PickerOptions,
+            candidates: Vec<Candidate>,
+        ) -> io::Result<Selection<Candidate>> {
+            self.calls += 1;
+            Ok(Selection::selected(
+                crate::selection::SelectionType::Default,
+                candidates.into_iter().take(1).collect(),
+            ))
+        }
+    }
+
+    fn options() -> PickerOptions {
+        PickerOptions::default().query("bugs").select_exact(true)
+    }
+
+    fn candidates() -> Vec<Candidate> {
+        ["bugs2", "bugs", "other"]
+            .into_iter()
+            .map(Candidate::identity)
+            .collect()
+    }
+
+    /// The contract is the trait's, not one implementation's: a picker that
+    /// writes only `pick` still answers an exact query without being asked.
+    #[test]
+    fn a_minimal_picker_honours_an_exact_query() {
+        let mut picker = Minimal::default();
+        let (selection, _) = picker.pick_options(&options(), candidates()).unwrap();
+
+        assert_eq!(selection.items()[0].value, "bugs");
+        assert_eq!(picker.calls, 0, "the picker was asked");
+    }
+
+    /// And the same over a stream, which the default collects.
+    #[test]
+    fn a_minimal_picker_honours_an_exact_query_on_a_stream() {
+        let mut picker = Minimal::default();
+        let mut stream = CandidateStream::of(candidates());
+        let (selection, _) = picker.pick_stream_options(&options(), &mut stream).unwrap();
+
+        assert_eq!(selection.items()[0].value, "bugs");
+        assert_eq!(picker.calls, 0, "the picker was asked");
+    }
+
+    /// Without an exact match it is asked, as usual.
+    #[test]
+    fn a_minimal_picker_is_asked_when_nothing_matches_exactly() {
+        let mut picker = Minimal::default();
+        let options = PickerOptions::default().query("bug").select_exact(true);
+        let (selection, _) = picker.pick_options(&options, candidates()).unwrap();
+
+        assert_eq!(selection.items()[0].value, "bugs2");
+        assert_eq!(picker.calls, 1);
+    }
+
+    #[test]
+    fn exact_selection_is_off_unless_asked_for() {
+        let options = PickerOptions::default().query("bugs");
+        assert!(exact_selection(&options, &candidates()).is_none());
     }
 }
