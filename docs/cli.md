@@ -189,6 +189,11 @@ so it can be pasted or run as it stands.
 | `-n`, `--limit` | Keep only the last N entries. |
 | `--clear` | Empty the log, after asking. |
 
+A line recorded as `run <name>` runs against the project the *current*
+directory is in, wherever it was first run — it is the command that is
+remembered, not the place. A command run in another project is recorded as
+`project <path> <name>` and goes back to that one.
+
 `F1` prints the invocation instead of running it, and `Esc` cancels. With
 `history: false` in the configuration there is nothing to show, and the
 command exits 1 saying so.
