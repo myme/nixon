@@ -138,6 +138,13 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     /// hand nixon a directory it worked out for itself.
     fn project_at(&self, path: &Path) -> Result<Project> {
         let path = expand_home(path, &self.dirs.home);
+        // Relative to where nixon was invoked, like everything else nixon
+        // reads; the process working directory is not consulted anywhere.
+        let path = if path.is_absolute() {
+            path
+        } else {
+            self.env.cwd.join(path)
+        };
         if !path.is_dir() {
             return Err(NixonError::NoSuchProject {
                 path: path.to_string_lossy().into_owned(),

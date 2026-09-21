@@ -1011,3 +1011,26 @@ fn an_exact_value_selects_one_item_of_a_multi_placeholder() {
     assert!(app.picker.calls.is_empty(), "the picker was asked");
     assert_eq!(&app.runner.last().unwrap().argv[2..], ["bugs"]);
 }
+
+/// A relative path is relative to where nixon was invoked, not to the
+/// process working directory.
+#[test]
+fn a_relative_project_path_resolves_against_the_invocation_directory() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    let here = app.pick_one_project(Some("./")).unwrap();
+    assert_eq!(here.path(), fixture.project_path().canonicalize().unwrap());
+}
+
+/// `..` walks up from the invocation directory too.
+#[test]
+fn a_parent_project_path_resolves_against_the_invocation_directory() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let picker = picks(&[]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    let up = app.pick_one_project(Some("../")).unwrap();
+    assert_eq!(up.path(), fixture.temp.path().canonicalize().unwrap());
+}
