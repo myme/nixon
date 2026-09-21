@@ -9,8 +9,12 @@
 # Source this from ~/.zshrc.
 
 nixon-insert-selection() {
-  LBUFFER="${LBUFFER}$(nixon run -s)"
+  # Quoted per value: a selection may hold spaces or shell characters.
+  # `(f)` unquoted splits on newlines and drops the empty ones.
+  local -a picked
+  picked=(${(f)"$(nixon run -s)"})
   local ret=$?
+  (($#picked)) && LBUFFER="${LBUFFER}${(j: :)${(@q)picked}} "
   zle reset-prompt
   return $ret
 }
@@ -30,8 +34,12 @@ nixon-insert-command() {
 }
 
 nixon-insert-project() {
-  LBUFFER="${LBUFFER}$(nixon project -s)"
+  # Quoted: a project path may hold spaces.
+  local project
+  project="$(nixon project -s)"
   local ret=$?
+  [[ -n $project ]] && LBUFFER="${LBUFFER}${(q)project}"
+
   zle reset-prompt
   return $ret
 }

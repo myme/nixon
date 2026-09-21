@@ -1013,3 +1013,69 @@ fn the_bash_widget_inserts_a_history_line() {
     session.send("exit\r").unwrap();
     let _ = finish(&mut session);
 }
+
+/// A project path with a space in it is inserted quoted, so the line the
+/// user is building stays one argument.
+#[test]
+#[cfg(unix)]
+fn the_bash_widget_quotes_an_inserted_project_path() {
+    let pty = Pty::new();
+    let projects = pty.temp.child("code");
+    projects
+        .child("a project")
+        .child(".git")
+        .create_dir_all()
+        .unwrap();
+    pty.temp
+        .child("config/nixon.md")
+        .write_str(&format!(
+            "```json config\n{{\"project_dirs\": [\"{}\"], \"project_types\": [{{\"name\": \"git\", \"test\": [\".git\"], \"desc\": \"Git\"}}]}}\n```\n",
+            projects.path().display()
+        ))
+        .unwrap();
+
+    let bin_dir = pty.temp.child("bin");
+    bin_dir.create_dir_all().unwrap();
+    std::os::unix::fs::symlink(Pty::binary(), bin_dir.child("nixon").path()).unwrap();
+
+    let rc = pty.temp.child("bashrc");
+    rc.write_str(&format!(
+        "PATH={}:$PATH\nHISTFILE=\nPS1='ready> '\nsource {}\n",
+        bin_dir.path().display(),
+        std::fs::canonicalize("../../extra/nixon-widget.bash")
+            .unwrap()
+            .display()
+    ))
+    .unwrap();
+
+    let mut command = std::process::Command::new("bash");
+    command.args([
+        "--noprofile",
+        "--rcfile",
+        &rc.path().to_string_lossy(),
+        "-i",
+    ]);
+    pty.apply(&mut command);
+
+    let mut session = Session::spawn(command).unwrap();
+    session.get_process_mut().set_window_size(80, 24).unwrap();
+    session.set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("ready> ").unwrap();
+    // Alt-P inserts the path; the only project is taken without drawing.
+    session.send("\u{1b}P").unwrap();
+    settle();
+    // One argument, not two: the space must be escaped.
+    session.send("\u{1}set -- \r").unwrap();
+    settle();
+    session.send("echo COUNT=$#\r").unwrap();
+
+    if session.expect("COUNT=1").is_err() {
+        session.send("exit\r").unwrap();
+        let (_, seen) = finish(&mut session);
+        panic!("the path was not inserted as one argument: {seen:?}");
+    }
+
+    session.send("exit\r").unwrap();
+    let _ = finish(&mut session);
+}

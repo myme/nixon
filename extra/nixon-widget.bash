@@ -31,7 +31,8 @@ nixon-insert-command() {
 
 nixon-insert-project() {
   local project
-  project="$(nixon project -s)"
+  # Quoted like a selection: a project path may hold spaces.
+  project="$(nixon project -s | while read -r item; do printf '%q ' "$item"; done)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$project${READLINE_LINE:$READLINE_POINT}"
   READLINE_POINT=$((READLINE_POINT + ${#project}))
 }
