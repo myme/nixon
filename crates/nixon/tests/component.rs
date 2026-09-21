@@ -1239,7 +1239,7 @@ fn the_history_picker_shows_newest_first_without_repeats() {
         .iter()
         .map(|candidate| candidate.value.clone())
         .collect();
-    assert_eq!(offered, ["run edit a.txt", "run build"]);
+    assert_eq!(offered, ["nixon run edit a.txt", "nixon run build"]);
 }
 
 /// `-n` keeps the newest.
@@ -1270,7 +1270,7 @@ fn choosing_a_history_line_asks_for_it_to_be_rerun() {
     let fixture = Fixture::new(HISTORY_MD);
     seed_history(&fixture, &[(1, "nixon run build --no-release")]);
 
-    let picker = picks(&[&["run build --no-release"]]);
+    let picker = picks(&[&["nixon run build --no-release"]]);
     let mut app = fixture.app(picker, FakeRunner::new());
 
     match app.history(&HistoryOpts::default()).unwrap() {
@@ -1287,7 +1287,7 @@ fn selecting_a_history_line_runs_nothing() {
     let fixture = Fixture::new(HISTORY_MD);
     seed_history(&fixture, &[(1, "nixon run build")]);
 
-    let picker = picks(&[&["run build"]]);
+    let picker = picks(&[&["nixon run build"]]);
     let mut app = fixture.app(picker, FakeRunner::new());
 
     match app

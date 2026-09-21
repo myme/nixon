@@ -1002,7 +1002,7 @@ fn the_bash_widget_inserts_a_history_line() {
 
     // Inserted, not run: prefix `echo` and the line comes back as text.
     session.send("\u{1}echo LINE=\r").unwrap();
-    if session.expect("LINE=run greet").is_err() {
+    if session.expect("LINE=nixon run greet").is_err() {
         session.send("exit\r").unwrap();
         let (_, seen) = finish(&mut session);
         panic!("the widget did not insert the invocation: {seen:?}");

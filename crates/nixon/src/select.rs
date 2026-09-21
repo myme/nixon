@@ -98,7 +98,11 @@ pub fn history_candidates(
     entries
         .iter()
         .map(|entry| {
-            let invocation = shell_words::join(entry.invocation.iter().map(String::as_str));
+            // The whole command line, program name and all: this is what a
+            // user presses Enter on after it is printed or inserted.
+            let invocation = shell_words::join(
+                std::iter::once("nixon").chain(entry.invocation.iter().map(String::as_str)),
+            );
             let display = format!(
                 "{DIM}{:>4}  {}{RESET}  {invocation}",
                 crate::history::ago(entry.at, now),

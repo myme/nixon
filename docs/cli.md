@@ -183,6 +183,9 @@ command collapses to one row.
 |---|---|
 | `-l`, `--list` | Print matching invocations and exit. |
 | `-s`, `--select` | Pick one and print it, running nothing. |
+
+What `--list` and `--select` print is the whole command line, `nixon` and all,
+so it can be pasted or run as it stands.
 | `-n`, `--limit` | Keep only the last N entries. |
 | `--clear` | Empty the log, after asking. |
 

@@ -19,8 +19,9 @@ you are already typing rather than in a subshell.
 `Alt-p` is fzf's `Alt-C` for projects: nothing is typed, the prompt is redrawn
 in the new directory, and cancelling leaves everything as it was.
 
-`Alt-h` picks from [the log](cli.md#the-log) and puts the line on the command
-line without running it — `nixon history -s` — so you can edit it first.
+`Alt-h` picks from [the log](cli.md#the-log) and puts the whole command line
+on the prompt without running it — `nixon history -s` — so you can edit it
+first and press Enter yourself.
 `nixon history` on its own runs the chosen line straight away.
 
 Source the one for your shell:

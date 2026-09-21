@@ -1054,7 +1054,7 @@ fn history_list_prints_the_invocations() {
         .args(["history", "-l"])
         .assert()
         .success()
-        .stdout("run beta\nrun alpha\n");
+        .stdout("nixon run beta\nnixon run alpha\n");
 }
 
 /// The query filters, as the other listings do.
@@ -1068,7 +1068,7 @@ fn history_list_filters_on_its_query() {
         .args(["history", "-l", "alpha"])
         .assert()
         .success()
-        .stdout("run alpha\n");
+        .stdout("nixon run alpha\n");
 }
 
 /// `-n` keeps the newest.
@@ -1082,7 +1082,7 @@ fn history_list_honours_the_limit() {
         .args(["history", "-l", "-n", "1"])
         .assert()
         .success()
-        .stdout("run beta\n");
+        .stdout("nixon run beta\n");
 }
 
 /// `--clear` asks first, and `n` leaves the log alone.

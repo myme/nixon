@@ -93,10 +93,16 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
                         output::line(&candidate.value)?;
                         Ok(Outcome::Done(0))
                     }
-                    _ => Ok(Outcome::Rerun(
-                        shell_words::split(&candidate.value)
-                            .map_err(|err| NixonError::NothingSelected(err.to_string()))?,
-                    )),
+                    _ => {
+                        // The value is a whole command line; what runs it
+                        // is the arguments after the program name.
+                        let mut words = shell_words::split(&candidate.value)
+                            .map_err(|err| NixonError::NothingSelected(err.to_string()))?;
+                        if words.first().is_some_and(|word| word == "nixon") {
+                            words.remove(0);
+                        }
+                        Ok(Outcome::Rerun(words))
+                    }
                 }
             }
         }
