@@ -1,10 +1,10 @@
 //! The picker interface and its implementations.
 
 use std::io;
+use std::sync::Arc;
+use std::time::Duration;
 
 use crossterm::event::{self, Event};
-
-use std::time::Duration;
 
 use crate::candidate::Candidate;
 use crate::confirm;
@@ -157,6 +157,57 @@ impl Picker for TuiPicker {
     }
 }
 
+/// Catches `^C` for as long as the picker owns a producer.
+///
+/// Until the terminal is taken, `^C` is a real SIGINT: nothing has turned
+/// off the terminal's own signal generation yet. Its default action ends
+/// nixon without unwinding, so the stream is never dropped and the producer
+/// — which leads its own process group, and so is not signalled with us —
+/// goes on running. Setting a flag instead leaves the loop to notice, stop
+/// the producer and report a cancellation.
+#[cfg(unix)]
+struct InterruptGuard {
+    id: Option<signal_hook::SigId>,
+    flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+#[cfg(unix)]
+impl InterruptGuard {
+    fn install() -> Self {
+        let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let id = signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&flag)).ok();
+        Self { id, flag }
+    }
+
+    fn interrupted(&self) -> bool {
+        self.flag.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+#[cfg(unix)]
+impl Drop for InterruptGuard {
+    fn drop(&mut self) {
+        if let Some(id) = self.id.take() {
+            signal_hook::low_level::unregister(id);
+        }
+    }
+}
+
+/// Nixon targets Linux and macOS; elsewhere there is nothing to install.
+#[cfg(not(unix))]
+struct InterruptGuard;
+
+#[cfg(not(unix))]
+impl InterruptGuard {
+    const fn install() -> Self {
+        Self
+    }
+
+    const fn interrupted(&self) -> bool {
+        false
+    }
+}
+
 /// The draw/read loop, shared by the ready and streaming entry points.
 ///
 /// With a stream, events are polled rather than waited on, so newly arrived
@@ -176,8 +227,17 @@ fn run_loop(
     // `-1` is decided once, on the query the picker opened with. Once the
     // user has typed, narrowing to a single row must not select it for them.
     let mut untouched = true;
+    let interrupt = InterruptGuard::install();
 
     while !app.is_done() {
+        // Before anything else: the producer must not outlive the pick.
+        if interrupt.interrupted() {
+            if let Some(stream) = stream.as_mut() {
+                stream.cancel();
+            }
+            return Ok(Selection::Canceled);
+        }
+
         let arrived = stream
             .as_mut()
             .map(|stream| (stream.drain(), stream.is_finished()));

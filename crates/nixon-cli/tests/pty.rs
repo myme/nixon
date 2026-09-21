@@ -975,6 +975,74 @@ fn the_command_picker_keeps_discovery_order_under_a_query() {
     );
 }
 
+/// `^C` while the picker is still waiting must stop the producer too.
+///
+/// Until `-1` is settled nothing is drawn and no terminal is taken, so the
+/// terminal still turns `^C` into a real SIGINT. Its default action would
+/// end nixon without unwinding, leaving the producer — which leads its own
+/// process group — running.
+#[cfg(unix)]
+fn interrupting_a_slow_producer(emit: &str) {
+    let pty = Pty::with_config(&format!(
+        "# `_slow`\n\n```bash\necho $$ > $nixon_project_path/producer.pid\n{emit}\nsleep 30\n```\n\n# `use ${{_slow}}`\n\n```bash\necho $1\n```\n"
+    ));
+    let pid_file = pty.temp.child("project/producer.pid");
+
+    let mut session = pty.spawn(&["run", "use"]);
+    // Long enough for the producer to have written its pid and settled into
+    // the sleep, while the picker is still waiting on `-1`.
+    settle();
+    session.send("\u{3}").unwrap();
+
+    let code = wait_code(&mut session);
+    assert_eq!(code, 130, "cancelling should exit 130");
+
+    let pid: i32 = std::fs::read_to_string(pid_file.path())
+        .expect("the producer never ran")
+        .trim()
+        .parse()
+        .unwrap();
+
+    // Reaped by nixon, so it is gone rather than a zombie; give the signal
+    // a moment to be delivered.
+    let mut alive = true;
+    for _ in 0..40 {
+        alive = group_alive(pid);
+        if !alive {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(
+        !alive,
+        "the producer outlived the cancelled pick: pid {pid}"
+    );
+}
+
+/// Whether the producer's process group still exists, without signalling it.
+///
+/// Negated pid: the producer leads its own group, so its pid is the group.
+#[cfg(unix)]
+fn group_alive(pid: i32) -> bool {
+    std::process::Command::new("kill")
+        .args(["-0", &format!("-{pid}")])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+#[test]
+#[cfg(unix)]
+fn cancelling_before_any_candidate_stops_the_producer() {
+    interrupting_a_slow_producer("");
+}
+
+#[test]
+#[cfg(unix)]
+fn cancelling_after_one_candidate_stops_the_producer() {
+    interrupting_a_slow_producer("echo only");
+}
+
 /// Sets up a bash with the widgets sourced and two lines in the log.
 ///
 /// Two, so the picker really opens rather than taking the only one without
