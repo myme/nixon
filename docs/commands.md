@@ -91,7 +91,9 @@ nixon remove --no-force
 
 Anything else stays a search query for the command's placeholders, so an
 unknown `--x` searches rather than failing. A command line that settles every
-option skips the prompt entirely.
+option skips the prompt entirely. A token is matched as an option's own
+spelling first, so if a command declares both `--cache` and `--no-cache`,
+writing `--no-cache` turns `--no-cache` on rather than turning `--cache` off.
 
 Each option is also exported to the command as `nixon_opt_<name>`, `1` when
 on and empty when off, with `-` replaced by `_`.

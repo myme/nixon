@@ -538,6 +538,17 @@ mod tests {
         assert_eq!(split.apply(&command.default_options()), [false]);
     }
 
+    /// A token is matched as an option's own spelling before it is read as
+    /// the negation of another's.
+    #[test]
+    fn an_exact_token_beats_the_no_form_of_another_option() {
+        let command = options_of("both --cache --no-cache");
+        let split = command.split_args(&words(&["--no-cache"]));
+
+        assert_eq!(split.set, [None, Some(true)]);
+        assert_eq!(split.apply(&command.default_options()), [false, true]);
+    }
+
     #[test]
     fn an_unknown_dashed_word_stays_a_query() {
         let command = options_of("remove --force");
