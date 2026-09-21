@@ -109,7 +109,7 @@ pub fn worktrees_of(dir: &Path) -> Vec<PathBuf> {
     let Some(git_dir) = git_dir(dir) else {
         return Vec::new();
     };
-    let Ok(entries) = std::fs::read_dir(git_dir.join("worktrees")) else {
+    let Ok(entries) = std::fs::read_dir(common_dir(&git_dir).join("worktrees")) else {
         return Vec::new();
     };
 
@@ -121,6 +121,23 @@ pub fn worktrees_of(dir: &Path) -> Vec<PathBuf> {
     found.sort();
     found.dedup();
     found
+}
+
+/// The repository's shared git directory.
+///
+/// A linked worktree's `.git` resolves to `<common>/worktrees/<name>`, which
+/// belongs to that worktree alone; the registry of them all lives under the
+/// common directory, which `commondir` names relative to the private one.
+fn common_dir(git_dir: &Path) -> PathBuf {
+    let Ok(contents) = std::fs::read_to_string(git_dir.join("commondir")) else {
+        return git_dir.to_path_buf();
+    };
+    let target = Path::new(contents.trim());
+    if target.is_absolute() {
+        target.to_path_buf()
+    } else {
+        git_dir.join(target)
+    }
 }
 
 /// The working directory an administrative `worktrees/<name>` entry points at.
@@ -136,7 +153,9 @@ mod tests {
     use assert_fs::TempDir;
     use assert_fs::prelude::*;
 
-    use super::{declares_bare, git_dir, is_bare_repo, is_git_dir, nested_bare_repo, worktrees_of};
+    use super::{
+        Path, declares_bare, git_dir, is_bare_repo, is_git_dir, nested_bare_repo, worktrees_of,
+    };
 
     /// Builds the layout git would, without running git.
     fn working_tree(at: &assert_fs::fixture::ChildPath) {
@@ -180,6 +199,67 @@ mod tests {
         root.child(".git")
             .write_str(&format!("gitdir: {}\n", admin.path().display()))
             .unwrap();
+        // As git writes it: where the shared git directory is from here.
+        admin.child("commondir").write_str("../..\n").unwrap();
+    }
+
+    /// Runs git, failing loudly: a silent skip would hide the defect.
+    fn git(args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.invalid")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.invalid")
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?} failed");
+    }
+
+    /// A linked worktree knows about its siblings.
+    ///
+    /// Its `.git` points at `<main>/.git/worktrees/<name>`, which is private
+    /// to it; the shared `worktrees` directory is one level up, where
+    /// `commondir` says. Appending `worktrees` to the private directory
+    /// searched somewhere that does not exist.
+    #[test]
+    fn a_linked_worktree_finds_the_others() {
+        let temp = TempDir::new().unwrap();
+        let main = temp.child("main");
+        main.create_dir_all().unwrap();
+        let at = main.path().to_string_lossy().into_owned();
+        git(&["init", "-q", "-b", "main", &at]);
+        git(&["-C", &at, "commit", "-q", "--allow-empty", "-m", "root"]);
+
+        let first = temp.child("roots/first");
+        let outside = temp.child("outside");
+        git(&[
+            "-C",
+            &at,
+            "worktree",
+            "add",
+            "-q",
+            &first.path().to_string_lossy(),
+        ]);
+        git(&[
+            "-C",
+            &at,
+            "worktree",
+            "add",
+            "-q",
+            &outside.path().to_string_lossy(),
+        ]);
+
+        let found = worktrees_of(first.path());
+        let canonical = |path: &Path| std::fs::canonicalize(path).unwrap();
+        assert!(
+            found
+                .iter()
+                .any(|root| canonical(root) == canonical(outside.path())),
+            "the sibling worktree was not found from a linked one: {found:?}"
+        );
     }
 
     #[test]
