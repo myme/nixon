@@ -51,6 +51,17 @@ impl Fixture {
         self.temp.child("project").to_path_buf()
     }
 
+    /// A second project beside the first.
+    ///
+    /// Anything that must reach the project picker needs one: `-1` takes a
+    /// lone candidate without asking.
+    fn sibling_project(&mut self, name: &str) {
+        let dir = self.temp.child(name);
+        dir.create_dir_all().unwrap();
+        dir.child(Self::MARKER).touch().unwrap();
+        self.config.project_dirs = vec![self.temp.child("*").to_path_buf()];
+    }
+
     fn dirs(&self) -> Dirs {
         Dirs {
             home: self.temp.path().to_path_buf(),
@@ -181,7 +192,7 @@ fn a_child_exit_code_is_propagated() {
 fn cancelling_during_expansion_is_a_cancel_not_a_panic() {
     let fixture = Fixture::new(VIM_FILE_MD);
     let picker = ScriptedPicker::new(vec![selected(&["vim-file"]), Selection::Canceled]);
-    let runner = FakeRunner::new().with_output(&["README.md"]);
+    let runner = FakeRunner::new().with_output(&["README.md", "Cargo.toml"]);
     let mut app = fixture.app(picker, runner);
 
     let err = app.run(&RunOpts::default()).unwrap_err();
@@ -235,10 +246,16 @@ echo secret
 ```bash
 echo \"$1\"
 ```
+
+# `plain`
+
+```bash
+echo plain
+```
 ";
     let fixture = Fixture::new(md);
     let picker = picks(&[&["uses"], &["hush"]]);
-    let runner = FakeRunner::new().with_output(&["hush"]);
+    let runner = FakeRunner::new().with_output(&["hush", "shush"]);
     let mut app = fixture.app(picker, runner);
 
     app.run(&RunOpts::default()).unwrap();
@@ -249,7 +266,7 @@ echo \"$1\"
         .iter()
         .map(|c| c.value.as_str())
         .collect();
-    assert_eq!(offered, ["uses"]);
+    assert_eq!(offered, ["plain", "uses"]);
 
     // ...but the hidden one still ran as a placeholder source.
     assert_eq!(app.runner.calls.len(), 2);
@@ -260,14 +277,15 @@ echo \"$1\"
 fn the_command_positional_pre_fills_the_picker_query() {
     let fixture = Fixture::new(VIM_FILE_MD);
     let picker = picks(&[&["git-files"]]);
+    // A query both commands match, or `-1` would answer it without asking.
     let opts = RunOpts {
-        command: Some("git".to_owned()),
+        command: Some("file".to_owned()),
         ..RunOpts::default()
     };
     let mut app = fixture.app(picker, FakeRunner::new());
 
     app.run(&opts).unwrap();
-    assert_eq!(app.picker.calls[0].0.initial_query.as_deref(), Some("git"));
+    assert_eq!(app.picker.calls[0].0.initial_query.as_deref(), Some("file"));
 }
 
 #[test]
@@ -293,7 +311,7 @@ fn the_command_picker_header_names_the_project() {
 fn the_placeholder_picker_header_is_the_outer_command() {
     let fixture = Fixture::new(VIM_FILE_MD);
     let picker = picks(&[&["vim-file"], &["README.md"]]);
-    let runner = FakeRunner::new().with_output(&["README.md"]);
+    let runner = FakeRunner::new().with_output(&["README.md", "Cargo.toml"]);
     let mut app = fixture.app(picker, runner);
 
     app.run(&RunOpts::default()).unwrap();
@@ -305,7 +323,9 @@ fn the_placeholder_picker_header_is_the_outer_command() {
 
 #[test]
 fn a_local_nixon_md_adds_its_commands() {
-    let fixture = Fixture::new("# `local-only`\n\n```bash\necho local\n```\n");
+    let fixture = Fixture::new(
+        "# `local-only`\n\n```bash\necho local\n```\n\n# `local-too`\n\n```bash\necho too\n```\n",
+    );
     let picker = picks(&[&["local-only"]]);
     let mut app = fixture.app(picker, FakeRunner::new());
 
@@ -315,13 +335,13 @@ fn a_local_nixon_md_adds_its_commands() {
         .iter()
         .map(|c| c.value.as_str())
         .collect();
-    assert_eq!(offered, ["local-only"]);
+    assert_eq!(offered, ["local-only", "local-too"]);
 }
 
 #[test]
 fn a_project_typed_command_is_filtered_out_elsewhere() {
     let fixture = Fixture::new(
-        "# `only-git` {type=\"git\"}\n\n```bash\necho git\n```\n\n# `always`\n\n```bash\necho always\n```\n",
+        "# `only-git` {type=\"git\"}\n\n```bash\necho git\n```\n\n# `always`\n\n```bash\necho always\n```\n\n# `also`\n\n```bash\necho also\n```\n",
     );
     let picker = picks(&[&["always"]]);
     let mut app = fixture.app(picker, FakeRunner::new());
@@ -332,7 +352,7 @@ fn a_project_typed_command_is_filtered_out_elsewhere() {
         .iter()
         .map(|c| c.value.as_str())
         .collect();
-    assert_eq!(offered, ["always"]);
+    assert_eq!(offered, ["also", "always"]);
 }
 
 #[test]
@@ -476,7 +496,8 @@ echo \"$@\"
 /// come back as a message and exit 1.
 #[test]
 fn cancelling_project_edit_or_new_exits_130() {
-    let fixture = Fixture::new(VIM_FILE_MD);
+    let mut fixture = Fixture::new(VIM_FILE_MD);
+    fixture.sibling_project("other");
     let canceled = || ScriptedPicker::new(vec![Selection::Canceled]);
 
     let errors = [
@@ -568,7 +589,7 @@ cargo build \"$@\"
 fn a_placeholder_picker_shows_the_commands_options() {
     let fixture = Fixture::new(OPTIONS_MD);
     let picker = picks(&[&["remove"], &["../wt"]]);
-    let runner = FakeRunner::new().with_output(&["../wt"]);
+    let runner = FakeRunner::new().with_output(&["../wt", "../spare"]);
     let mut app = fixture.app(picker, runner);
 
     app.run(&RunOpts::default()).unwrap();
@@ -592,7 +613,7 @@ fn toggling_at_the_picker_changes_what_runs() {
     // as `Alt-1` would.
     let picker =
         ScriptedPicker::new(vec![selected(&["remove"]), selected(&["../wt"])]).toggling(&[0]);
-    let runner = FakeRunner::new().with_output(&["../wt"]);
+    let runner = FakeRunner::new().with_output(&["../wt", "../spare"]);
     let mut app = fixture.app(picker, runner);
 
     app.run(&RunOpts::default()).unwrap();
@@ -668,7 +689,7 @@ fn an_inner_command_is_not_given_the_outer_commands_toggles() {
     let fixture = Fixture::new(OPTIONS_MD);
     let picker =
         ScriptedPicker::new(vec![selected(&["remove"]), selected(&["../wt"])]).toggling(&[0]);
-    let runner = FakeRunner::new().with_output(&["../wt"]);
+    let runner = FakeRunner::new().with_output(&["../wt", "../spare"]);
     let mut app = fixture.app(picker, runner);
 
     app.run(&RunOpts::default()).unwrap();
@@ -779,7 +800,9 @@ fn a_project_path_that_does_not_exist_is_an_error() {
 /// A name with no separator is still a query for the picker.
 #[test]
 fn a_bare_name_is_still_a_query() {
-    let fixture = Fixture::new(VIM_FILE_MD);
+    let mut fixture = Fixture::new(VIM_FILE_MD);
+    // Both names match the query, or `-1` would answer it without asking.
+    fixture.sibling_project("project-two");
     let picker = picks(&[&["/somewhere/else"]]);
     let mut app = fixture.app(picker, FakeRunner::new());
 
@@ -1328,4 +1351,36 @@ fn cancelling_the_history_picker_exits_130() {
     let err = app.history(&HistoryOpts::default()).unwrap_err();
     assert!(matches!(err, NixonError::Canceled));
     assert_eq!(err.exit_code(), 130);
+}
+
+/// Looking at the history is not asking to run something.
+#[test]
+fn the_history_picker_draws_even_for_a_single_entry() {
+    let fixture = Fixture::new(HISTORY_MD);
+    seed_history(&fixture, &[(1, "nixon run build")]);
+
+    let picker = picks(&[&["nixon run build"]]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+    let _ = app.history(&HistoryOpts::default());
+
+    assert_eq!(app.picker.calls.len(), 1, "the picker was not asked");
+}
+
+/// Naming it is asking, so no picker is needed.
+#[test]
+fn a_history_query_matching_one_line_needs_no_picker() {
+    let fixture = Fixture::new(HISTORY_MD);
+    seed_history(&fixture, &[(1, "nixon run build"), (2, "nixon run other")]);
+
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    let outcome = app
+        .history(&HistoryOpts {
+            query: Some("build".to_owned()),
+            select: true,
+            ..HistoryOpts::default()
+        })
+        .unwrap();
+
+    assert!(app.picker.calls.is_empty(), "the picker was asked");
+    assert!(matches!(outcome, nixon::app::history::Outcome::Done(0)));
 }

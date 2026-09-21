@@ -63,7 +63,8 @@ Fixture rules, each learned from a failure:
   `$EDITOR` that records argv), never on screen content: ratatui interleaves
   cursor escapes between characters, so matching drawn text is a coin flip.
 - `-1` fires on the **empty** query too, so a fixture with one candidate runs
-  it before any key arrives. Interactive fixtures need at least two.
+  it before any key arrives. Interactive fixtures need at least two — in
+  component tests as well, because `ScriptedPicker` honours the contract.
 - `cargo doc` runs `--no-deps`; documenting dependencies raced on the shared
   `target/doc` and failed intermittently.
 - `cargo-shear` runs inside crane's vendored registry: a sandboxed build has
@@ -111,6 +112,11 @@ Fixture rules, each learned from a failure:
 - Exit codes: the child's status is propagated; a cancelled selection is 130.
 - `-1` auto-select is decided **once**, on the query the picker opened with.
   The terminal is taken lazily so it can still apply without one.
+- `exact_selection` and `unique_selection` are the `Picker` **contract**: the
+  trait defaults, `TuiPicker` and the test doubles all honour them, or the
+  component layer answers differently from production.
+- `history` sets `-1` only when a query was given. Opening the log and having
+  it run the only entry is not what looking meant.
 - `Lines` and `Fields` placeholders stream as the command produces them;
   `Columns` and `JSON` are buffered, because widths and the whole document
   are needed before a candidate exists.

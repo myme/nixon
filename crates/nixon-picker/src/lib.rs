@@ -22,6 +22,6 @@ pub mod ui;
 pub use candidate::Candidate;
 pub use filter::filter;
 pub use options::{PickerOption, PickerOptions};
-pub use picker::{FilterPicker, Picker, TuiPicker, exact_selection};
+pub use picker::{FilterPicker, Picker, TuiPicker, exact_selection, unique_selection};
 pub use selection::{Selection, SelectionType};
 pub use stream::CandidateStream;

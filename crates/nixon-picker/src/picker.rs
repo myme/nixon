@@ -41,14 +41,15 @@ pub trait Picker {
     ///
     /// The default leaves them as they were given, which is right for every
     /// picker that draws nothing. Every implementation must first honour
-    /// [`exact_selection`], so a query that names a candidate outright gets
-    /// the same answer whichever picker is in play.
+    /// [`exact_selection`] and [`unique_selection`], so a query that names
+    /// or uniquely matches a candidate gets the same answer whichever
+    /// picker is in play.
     fn pick_options(
         &mut self,
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
-        if let Some(selection) = exact_selection(options, &candidates) {
+        if let Some(selection) = settled(options, &candidates) {
             return Ok((selection, option_state(options)));
         }
         let selection = self.pick(options, candidates)?;
@@ -66,7 +67,7 @@ pub trait Picker {
         stream: &mut CandidateStream,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
         let candidates = stream.collect();
-        if let Some(selection) = exact_selection(options, &candidates) {
+        if let Some(selection) = settled(options, &candidates) {
             return Ok((selection, option_state(options)));
         }
         let selection = self.pick(options, candidates)?;
@@ -81,6 +82,11 @@ pub trait Picker {
     fn confirm(&mut self, options: &PickerOptions) -> io::Result<Option<Vec<bool>>> {
         Ok(Some(option_state(options)))
     }
+}
+
+/// What the contract settles before anything is drawn, if anything.
+fn settled(options: &PickerOptions, candidates: &[Candidate]) -> Option<Selection<Candidate>> {
+    exact_selection(options, candidates).or_else(|| unique_selection(options, candidates))
 }
 
 /// The toggles as the caller set them.
@@ -114,12 +120,9 @@ impl Picker for TuiPicker {
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
-        if let Some(selection) = exact_selection(options, &candidates) {
-            return Ok((selection, option_state(options)));
-        }
-        // `-1` still applies: with a unique match there is nothing to ask,
-        // and the toggles stay as they were given.
-        if let Some(selection) = short_circuit(options, &candidates) {
+        // With an exact or unique match there is nothing to ask, and the
+        // toggles stay as they were given.
+        if let Some(selection) = settled(options, &candidates) {
             return Ok((selection, option_state(options)));
         }
 
@@ -296,8 +299,13 @@ fn exact_match(options: &PickerOptions, candidate: &Candidate) -> Option<Selecti
         .then(|| Selection::selected(SelectionType::Default, vec![candidate.clone()]))
 }
 
-/// fzf's `-1`: a query matching exactly one row selects it without drawing.
-fn short_circuit(
+/// The candidate `select_one` settles the pick with, if there is one.
+///
+/// fzf's `-1`: a query matching exactly one row selects it without drawing,
+/// and a query matching none settles as [`Selection::Empty`]. Part of the
+/// [`Picker`] contract, like [`exact_selection`], so the answer does not
+/// depend on which picker is in play.
+pub fn unique_selection(
     options: &PickerOptions,
     candidates: &[Candidate],
 ) -> Option<Selection<Candidate>> {
@@ -376,11 +384,16 @@ impl ScriptedPicker {
 
 #[cfg(any(test, feature = "test-util"))]
 impl Picker for ScriptedPicker {
+    /// Honours the contract before answering, or a fixture the real picker
+    /// would never have drawn for would consume a scripted answer.
     fn pick(
         &mut self,
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<Selection<Candidate>> {
+        if let Some(selection) = settled(options, &candidates) {
+            return Ok(selection);
+        }
         self.calls.push((options.clone(), candidates));
         Ok(self.answers.pop_front().unwrap_or(Selection::Empty))
     }
@@ -390,7 +403,7 @@ impl Picker for ScriptedPicker {
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
-        if let Some(selection) = exact_selection(options, &candidates) {
+        if let Some(selection) = settled(options, &candidates) {
             return Ok((selection, option_state(options)));
         }
         let state = self.toggled(options);
@@ -418,6 +431,10 @@ impl Picker for ScriptedPicker {
                 break;
             }
             std::thread::yield_now();
+        }
+
+        if let Some(selection) = unique_selection(options, &candidates) {
+            return Ok((selection, option_state(options)));
         }
 
         let state = self.toggled(options);
@@ -471,6 +488,9 @@ impl Picker for SelectingPicker {
         options: &PickerOptions,
         candidates: Vec<Candidate>,
     ) -> io::Result<Selection<Candidate>> {
+        if let Some(selection) = settled(options, &candidates) {
+            return Ok(selection);
+        }
         let picked: Vec<Candidate> = self
             .indices
             .iter()

@@ -179,15 +179,19 @@ through the same argument parser, so its options and values mean what they
 meant the first time, and the re-run is itself recorded. A run of the same
 command collapses to one row.
 
+A `QUERY` that matches exactly one line takes it without drawing anything.
+Without one the picker always opens, even for a single entry: looking at the
+history is not asking to run something.
+
 | Flag | Effect |
 |---|---|
 | `-l`, `--list` | Print matching invocations and exit. |
 | `-s`, `--select` | Pick one and print it, running nothing. |
+| `-n`, `--limit` | Keep only the last N entries. |
+| `--clear` | Empty the log, after asking. |
 
 What `--list` and `--select` print is the whole command line, `nixon` and all,
 so it can be pasted or run as it stands.
-| `-n`, `--limit` | Keep only the last N entries. |
-| `--clear` | Empty the log, after asking. |
 
 A line recorded as `run <name>` runs against the project the *current*
 directory is in, wherever it was first run — it is the command that is

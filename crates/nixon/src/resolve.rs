@@ -616,7 +616,7 @@ mod tests {
         let outer = command("edit", "vim\n", vec![placeholder]);
 
         let mut picker = ScriptedPicker::new(vec![selected(&["src/main.rs"])]);
-        let mut runner = FakeRunner::new().with_output(&["src/main.rs", "README.md"]);
+        let mut runner = FakeRunner::new().with_output(&["src/main.rs", "src/lib.rs", "README.md"]);
 
         harness
             .resolve(&outer, &[], &mut picker, &mut runner)
@@ -627,7 +627,7 @@ mod tests {
             .iter()
             .map(|candidate| candidate.value.clone())
             .collect();
-        assert_eq!(offered, ["src/main.rs"]);
+        assert_eq!(offered, ["src/main.rs", "src/lib.rs"]);
     }
 
     #[test]
@@ -836,7 +836,8 @@ mod tests {
         let outer = command("edit", "vim\n", vec![arg("files")]);
 
         let mut picker = ScriptedPicker::new(vec![selected(&["README.md"])]);
-        let mut runner = FakeRunner::new().with_output(&["README.md"]);
+        // Two rows match the query, or `-1` would answer it without asking.
+        let mut runner = FakeRunner::new().with_output(&["README.md", "READING.md"]);
 
         harness
             .resolve(&outer, &["READ".to_owned()], &mut picker, &mut runner)
@@ -886,7 +887,7 @@ mod tests {
         let outer = command("edit", "vim\n", vec![arg("files")]);
 
         let mut picker = ScriptedPicker::new(vec![Selection::Canceled]);
-        let mut runner = FakeRunner::new().with_output(&["one"]);
+        let mut runner = FakeRunner::new().with_output(&["one", "two"]);
 
         let err = harness
             .resolve(&outer, &[], &mut picker, &mut runner)
@@ -929,7 +930,7 @@ mod tests {
             SelectionType::Default,
             vec![Candidate::with_title("alpha beta gamma", "beta")],
         )]);
-        let mut runner = FakeRunner::new().with_output(&["alpha beta gamma"]);
+        let mut runner = FakeRunner::new().with_output(&["alpha beta gamma", "one two three"]);
 
         let resolved = harness
             .resolve(&outer, &[], &mut picker, &mut runner)
