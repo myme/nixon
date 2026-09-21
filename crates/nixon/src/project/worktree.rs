@@ -6,9 +6,37 @@
 
 use std::path::{Path, PathBuf};
 
-/// Whether `dir` is a git directory: a working tree or a bare repository.
+/// Whether `dir` is a git directory.
+///
+/// A working tree, a bare repository, or a container: a directory that keeps
+/// its bare repository in a dot-subdirectory and its worktrees beside it.
 pub fn is_git_dir(dir: &Path) -> bool {
-    dir.join(".git").exists() || is_bare_repo(dir)
+    dir.join(".git").exists() || is_bare_repo(dir) || nested_bare_repo(dir).is_some()
+}
+
+/// A bare repository kept in a direct dot-subdirectory of `dir`.
+///
+/// The `.bare` layout: `~/code/gaia/.bare` is the repository and
+/// `~/code/gaia/bugs` is a worktree of it, so the container has no `.git` of
+/// its own and marker-based discovery walks straight past it. Recognised by
+/// the repository layout rather than by the name, which is only a
+/// convention; the first in sorted order wins if there is more than one.
+pub fn nested_bare_repo(dir: &Path) -> Option<PathBuf> {
+    let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| is_hidden(path) && is_bare_repo(path))
+        .collect();
+    found.sort();
+    found.into_iter().next()
+}
+
+/// Whether a path's own name starts with a dot.
+fn is_hidden(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with('.'))
 }
 
 /// Whether `dir` is a bare repository.
@@ -35,9 +63,11 @@ fn declares_bare(config: &str) -> bool {
 
 /// The git directory holding a repository's metadata.
 ///
-/// `<dir>/.git` for a working tree, `<dir>` itself for a bare repository. A
-/// `.git` *file* points elsewhere with a `gitdir:` line, which is how a
-/// worktree refers back to the repository it belongs to.
+/// `<dir>/.git` for a working tree, `<dir>` itself for a bare repository,
+/// and the nested repository for a container. A `.git` *file* points
+/// elsewhere with a `gitdir:` line, which is how a worktree refers back to
+/// the repository it belongs to and how a container may point at its own
+/// `.bare`.
 pub fn git_dir(dir: &Path) -> Option<PathBuf> {
     let dot_git = dir.join(".git");
     if dot_git.is_dir() {
@@ -46,7 +76,10 @@ pub fn git_dir(dir: &Path) -> Option<PathBuf> {
     if dot_git.is_file() {
         return read_gitdir_pointer(&dot_git);
     }
-    is_bare_repo(dir).then(|| dir.to_path_buf())
+    if is_bare_repo(dir) {
+        return Some(dir.to_path_buf());
+    }
+    nested_bare_repo(dir)
 }
 
 /// Follows a `gitdir: <path>` pointer, resolving it against `file`'s parent.
@@ -103,7 +136,7 @@ mod tests {
     use assert_fs::TempDir;
     use assert_fs::prelude::*;
 
-    use super::{declares_bare, git_dir, is_bare_repo, is_git_dir, worktrees_of};
+    use super::{declares_bare, git_dir, is_bare_repo, is_git_dir, nested_bare_repo, worktrees_of};
 
     /// Builds the layout git would, without running git.
     fn working_tree(at: &assert_fs::fixture::ChildPath) {
@@ -165,6 +198,93 @@ mod tests {
         bare_repo(&repo);
         assert!(is_git_dir(repo.path()));
         assert!(is_bare_repo(repo.path()));
+    }
+
+    /// The `.bare` container layout, as `git init --bare .bare` plus
+    /// `git -C .bare worktree add ../bugs` leaves it on disk.
+    fn container(at: &assert_fs::fixture::ChildPath, worktrees: &[&str]) {
+        at.create_dir_all().unwrap();
+        let repo = at.child(".bare");
+        bare_repo(&repo);
+        for name in worktrees {
+            register_worktree(&repo, name, &at.child(name));
+        }
+    }
+
+    #[test]
+    fn a_container_holding_a_bare_repo_is_a_git_dir() {
+        let temp = TempDir::new().unwrap();
+        let gaia = temp.child("gaia");
+        container(&gaia, &["bugs"]);
+
+        // No .git of its own, and not bare itself.
+        assert!(!gaia.child(".git").path().exists());
+        assert!(!is_bare_repo(gaia.path()));
+        assert!(is_git_dir(gaia.path()));
+        assert_eq!(
+            git_dir(gaia.path()),
+            Some(gaia.child(".bare").to_path_buf())
+        );
+    }
+
+    #[test]
+    fn a_containers_worktrees_are_found() {
+        let temp = TempDir::new().unwrap();
+        let gaia = temp.child("gaia");
+        container(&gaia, &["bugs", "claims"]);
+
+        assert_eq!(
+            worktrees_of(gaia.path()),
+            [
+                gaia.child("bugs").to_path_buf(),
+                gaia.child("claims").to_path_buf()
+            ]
+        );
+    }
+
+    /// Some containers keep a `.git` file at the root pointing at `.bare`.
+    #[test]
+    fn a_container_with_a_git_file_at_its_root_works_the_same_way() {
+        let temp = TempDir::new().unwrap();
+        let atlas = temp.child("atlas");
+        container(&atlas, &["bugs"]);
+        atlas
+            .child(".git")
+            .write_str(
+                "gitdir: ./.bare
+",
+            )
+            .unwrap();
+
+        assert!(is_git_dir(atlas.path()));
+        assert_eq!(
+            worktrees_of(atlas.path()),
+            [atlas.child("bugs").to_path_buf()]
+        );
+    }
+
+    /// A dot-subdirectory that is not a repository proves nothing.
+    #[test]
+    fn a_hidden_directory_that_is_not_bare_does_not_make_a_container() {
+        let temp = TempDir::new().unwrap();
+        let plain = temp.child("plain");
+        plain.child(".cache/objects").create_dir_all().unwrap();
+        assert!(!is_git_dir(plain.path()));
+        assert_eq!(nested_bare_repo(plain.path()), None);
+    }
+
+    /// The name is a convention; the layout is what is checked.
+    #[test]
+    fn the_nested_repository_is_found_under_any_dot_name() {
+        let temp = TempDir::new().unwrap();
+        let repo = temp.child("project");
+        repo.create_dir_all().unwrap();
+        bare_repo(&repo.child(".git-store"));
+
+        assert_eq!(
+            nested_bare_repo(repo.path()),
+            Some(repo.child(".git-store").to_path_buf())
+        );
     }
 
     #[test]

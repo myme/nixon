@@ -22,6 +22,8 @@ let
       pkgs.installShellFiles
       # setsid, for the test that runs nixon with no controlling terminal.
       pkgs.util-linux
+      # The worktree fixtures are checked against real git once.
+      pkgs.git
     ];
   };
 

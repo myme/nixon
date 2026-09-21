@@ -774,3 +774,70 @@ fn a_project_path_that_does_not_exist_is_reported() {
         .code(1)
         .stderr(contains("no such project: /nowhere/at/all"));
 }
+
+/// The `.bare` container layout, built by real git rather than by hand, so
+/// the fixtures elsewhere stay honest.
+#[test]
+fn project_list_includes_the_worktrees_of_a_bare_container() {
+    let fixture = Fixture::new();
+    let code = fixture.temp.child("code");
+    let gaia = code.child("novem/gaia");
+    gaia.create_dir_all().unwrap();
+
+    let git = |args: &[&str], cwd: &std::path::Path| {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_SYSTEM", "/dev/null")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.com")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.com")
+            .output()
+            .unwrap();
+        assert!(status.status.success(), "git {args:?}: {status:?}");
+    };
+
+    git(
+        &["init", "-q", "--bare", "-b", "main", ".bare"],
+        gaia.path(),
+    );
+    // A worktree needs a commit to branch from.
+    let seed = fixture.temp.child("seed");
+    seed.create_dir_all().unwrap();
+    git(&["init", "-q", "-b", "main", "."], seed.path());
+    git(
+        &["commit", "-q", "--allow-empty", "-m", "seed"],
+        seed.path(),
+    );
+    git(
+        &[
+            "push",
+            "-q",
+            &gaia.child(".bare").path().to_string_lossy(),
+            "main",
+        ],
+        seed.path(),
+    );
+    git(
+        &["worktree", "add", "-q", "../bugs", "main"],
+        gaia.child(".bare").path(),
+    );
+
+    fixture
+        .temp
+        .child("config/nixon.md")
+        .write_str(&format!(
+            "```json config\n{{\"project_dirs\": [\"{}/*\"], \"project_types\": [{{\"name\": \"any\", \"desc\": \"Any\"}}]}}\n```\n",
+            code.path().display()
+        ))
+        .unwrap();
+
+    fixture
+        .nixon()
+        .args(["project", "-l"])
+        .assert()
+        .success()
+        .stdout(contains("gaia").and(contains("gaia/bugs")));
+}

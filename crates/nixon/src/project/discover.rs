@@ -226,6 +226,80 @@ mod tests {
         );
     }
 
+    /// The `.bare` container layout: the repository in a dot-subdirectory,
+    /// the worktrees beside it.
+    fn container(at: &assert_fs::fixture::ChildPath, worktrees: &[&str]) {
+        at.create_dir_all().unwrap();
+        bare_repo(&at.child(".bare"));
+        for name in worktrees {
+            let root = at.child(name);
+            root.create_dir_all().unwrap();
+            let admin = at.child(format!(".bare/worktrees/{name}"));
+            admin.create_dir_all().unwrap();
+            admin
+                .child("gitdir")
+                .write_str(&format!("{}\n", root.child(".git").path().display()))
+                .unwrap();
+            root.child(".git")
+                .write_str(&format!("gitdir: {}\n", admin.path().display()))
+                .unwrap();
+        }
+    }
+
+    /// The layout the user has: `project_dirs: ["<root>/*"]` over a tree of
+    /// containers, each holding a bare repo and its worktrees.
+    #[test]
+    fn a_glob_over_containers_lists_them_and_their_worktrees() {
+        let temp = TempDir::new().unwrap();
+        let marker = unique_marker(&temp);
+        let code = temp.child("code");
+        let novem = code.child("novem");
+        novem.create_dir_all().unwrap();
+
+        let gaia = novem.child("gaia");
+        container(&gaia, &["bugs", "claims"]);
+        // The container is a project in its own right, by its own marker.
+        gaia.child(&marker).touch().unwrap();
+
+        let found = get_sorted_projects(
+            &[marker_type(&marker)],
+            &[code.child("*").to_path_buf()],
+            &expansion(temp.path()),
+            true,
+        );
+
+        assert_eq!(
+            paths(&found),
+            [
+                gaia.to_path_buf(),
+                gaia.child("bugs").to_path_buf(),
+                gaia.child("claims").to_path_buf(),
+            ]
+        );
+    }
+
+    /// A container with no marker of its own still contributes its
+    /// worktrees: they are what the user selects.
+    #[test]
+    fn an_unmarked_container_still_contributes_its_worktrees() {
+        let temp = TempDir::new().unwrap();
+        let marker = unique_marker(&temp);
+        let src = temp.child("src");
+        src.create_dir_all().unwrap();
+
+        let gaia = src.child("gaia");
+        container(&gaia, &["bugs"]);
+
+        let found = get_sorted_projects(
+            &[marker_type(&marker)],
+            &[src.to_path_buf()],
+            &expansion(temp.path()),
+            true,
+        );
+
+        assert_eq!(paths(&found), [gaia.child("bugs").to_path_buf()]);
+    }
+
     fn make_project(parent: &assert_fs::fixture::ChildPath, name: &str, marker: &str) -> PathBuf {
         let dir = parent.child(name);
         dir.create_dir_all().unwrap();
