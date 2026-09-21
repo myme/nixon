@@ -783,7 +783,7 @@ fn stdout_carries_no_escape_sequences() {
         !stdout.contains('\u{1b}'),
         "an escape sequence reached stdout: {stdout:?}"
     );
-    assert_eq!(stdout, "a.txt\n\n");
+    assert_eq!(stdout, "a.txt\n");
 }
 
 /// The same for the two other things a widget captures.

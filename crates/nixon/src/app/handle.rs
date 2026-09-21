@@ -53,8 +53,6 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         if opts.select {
             let values = self.select_from(project, &command)?;
             output::lines(&values)?;
-            // v1 printed a trailing blank line after the values.
-            output::line("")?;
             return Ok(0);
         }
 

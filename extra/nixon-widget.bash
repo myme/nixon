@@ -9,9 +9,13 @@
 #
 # Source this from ~/.bashrc.
 
+# `IFS=` keeps each value's bytes: `read` would otherwise trim the spaces
+# at either end before quoting. An empty line is a separator, never a value.
 nixon-insert-selection() {
   local selected
-  selected="$(nixon run -s | while read -r item; do printf '%q ' "$item"; done)"
+  selected="$(nixon run -s | while IFS= read -r item; do
+    [[ -n $item ]] && printf '%q ' "$item"
+  done)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$selected${READLINE_LINE:$READLINE_POINT}"
   READLINE_POINT=$((READLINE_POINT + ${#selected}))
 }
@@ -32,8 +36,11 @@ nixon-insert-command() {
 
 nixon-insert-project() {
   local project
-  # Quoted like a selection: a project path may hold spaces.
-  project="$(nixon project -s | while read -r item; do printf '%q ' "$item"; done)"
+  # Quoted like a selection, and read the same way: a project path may hold
+  # spaces, at either end as much as in the middle.
+  project="$(nixon project -s | while IFS= read -r item; do
+    [[ -n $item ]] && printf '%q ' "$item"
+  done)"
   READLINE_LINE="${READLINE_LINE:0:$READLINE_POINT}$project${READLINE_LINE:$READLINE_POINT}"
   READLINE_POINT=$((READLINE_POINT + ${#project}))
 }

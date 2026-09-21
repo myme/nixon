@@ -253,6 +253,34 @@ fn a_bad_placeholder_after_dash_f_is_a_cli_error() {
         .stderr(contains("invalid value 'echo hi' for '[PLACEHOLDERS]...'"));
 }
 
+/// What `Alt-i` inserts must be exactly what was selected.
+///
+/// `read -r` without `IFS=` trimmed each value's edge whitespace, and an
+/// empty line in the input became a quoted empty argument of its own.
+#[test]
+#[cfg(unix)]
+fn the_bash_selection_widget_inserts_one_argument_per_value() {
+    let widget = std::fs::canonicalize("../../extra/nixon-widget.bash").unwrap();
+    let script = format!(
+        // A stub in place of the binary, printing a value with edge spaces
+        // and the blank line a producer's output may end with.
+        "nixon() {{ printf '  a b  \n\n'; }}\n\
+         source {}\n\
+         READLINE_LINE=''\n\
+         READLINE_POINT=0\n\
+         nixon-insert-selection\n\
+         eval \"set -- $READLINE_LINE\"\n\
+         printf '[%s]' \"$@\"\n",
+        widget.display()
+    );
+
+    Command::new("bash")
+        .args(["--noprofile", "--norc", "-c", &script])
+        .assert()
+        .success()
+        .stdout("[  a b  ]");
+}
+
 #[test]
 fn gc_reports_what_it_removes() {
     let fixture = Fixture::new();
@@ -363,7 +391,7 @@ fn select_runs_the_command_and_prints_its_output_lines() {
         .args(["run", "-s", "files"])
         .assert()
         .success()
-        .stdout("only.txt\n\n");
+        .stdout("only.txt\n");
 }
 
 #[test]
@@ -965,7 +993,7 @@ fn nixons_flags_still_work_before_the_command_name() {
         .args(["run", "-s", "one"])
         .assert()
         .success()
-        .stdout("only.txt\n\n");
+        .stdout("only.txt\n");
 }
 
 /// The flag boundary: nixon's flags go before the command name, and
