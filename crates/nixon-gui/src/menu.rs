@@ -83,6 +83,26 @@ impl MenuState {
         self.path.len()
     }
 
+    /// The label of the current submenu, or `None` at the root.
+    #[must_use]
+    pub fn current_label(&self) -> Option<&str> {
+        let mut items = self.root.as_slice();
+        let mut label = None;
+        for index in &self.path {
+            let MenuItem::Submenu {
+                label: current,
+                items: children,
+                ..
+            } = items.get(*index)?
+            else {
+                return None;
+            };
+            label = Some(current.as_str());
+            items = children;
+        }
+        label
+    }
+
     /// Routes a key without running the selected action.
     pub fn handle(&mut self, input: MenuInput, focus: InputFocus) -> MenuOutcome {
         if focus == InputFocus::TextInput {
@@ -148,6 +168,7 @@ mod tests {
     fn root_starts_visible_and_leaf_actions_do_not_change_the_path() {
         let mut state = defaults();
         assert_eq!(state.depth(), 0);
+        assert_eq!(state.current_label(), None);
         assert_eq!(state.items().len(), 5);
         assert_eq!(
             press(&mut state, MenuInput::Character('c')),
@@ -164,6 +185,7 @@ mod tests {
             MenuOutcome::EnteredSubmenu
         );
         assert_eq!(state.depth(), 1);
+        assert_eq!(state.current_label(), Some("Browser"));
         assert_eq!(state.items().len(), 1);
         assert_eq!(
             press(&mut state, MenuInput::Character('O')),

@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/nixon", "crates/nixon-cli", "crates/nixon-gui", "crates/nixon-picker"]
+members = [
+  "crates/nixon",
+  "crates/nixon-cli",
+  "crates/nixon-gui",
+  "crates/nixon-picker",
+]
 resolver = "3"
 
 # crane reads the package name from here; without it every build warns
@@ -19,6 +24,12 @@ authors = ["Martin Øinæs Myrseth"]
 nixon = { path = "crates/nixon", version = "0.2.0" }
 nixon-picker = { path = "crates/nixon-picker", version = "0.2.0" }
 
+eframe = { version = "=0.31.1", default-features = false, features = [
+  "default_fonts",
+  "glow",
+  "x11",
+  "wayland",
+] }
 serde = { version = "1", features = ["derive"] }
 serde-saphyr = "1"
 serde_json = "1"
