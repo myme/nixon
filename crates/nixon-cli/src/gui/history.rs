@@ -105,11 +105,6 @@ fn replay_history_line<R: ProcessRunner>(
                     ));
                 }
             };
-            if opts.file.is_none() && opts.source.as_deref().is_none_or(str::is_empty) {
-                return CommandOutcome::Error(
-                    "Could not replay history: recorded eval has no source.".to_owned(),
-                );
-            }
             replay_eval(app, &opts)
         }
         _ => unsupported_history_action(),
