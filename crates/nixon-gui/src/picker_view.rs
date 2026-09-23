@@ -522,9 +522,10 @@ fn picker_events(ctx: &egui::Context) -> Vec<KeyEvent> {
             .events
             .iter()
             .flat_map(|event| match event {
-                egui::Event::Text(text) => text
+                // egui-winit sends Paste instead of Text for a paste shortcut.
+                egui::Event::Text(text) | egui::Event::Paste(text) => text
                     .chars()
-                    .filter(|c| !c.is_control())
+                    .filter(|c| !c.is_control() && !matches!(c, '\u{2028}' | '\u{2029}'))
                     .map(|c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE))
                     .collect::<Vec<_>>(),
                 egui::Event::Key {

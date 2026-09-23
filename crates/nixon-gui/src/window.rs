@@ -877,6 +877,136 @@ mod tests {
     }
 
     #[test]
+    fn paste_into_empty_picker_query_filters_line_breaks_and_selects_unicode() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            done.send(
+                picker
+                    .pick(
+                        &PickerOptions::default().header("Paste choices"),
+                        candidates(&["東京", "大阪"]),
+                    )
+                    .unwrap(),
+            )
+            .unwrap();
+        });
+        let ctx = egui::Context::default();
+        wait_for_text(&ctx, &mut window, "Paste choices");
+        frame(
+            &ctx,
+            &mut window,
+            vec![egui::Event::Paste(
+                "東\n\u{0000}\u{2028}京\u{2029}".to_owned(),
+            )],
+        );
+        let output = wait_for_text(&ctx, &mut window, "> 東京▏");
+        assert!(texts(&output).iter().any(|text| text == "1/2"));
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        let answer = wait_for_reply(&ctx, &mut window, &replies);
+        assert_eq!(answer.items()[0].value, "東京");
+        wait_for_text(&ctx, &mut window, "Nixon");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn paste_at_query_cursor_preserves_mark_and_escape_cancels() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            done.send(
+                picker
+                    .pick(
+                        &PickerOptions::default()
+                            .header("Paste at cursor")
+                            .query("bld")
+                            .multi(true)
+                            .no_sort(),
+                        candidates(&["build", "bald", "other"]),
+                    )
+                    .unwrap(),
+            )
+            .unwrap();
+        });
+        let ctx = egui::Context::default();
+        wait_for_text(&ctx, &mut window, "> bld▏");
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![
+                key(egui::Key::Home, egui::Modifiers::default()),
+                key(egui::Key::ArrowRight, egui::Modifiers::default()),
+            ],
+        );
+        frame(&ctx, &mut window, vec![egui::Event::Paste("ui".to_owned())]);
+        let output = wait_for_text(&ctx, &mut window, "> bui▏ld");
+        assert!(texts(&output).iter().any(|text| text == "1/3 (1)"));
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Escape, egui::Modifiers::default())],
+        );
+        assert_eq!(
+            wait_for_reply(&ctx, &mut window, &replies),
+            Selection::Canceled
+        );
+        wait_for_text(&ctx, &mut window, "Nixon");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn typing_and_pasting_in_a_pick_do_not_trigger_menu_mnemonics() {
+        let (actions, menu_actions) = mpsc::channel();
+        let mut window = MenuWindow::new(&Config::defaults().launcher, actions).unwrap();
+        let (mut picker, requests) = GuiPicker::channel();
+        window.attach_picker(requests);
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            done.send(
+                picker
+                    .pick(
+                        &PickerOptions::default().header("Picker owns input"),
+                        candidates(&["paste", "other"]),
+                    )
+                    .unwrap(),
+            )
+            .unwrap();
+        });
+        let ctx = egui::Context::default();
+        wait_for_text(&ctx, &mut window, "Picker owns input");
+        frame(
+            &ctx,
+            &mut window,
+            vec![
+                key(egui::Key::P, egui::Modifiers::default()),
+                egui::Event::Text("p".to_owned()),
+                egui::Event::Paste("aste".to_owned()),
+            ],
+        );
+        wait_for_text(&ctx, &mut window, "> paste▏");
+        assert!(menu_actions.try_recv().is_err());
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        assert_eq!(
+            wait_for_reply(&ctx, &mut window, &replies).items()[0].value,
+            "paste"
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
     fn duplicate_visible_titles_keep_distinct_values_and_marks() {
         let (mut window, mut picker) = window_with_picker();
         let (done, replies) = mpsc::channel();

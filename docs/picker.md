@@ -147,4 +147,5 @@ whole process group.
 The GUI picker uses the same candidate stream and matcher. It shows pending and
 complete states while rows arrive, and keeps the current query and marked rows
 when more candidates appear. Selecting a row or leaving the window stops an
-active producer.
+active producer. Clipboard paste inserts at the query cursor; line breaks and
+control characters are ignored because the query is one line.
