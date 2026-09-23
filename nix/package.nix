@@ -1,6 +1,23 @@
 { pkgs, craneLib }:
 
 let
+  inherit (pkgs) lib;
+
+  # winit, xkbcommon-dl, and glutin load these at runtime with dlopen.
+  guiRuntimeLibraries = lib.optionals pkgs.stdenv.isLinux (
+    with pkgs;
+    [
+      wayland
+      libxkbcommon
+      libglvnd
+      libx11
+      libxcb
+      libxcursor
+      libxi
+      libxrender
+    ]
+  );
+
   # crane's cargo filter keeps only what cargo needs to build. Everything else
   # the build or the tests read has to be named here, or the checks see a
   # different tree than `cargo test` does: .snap files, or insta finds no
@@ -44,7 +61,15 @@ let
     // {
       inherit cargoArtifacts;
 
-      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.pandoc ];
+      nativeBuildInputs =
+        commonArgs.nativeBuildInputs
+        ++ [ pkgs.pandoc ]
+        ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.makeWrapper ];
+
+      postFixup = lib.optionalString pkgs.stdenv.isLinux ''
+        wrapProgram $out/bin/nixon \
+          --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath guiRuntimeLibraries}
+      '';
 
       # The widgets are v2's: no -b/-T, which no longer parse. Completion is
       # clap_complete's CompleteEnv, so the loaders are `eval`'d snippets
@@ -108,5 +133,10 @@ let
   );
 in
 {
-  inherit nixon commonArgs cargoArtifacts;
+  inherit
+    nixon
+    commonArgs
+    cargoArtifacts
+    guiRuntimeLibraries
+    ;
 }

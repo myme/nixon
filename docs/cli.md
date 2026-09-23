@@ -17,6 +17,7 @@ Commands:
   help     Print this message or the help of the given subcommand(s)
 
 Options:
+  -m, --mode <MODE>          Interaction mode (GUI is a menu preview) [default: tui]
   -C, --config <CONFIG>      Path to config file [default: [..]]
   -e, --exact                Exact match in the selector
   -i, --ignore-case          Case-insensitive match in the selector
@@ -34,6 +35,13 @@ See nixon.md(5), nixon-picker(7), nixon-shell(7).
 Global options come before the subcommand. Each on/off flag has a hidden
 `--no-…` counterpart, and the last one given wins, so a config file setting can
 be overridden either way.
+
+`nixon --mode gui` (or `nixon -m gui`) opens the configured graphical root
+menu. This is a preview: selecting an action shows an in-window status, but
+does not execute it yet.
+GUI mode currently accepts no subcommands; `nixon --mode gui run` and bare
+command names report an error. `--mode tui` and the default retain the terminal
+behavior.
 
 **Where nixon's flags stop.** A subcommand's own flags go *before* the command
 name; everything after the command name belongs to the command. `nixon run -i

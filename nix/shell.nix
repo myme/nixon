@@ -2,9 +2,12 @@
   pkgs,
   craneLib,
   toolchain,
+  guiRuntimeLibraries,
 }:
 
 craneLib.devShell {
+  LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath guiRuntimeLibraries;
+
   packages = [
     toolchain
   ]

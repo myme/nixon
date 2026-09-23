@@ -2,7 +2,9 @@
 
 use std::path::PathBuf;
 
-use clap::{ArgAction, Args, CommandFactory as _, FromArgMatches as _, Parser, Subcommand};
+use clap::{
+    ArgAction, Args, CommandFactory as _, FromArgMatches as _, Parser, Subcommand, ValueEnum,
+};
 use nixon::config::{Config, LogLevel};
 use nixon::language::Language;
 use nixon::placeholder::{Placeholder, parse_one};
@@ -35,6 +37,10 @@ pub struct Cli {
     reason = "each flag is a separate command-line option"
 )]
 pub struct GlobalOpts {
+    /// Interaction mode (GUI is a menu preview).
+    #[arg(short = 'm', long, value_enum, default_value_t = Mode::Tui, value_name = "MODE", hide_possible_values = true)]
+    pub mode: Mode,
+
     /// Path to config file.
     #[arg(short = 'C', long, value_name = "CONFIG", help = config_help())]
     pub config: Option<PathBuf>,
@@ -74,6 +80,16 @@ pub struct GlobalOpts {
     /// Log level.
     #[arg(short = 'L', long, value_name = "LOGLEVEL", value_parser = parse_log_level)]
     pub loglevel: Option<LogLevel>,
+}
+
+/// The user interface selected for this invocation.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum Mode {
+    /// Terminal interface and existing command behavior.
+    #[default]
+    Tui,
+    /// Graphical launcher menu preview.
+    Gui,
 }
 
 impl GlobalOpts {

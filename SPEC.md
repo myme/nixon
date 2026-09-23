@@ -40,8 +40,8 @@ The launcher combines two interaction models:
 Both use the same discovered projects, commands, config, placeholder
 resolution, evaluation, and history as the terminal CLI.
 
-- [ ] **MUST:** Provide a separately invocable `nixon-launcher` executable for
-  a desktop shortcut or window manager binding. Starting it opens the root
+- [x] **MUST:** Provide `nixon --mode gui` (also `nixon -m gui`) for a
+  desktop shortcut or window manager binding. Starting it opens the root
   launcher window without needing a controlling terminal.
 - [ ] **MUST:** The root offers at least **Commands**, **Projects**,
   **History**, and configured quick actions. Commands use the current project;
@@ -50,13 +50,17 @@ resolution, evaluation, and history as the terminal CLI.
 - [ ] **MUST:** The same GUI picker handles command selection, project
   selection, history, command options, and placeholder candidates. A command
   chosen through a mnemonic may still lead to a GUI placeholder pick.
-- [ ] **MUST:** Launching the GUI does not change `nixon`, its default terminal
+- [ ] **MUST:** Launching the GUI does not change `nixon`'s default terminal
   picker, shell widgets, or scripting output. There is no implicit switch to
   GUI based on stdin or display environment variables.
-- [ ] **DECISION:** The first entry point is `nixon-launcher`, not a new
-  `nixon -b rofi` compatibility flag. The separate binary keeps GUI libraries
-  and platform runtime dependencies out of the terminal executable. A later
-  `nixon gui` alias may exec the launcher without changing the selection API.
+- [x] **DECISION:** One `nixon` binary provides both modes. `--mode tui` is the
+  default; `--mode gui` (or `-m gui`) explicitly opens the graphical menu.
+  This replaces the earlier separate-binary plan and does not restore
+  `nixon -b rofi`.
+- [x] **PREVIEW:** The first runnable GUI stage opens the merged-config menu.
+  Selecting an action shows a visible status that execution is not wired yet;
+  it never silently drops or executes the action. GUI subcommands and bare
+  command names are explicitly rejected until the workflows are integrated.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
   old exit-code/argv protocol. The behavior to recover is GUI selection.
 
@@ -103,17 +107,18 @@ view, key, or action. The spec follows the executable code.
 
 ## 3. Workspace boundaries
 
-Current dependencies are `nixon-cli -> nixon -> nixon-picker`. `nixon-picker`
-is domain-neutral. `nixon::select` alone maps projects and commands to picker
-candidates; `App<P: Picker, R: ProcessRunner>` runs the workflows.
+The terminal workflow follows `nixon-cli -> nixon -> nixon-picker`.
+`nixon-picker` is domain-neutral. `nixon::select` alone maps projects and
+commands to picker candidates; `App<P: Picker, R: ProcessRunner>` runs the
+workflows.
 
 - [ ] **MUST:** Add `nixon-gui` as a GUI library crate that owns window state,
   rendering, keyboard routing, and a `GuiPicker` implementation of the
   existing `nixon_picker::Picker` contract. It may depend on `nixon` to
   orchestrate its workflows without duplicating them.
-- [ ] **MUST:** Add `nixon-launcher` as a thin binary crate for config/env
-  loading, GUI startup, and error/exit reporting. It depends on `nixon-gui`
-  and `nixon`; neither `nixon` nor `nixon-picker` depends on GUI types.
+- [x] **MUST:** Use the existing `nixon-cli` binary for config/env loading,
+  GUI startup, and error/exit reporting. It depends on `nixon-gui` and `nixon`;
+  neither `nixon` nor `nixon-picker` depends on GUI types.
 - [ ] **MUST:** Keep command/project discovery, config merging, resolution,
   evaluation, history, and process execution in `nixon`. GUI code sends typed
   actions into that domain layer; it does not parse markdown or build shell
@@ -136,9 +141,10 @@ candidates; `App<P: Picker, R: ProcessRunner>` runs the workflows.
 Dependency direction:
 
 ```text
-nixon-launcher -> nixon-gui -> nixon -> nixon-picker
-                            \------> nixon-picker
-nixon-cli      -----------> nixon -> nixon-picker
+nixon-cli -> nixon-gui -> nixon -> nixon-picker
+          |           \-------> nixon-picker
+          +-----------> nixon
+          +-----------> nixon-picker
 ```
 
 ## 4. Root menu and quick actions
@@ -234,7 +240,7 @@ nixon-cli      -----------> nixon -> nixon-picker
   error before running a foreground command. Do not drop its output into an
   invisible pipe. An explicitly terminal-free action may run detached.
 - [ ] **DECISION:** Do not resurrect v1's automatic foreground-vs-detached
-  choice based on whether the picker is a GUI. The GUI entry point has an
+  choice based on whether the picker is a GUI. `nixon --mode gui` has an
   explicit terminal execution policy; the command's `&` marker still wins.
 - [ ] **DECISION:** A successful terminal handoff counts as launch success;
   the GUI cannot claim the later child exit status after it closes. The
@@ -332,7 +338,7 @@ launcher:
   on macOS. A macOS GUI target requires a separate media-control decision.
 - [ ] **OUT OF SCOPE:** A resident daemon, global hotkey registration, tray
   icon, and display-server-specific window focus tricks. The desktop binds a
-  shortcut to start `nixon-launcher`.
+  shortcut to start `nixon --mode gui`.
 
 ## 9. Verification checklist
 
@@ -371,7 +377,7 @@ placeholder producer was cancelled.
 3. Add GUI-safe Run/Edit/Show/Visit and terminal execution policy; prove a
    placeholder workflow end to end.
 4. Add mnemonic menus and the PoC's browser/MPRIS actions.
-5. Package `nixon-launcher` for Linux, document keys/config, and run the
+5. Package `nixon --mode gui` for Linux, document keys/config, and run the
    functional smoke tests.
 
 No cut is complete if its user-facing path can only be used from a terminal.

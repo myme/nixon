@@ -4,8 +4,7 @@ Project environment and command launcher.
 
 `nixon` reads `nixon.md` files, finds the commands in them, lets you pick one
 with a built-in fuzzy picker, and runs it — optionally inside `direnv` or
-`nix-shell`. It has no external dependencies: the picker is built in, so there
-is no `fzf` or `rofi` to install.
+`nix-shell`. The terminal picker needs no `fzf` or `rofi` install.
 
 ## Install
 
@@ -22,6 +21,10 @@ Or build from a checkout:
 nix build
 ./result/bin/nixon --help
 ```
+
+To preview the graphical menu from a checkout, enter `nix develop` and run
+`cargo run -- -m gui`. Re-enter the dev shell after updating it so the GUI
+runtime library paths take effect.
 
 ## Quick start
 
@@ -102,8 +105,9 @@ Installed as man pages: `nixon(1)`, `nixon.md(5)`, `nixon-picker(7)` and
 v2 is a rewrite in Rust. Configuration files carry over unchanged; the
 command line has a few deliberate differences.
 
-- **The picker is built in.** `fzf` and `rofi` are no longer needed or used,
-  and the `rofi` GUI mode is gone with them.
+- **The picker is built in.** `fzf` and `rofi` are no longer needed or used.
+  `nixon --mode gui` now opens a graphical menu preview; selected actions
+  show a status until workflow execution is integrated.
 - **Removed flags.** `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went
   with the backend concept. Passing one is now an ordinary argument error.
   Commands run in the terminal you started them from; a command marked `&`

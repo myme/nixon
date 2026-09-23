@@ -9,6 +9,7 @@
 
 mod cli;
 mod complete;
+mod gui;
 mod mangen;
 
 use std::process::ExitCode;
@@ -25,7 +26,7 @@ use nixon::fs::Dirs;
 use nixon::process::RealRunner;
 use nixon_picker::TuiPicker;
 
-use cli::{Cli, Commands, EvalArgs, HistoryArgs, Internal, ProjectArgs, RunArgs};
+use cli::{Cli, Commands, EvalArgs, HistoryArgs, Internal, Mode, ProjectArgs, RunArgs};
 
 fn main() -> ExitCode {
     // Completion must answer before anything writes to stdout.
@@ -58,11 +59,13 @@ fn report(err: &NixonError) {
 
 fn run() -> Result<i32> {
     let parsed = Cli::parse();
-    let dirs =
-        Dirs::from_env().map_err(|err| NixonError::Io(std::io::Error::other(err.to_string())))?;
-
     let cli_config = parsed.global.to_config();
     init_tracing(cli_config.loglevel);
+    if parsed.global.mode == Mode::Gui {
+        gui::reject_subcommand(parsed.command.as_ref())?;
+    }
+    let dirs =
+        Dirs::from_env().map_err(|err| NixonError::Io(std::io::Error::other(err.to_string())))?;
 
     let config_path = parsed
         .global
@@ -73,6 +76,10 @@ fn run() -> Result<i32> {
 
     // Defaults, then the file, then the command line.
     let config = Config::defaults().merge(file_config).merge(cli_config);
+
+    if parsed.global.mode == Mode::Gui {
+        return gui::run(&config.launcher);
+    }
 
     let env = Environment {
         cwd: std::env::current_dir()?,

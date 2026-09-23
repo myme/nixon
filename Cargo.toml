@@ -22,6 +22,7 @@ authors = ["Martin Øinæs Myrseth"]
 
 [workspace.dependencies]
 nixon = { path = "crates/nixon", version = "0.2.0" }
+nixon-gui = { path = "crates/nixon-gui", version = "0.2.0" }
 nixon-picker = { path = "crates/nixon-picker", version = "0.2.0" }
 
 eframe = { version = "=0.31.1", default-features = false, features = [

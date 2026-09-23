@@ -100,6 +100,47 @@ fn help_shows_the_computed_default_config_path_with_home_collapsed() {
 }
 
 #[test]
+fn mode_flag_keeps_tui_behavior_and_rejects_unknown_values() {
+    Fixture::new()
+        .nixon()
+        .args(["--mode", "tui", "run", "-l"])
+        .assert()
+        .success()
+        .stdout("_hidden\nboom\nhello - Say hello.\n");
+    Fixture::new()
+        .nixon()
+        .args(["-m", "tui", "run", "-l"])
+        .assert()
+        .success()
+        .stdout("_hidden\nboom\nhello - Say hello.\n");
+    Fixture::new()
+        .nixon()
+        .args(["--mode", "other"])
+        .assert()
+        .failure()
+        .stderr(contains("possible values: tui, gui"));
+}
+
+#[test]
+fn gui_preview_rejects_subcommands_before_loading_config_or_opening_a_window() {
+    let fixture = Fixture::new();
+    fixture
+        .nixon()
+        .args(["--mode", "gui", "run", "hello"])
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(contains("GUI preview does not support subcommands"));
+    fixture
+        .nixon()
+        .args(["-m", "gui", "hello"])
+        .assert()
+        .failure()
+        .stdout("")
+        .stderr(contains("GUI preview does not support subcommands"));
+}
+
+#[test]
 fn the_removed_backend_flags_are_unexpected_arguments() {
     for flag in ["-b", "--backend", "-T", "--force-tty", "-t", "--terminal"] {
         Fixture::new()

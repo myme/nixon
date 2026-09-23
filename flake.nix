@@ -44,7 +44,10 @@
           inherit (package) nixon commonArgs cargoArtifacts;
         };
 
-        devShells.default = import ./nix/shell.nix { inherit pkgs craneLib toolchain; };
+        devShells.default = import ./nix/shell.nix {
+          inherit pkgs craneLib toolchain;
+          inherit (package) guiRuntimeLibraries;
+        };
 
         formatter = pkgs.nixfmt;
       }
