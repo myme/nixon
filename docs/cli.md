@@ -42,8 +42,10 @@ config and hidden-command rules applied. Enter resolves the selected command,
 including options and placeholders, then hands foreground execution to an
 external terminal. A command marked `&` keeps its detached behavior. A
 successful handoff closes the window; a missing terminal or other error stays
-visible and is reported on stderr. Canceling returns to the menu. Edit, Show,
-and Visit selections show explicit preview statuses without running the command.
+visible and is reported on stderr. Canceling returns to the menu. F1 shows the
+command's exact source in a read-only detail panel; Copy or Ctrl-C copies it,
+and Back or Esc returns to the menu. Edit and Visit selections show explicit
+preview statuses without running the command.
 Browser (default **W**, then **O**) opens a focused input. Enter opens a full
 `http://` or `https://` URL unchanged, adds `https://` to a dotted address
 without spaces, or searches through `launcher.search_url`. Empty input does
@@ -62,9 +64,10 @@ menu; missing projects, commands, or launchers stay visible and are reported on
 stderr. Projects (default **P**) opens a searchable list showing each project's
 name and path. Enter opens that project's visible commands; choosing one uses
 its local config, prompts, history, and terminal or detached execution. Esc at
-either pick returns to the menu. F1 on a project shows an inspection preview in
-the window without launching a command. History still shows a preview status.
-F1 in a quick action's project picker returns to the menu without launching.
+either pick returns to the menu. F1 on a project opens a read-only detail panel
+with Nixon's name, path, and type information. The panel has the same Copy and
+Back controls and does not launch a command. F1 in a quick action's project
+picker opens this panel too. History still shows a preview status.
 GUI mode currently accepts no subcommands; `nixon --mode gui run` and bare
 command names report an error. `--mode tui` and the default retain the terminal
 behavior.

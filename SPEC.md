@@ -59,9 +59,10 @@ resolution, evaluation, and history as the terminal CLI.
   `nixon -b rofi`.
 - [x] **PREVIEW:** The GUI opens the merged-config menu. Commands and Projects
   discover and run commands through the GUI picker and existing App flow on a
-  worker. Browser and media actions run on workers. Project inspect and command
-  Edit/Show/Visit display preview statuses; History remains a preview. GUI
-  subcommands and bare command names are explicitly rejected.
+  worker. Browser and media actions run on workers. Project Inspect and command
+  Show open a read-only detail panel; Edit/Visit display preview statuses.
+  History remains a preview. GUI subcommands and bare command names are
+  explicitly rejected.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
   old exit-code/argv protocol. The behavior to recover is GUI selection.
 
@@ -218,7 +219,7 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
 - [x] **MUST:** Run a selected command via Nixon's existing `App` flow. The
   GUI must not duplicate placeholder resolution, option argument placement,
   project environment variables, or history serialization.
-- [ ] **MUST:** Show displays command source in a GUI panel with a way back;
+- [x] **MUST:** Show displays command source in a GUI panel with a way back;
   it does not print invisible data to the launcher's stdout.
 - [ ] **MUST:** Edit opens a multiline GUI editor initialized from the source.
   Submitting runs the edited source with the original command's language,

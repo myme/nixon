@@ -6,6 +6,7 @@ use eframe::egui;
 use nixon::config::launcher::{LauncherAction, LauncherConfig, MenuItem, MenuKey};
 
 use crate::browser_view::{BrowserInputOutcome, BrowserInputView};
+use crate::detail_view::{DetailOutcome, DetailView};
 use crate::menu::{InputFocus, MenuInput, MenuOutcome, MenuState};
 use crate::picker::GuiPickerRequests;
 use crate::picker_view::PickerView;
@@ -18,6 +19,8 @@ pub struct MenuWindow {
     picker: Option<PickerView>,
     browser: Option<BrowserInputView>,
     browser_event: Option<BrowserInputEvent>,
+    detail: Option<DetailView>,
+    detail_closed: bool,
 }
 
 /// The browser input screen's result.
@@ -40,6 +43,8 @@ impl MenuWindow {
             picker: None,
             browser: None,
             browser_event: None,
+            detail: None,
+            detail_closed: false,
         })
     }
 
@@ -59,6 +64,17 @@ impl MenuWindow {
         self.browser_event.take()
     }
 
+    /// Opens a read-only detail screen over the menu.
+    pub fn open_detail(&mut self, title: String, body: String) {
+        self.detail = Some(DetailView::new(title, body));
+        self.detail_closed = false;
+    }
+
+    /// Whether the user returned from the detail screen since the last check.
+    pub const fn take_detail_closed(&mut self) -> bool {
+        std::mem::replace(&mut self.detail_closed, false)
+    }
+
     /// The menu currently shown by the window.
     #[must_use]
     pub const fn menu(&self) -> &MenuState {
@@ -67,6 +83,15 @@ impl MenuWindow {
 
     /// Handles one egui frame without running the selected action.
     pub fn show(&mut self, ctx: &egui::Context) {
+        if let Some(detail) = self.detail.as_mut() {
+            if matches!(detail.show(ctx), DetailOutcome::Back) {
+                self.detail = None;
+                self.detail_closed = true;
+                self.focus_first_row = true;
+                ctx.request_repaint();
+            }
+            return;
+        }
         if let Some(browser) = self.browser.as_mut() {
             match browser.show(ctx) {
                 BrowserInputOutcome::Pending => {}
@@ -373,6 +398,47 @@ mod tests {
             .collect()
     }
 
+    fn click_button(
+        ctx: &egui::Context,
+        window: &mut MenuWindow,
+        output: &egui::FullOutput,
+        label: &str,
+    ) -> egui::FullOutput {
+        let at = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == label => {
+                    Some(text.pos + text.galley.size() / 2.0)
+                }
+                _ => None,
+            })
+            .unwrap();
+        frame(
+            ctx,
+            window,
+            vec![
+                egui::Event::PointerMoved(at),
+                egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::default(),
+                },
+            ],
+        );
+        frame(
+            ctx,
+            window,
+            vec![egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::default(),
+            }],
+        )
+    }
+
     fn wait_for_text(
         ctx: &egui::Context,
         window: &mut MenuWindow,
@@ -411,6 +477,50 @@ mod tests {
         let (picker, requests) = GuiPicker::channel();
         window.attach_picker(requests);
         (window, picker)
+    }
+
+    #[test]
+    fn detail_screen_copies_exact_text_and_returns_to_menu() {
+        let (actions, _receiver) = mpsc::channel();
+        let mut window = MenuWindow::new(&Config::defaults().launcher, actions).unwrap();
+        let ctx = egui::Context::default();
+        let body = "echo 'quoted value'\n\n";
+        window.open_detail("Command: alpha".to_owned(), body.to_owned());
+        let output = frame(&ctx, &mut window, Vec::new());
+        let shown = texts(&output);
+        assert!(shown.iter().any(|text| text == "Command: alpha"));
+        assert!(shown.iter().any(|text| text == "Copy"));
+        let output = click_button(&ctx, &mut window, &output, "Copy");
+        assert!(
+            output.platform_output.commands.iter().any(
+                |command| matches!(command, egui::OutputCommand::CopyText(text) if text == body)
+            )
+        );
+        let ctrl = egui::Modifiers {
+            ctrl: true,
+            ..egui::Modifiers::default()
+        };
+        let output = frame(&ctx, &mut window, vec![key(egui::Key::C, ctrl)]);
+        assert!(
+            output.platform_output.commands.iter().any(
+                |command| matches!(command, egui::OutputCommand::CopyText(text) if text == body)
+            )
+        );
+        click_button(&ctx, &mut window, &output, "Back");
+        assert!(window.take_detail_closed());
+        let output = frame(&ctx, &mut window, Vec::new());
+        assert!(texts(&output).iter().any(|text| text == "Commands"));
+        window.open_detail(
+            "Project: work-one".to_owned(),
+            "Name: work-one\n".to_owned(),
+        );
+        frame(&ctx, &mut window, Vec::new());
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Escape, egui::Modifiers::default())],
+        );
+        assert!(window.take_detail_closed());
     }
 
     #[test]

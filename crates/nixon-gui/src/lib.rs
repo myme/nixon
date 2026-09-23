@@ -4,6 +4,7 @@
 
 pub mod browser;
 mod browser_view;
+mod detail_view;
 pub mod menu;
 pub mod picker;
 mod picker_view;
