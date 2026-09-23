@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 nixon.workspace = true
+nixon-picker.workspace = true
 
 [lints]
 workspace = true
