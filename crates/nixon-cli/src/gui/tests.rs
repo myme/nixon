@@ -1454,6 +1454,39 @@ fn history_picker_keeps_recent_order_duplicates_and_filters_query() {
 }
 
 #[test]
+fn history_filtered_picker_cancel_returns_to_menu_without_replay() {
+    let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    write_history(
+        &temp,
+        &[
+            history_entry(&cwd, &["run", "alpha"]),
+            history_entry(&cwd, &["run", "beta"]),
+        ],
+    );
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+    let _ = frame(&mut app, &ctx, vec![key(egui::Key::H)]);
+    wait_for_text(&mut app, &ctx, "History (Enter replays");
+    let _ = frame(&mut app, &ctx, vec![egui::Event::Text("alpha".to_owned())]);
+    let output = wait_for_text(&mut app, &ctx, "1/2");
+    assert!(
+        texts(&output)
+            .iter()
+            .any(|text| text.contains("nixon run alpha"))
+    );
+    let _ = frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
+    let output = wait_for_idle(&mut app, &ctx);
+    assert!(
+        texts(&output)
+            .iter()
+            .any(|text| text == super::PREVIEW_STATUS)
+    );
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
 fn history_alt_enter_shows_without_replay() {
     let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
     let cwd = temp.child("project").path().to_string_lossy().into_owned();

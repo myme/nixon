@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
-use nixon::app::history::HistoryOpts;
+use nixon::app::history::{HistoryOpts, HistoryReadMode};
 use nixon::app::new::NewOpts;
 use nixon::app::project::ProjectOpts;
 use nixon::app::{App, Environment, RunOpts};
@@ -1240,6 +1240,52 @@ fn seed_history(fixture: &Fixture, lines: &[(u64, &str)]) {
         .child("state/nixon/history")
         .write_str(&log)
         .unwrap();
+}
+
+#[test]
+fn shared_history_candidates_report_or_ignore_read_errors() {
+    let fixture = Fixture::new(HISTORY_MD);
+    fixture
+        .temp
+        .child("state/nixon/history")
+        .create_dir_all()
+        .unwrap();
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+
+    assert!(matches!(
+        app.history_candidates(Some(10), HistoryReadMode::ReportErrors),
+        Err(NixonError::Io(_))
+    ));
+    let (_, candidates) = app
+        .history_candidates(Some(10), HistoryReadMode::IgnoreErrors)
+        .unwrap();
+    assert!(candidates.is_empty());
+    assert!(matches!(
+        app.history(&HistoryOpts::default()),
+        Err(NixonError::NothingSelected(_))
+    ));
+    assert!(app.picker.calls[0].1.is_empty());
+}
+
+#[test]
+fn shared_history_picker_preserves_query_header_and_cancellation() {
+    let fixture = Fixture::new(HISTORY_MD);
+    seed_history(&fixture, &[(1, "nixon run build"), (2, "nixon run other")]);
+    let picker = ScriptedPicker::new(vec![Selection::Canceled]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+    let (config, candidates) = app
+        .history_candidates(Some(10), HistoryReadMode::ReportErrors)
+        .unwrap();
+
+    assert!(matches!(
+        app.pick_history_candidates(&config, candidates, Some("run"), Some("Recent runs")),
+        Ok(Selection::Canceled)
+    ));
+    let (options, offered) = &app.picker.calls[0];
+    assert_eq!(options.header.as_deref(), Some("Recent runs"));
+    assert_eq!(options.initial_query.as_deref(), Some("run"));
+    assert_eq!(offered[0].value, "nixon run other");
+    assert_eq!(offered[1].value, "nixon run build");
 }
 
 /// Newest first, and a run of the same command shown once.

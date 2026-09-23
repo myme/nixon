@@ -13,6 +13,15 @@ use crate::select;
 /// How far back the picker looks when nothing says otherwise.
 pub const DEFAULT_LIMIT: usize = 1000;
 
+/// Whether an unreadable history log is treated as empty.
+#[derive(Clone, Copy, Debug)]
+pub enum HistoryReadMode {
+    /// Treat an unreadable log as empty, as terminal History does.
+    IgnoreErrors,
+    /// Return read errors for the GUI to display.
+    ReportErrors,
+}
+
 /// What `history` was asked to do.
 #[derive(Clone, Debug, Default)]
 pub struct HistoryOpts {
@@ -42,18 +51,52 @@ pub enum Outcome {
 }
 
 impl<P: Picker, R: ProcessRunner> App<P, R> {
-    /// Shows what has been run, and runs it again.
-    pub fn history(&mut self, opts: &HistoryOpts) -> Result<Outcome> {
-        // The project's config, as recording uses: a repository that turns
-        // history off has none to show.
-        let project = self.current_project();
-        let config = self.config_for(&project)?;
+    /// Loads the effective history and builds its picker candidates.
+    pub fn history_candidates(
+        &self,
+        limit: Option<usize>,
+        read_mode: HistoryReadMode,
+    ) -> Result<(Config, Vec<Candidate>)> {
+        let config = self.config_for(&self.current_project())?;
         if !config.records_history() {
             return Err(NixonError::HistoryDisabled);
         }
         let path = self.dirs.history_file();
+        let entries = match read_mode {
+            HistoryReadMode::IgnoreErrors => history::read(&path, limit),
+            HistoryReadMode::ReportErrors => history::read_checked(&path, limit)?,
+        };
+        let entries = history::recent(entries, limit);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs());
+        let candidates = select::history_candidates(&entries, &self.dirs.home, now);
+        Ok((config, candidates))
+    }
 
+    /// Opens the shared history picker with a caller-specific header.
+    pub fn pick_history_candidates(
+        &mut self,
+        config: &Config,
+        candidates: Vec<Candidate>,
+        query: Option<&str>,
+        header: Option<&str>,
+    ) -> Result<Selection<Candidate>> {
+        let mut options = select::history_options(config, query);
+        if let Some(header) = header {
+            options.header = Some(header.to_owned());
+        }
+        Ok(self.picker.pick(&options, candidates)?)
+    }
+
+    /// Shows what has been run, and runs it again.
+    pub fn history(&mut self, opts: &HistoryOpts) -> Result<Outcome> {
         if opts.clear {
+            let config = self.config_for(&self.current_project())?;
+            if !config.records_history() {
+                return Err(NixonError::HistoryDisabled);
+            }
+            let path = self.dirs.history_file();
             if output::confirm(&format!("Clear {}? [y/N] ", path.display()))? {
                 history::clear(&path)?;
                 tracing::info!("Cleared {}…", path.display());
@@ -67,18 +110,13 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         let limit = opts
             .limit
             .or(if opts.list { None } else { Some(DEFAULT_LIMIT) });
-        let entries = history::recent(history::read(&path, limit), limit);
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_secs());
-        let candidates = select::history_candidates(&entries, &self.dirs.home, now);
+        let (config, candidates) = self.history_candidates(limit, HistoryReadMode::IgnoreErrors)?;
 
         if opts.list {
             return Self::list(&config, candidates, opts.query.as_deref()).map(Outcome::Done);
         }
 
-        let options = select::history_options(&config, opts.query.as_deref());
-        match self.picker.pick(&options, candidates)? {
+        match self.pick_history_candidates(&config, candidates, opts.query.as_deref(), None)? {
             Selection::Empty => Err(NixonError::NothingSelected(
                 "No command selected.".to_owned(),
             )),

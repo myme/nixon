@@ -1,14 +1,13 @@
 //! History selection and replay in the GUI worker.
 
+use nixon::app::history::{DEFAULT_LIMIT, HistoryReadMode};
 use nixon::app::{App, RunOpts};
 use nixon::error::{NixonError, Result};
-use nixon::history;
 use nixon::process::ProcessRunner;
 use nixon::project::Project;
 use nixon::project::detect::inspect;
-use nixon::select;
 use nixon_gui::picker::GuiPicker;
-use nixon_picker::{Picker, Selection, SelectionType};
+use nixon_picker::{Selection, SelectionType};
 
 use crate::cli::Commands;
 use crate::gui_process::GuiProcessRunner;
@@ -20,34 +19,29 @@ use super::{
 pub(super) fn pick_history<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
 ) -> CommandOutcome {
-    let config = match app.config_for(&app.current_project()) {
-        Ok(config) => config,
-        Err(error) => return CommandOutcome::Error(format!("Could not load history: {error}")),
-    };
-    if !config.records_history() {
-        return CommandOutcome::Error(NixonError::HistoryDisabled.to_string());
-    }
-    let path = app.dirs.history_file();
-    let limit = Some(nixon::app::history::DEFAULT_LIMIT);
-    let entries = match history::read_checked(&path, limit) {
-        Ok(entries) => history::recent(entries, limit),
-        Err(error) => {
-            return CommandOutcome::Error(format!(
-                "Could not load history from {}: {error}",
-                path.display()
-            ));
-        }
-    };
-    if entries.is_empty() {
+    let (config, candidates) =
+        match app.history_candidates(Some(DEFAULT_LIMIT), HistoryReadMode::ReportErrors) {
+            Err(NixonError::Io(error)) => {
+                return CommandOutcome::Error(format!(
+                    "Could not load history from {}: {error}",
+                    app.dirs.history_file().display()
+                ));
+            }
+            Err(NixonError::HistoryDisabled) => {
+                return CommandOutcome::Error(NixonError::HistoryDisabled.to_string());
+            }
+            Ok(config) => config,
+            Err(error) => return CommandOutcome::Error(format!("Could not load history: {error}")),
+        };
+    if candidates.is_empty() {
         return CommandOutcome::Canceled;
     }
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs());
-    let candidates = select::history_candidates(&entries, &app.dirs.home, now);
-    let mut options = select::history_options(&config, None);
-    options.header = Some("History (Enter replays; F1 or Alt-Enter shows)".to_owned());
-    match app.picker.pick(&options, candidates) {
+    match app.pick_history_candidates(
+        &config,
+        candidates,
+        None,
+        Some("History (Enter replays; F1 or Alt-Enter shows)"),
+    ) {
         Ok(Selection::Selected { kind, mut items }) if items.len() == 1 => {
             let line = items.remove(0).value;
             match kind {
