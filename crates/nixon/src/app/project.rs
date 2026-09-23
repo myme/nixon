@@ -90,7 +90,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     ///
     /// `.` means the project containing the current directory, falling back
     /// to an unfiltered picker when there is none.
-    fn pick_projects(
+    pub fn pick_projects(
         &mut self,
         query: Option<&str>,
         multiple: bool,

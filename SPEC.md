@@ -234,7 +234,7 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
   at its recorded line. Errors are shown in the GUI. The GUI must not assume
   `$EDITOR` names a graphical program; a terminal editor needs the configured
   terminal launcher.
-- [ ] **MUST:** An action that only returns data (`--select`, `--insert`,
+- [x] **MUST:** An action that only returns data (`--select`, `--insert`,
   project path/inspect, history show) has an explicit GUI presentation or copy
   action. GUI behavior must not silently send useful output to stdout.
 - [ ] **MUST:** Launch every foreground Nixon command from the GUI in an

@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
 use eframe::egui;
-use nixon::app::{App, Environment};
+use nixon::app::{App, Environment, RunOpts};
 use nixon::command::Command;
 use nixon::config::launcher::{DEFAULT_SEARCH_URL, LauncherAction, LauncherConfig, MprisOperation};
 use nixon::config::{Config, ConfigError, load};
@@ -626,23 +626,9 @@ fn replay_history_line<R: ProcessRunner>(
     match parsed.command {
         Some(Commands::Run(args)) => {
             let project = app.current_project();
-            replay_named_command(app, &project, crate::run_opts(args))
+            replay_named_command(app, &project, &crate::run_opts(args))
         }
-        Some(Commands::Project(args)) => {
-            let opts = crate::project_opts(args);
-            if opts.list || opts.select || opts.inspect {
-                return unsupported_history_action();
-            }
-            let project = match app.project_for_query_with_kind(opts.project.as_deref()) {
-                Ok((SelectionType::Default, project)) => project,
-                Ok((SelectionType::Show, project)) => return project_detail(&project),
-                Ok(_) | Err(NixonError::Canceled) => return CommandOutcome::Canceled,
-                Err(error) => {
-                    return CommandOutcome::Error(format!("Could not replay history: {error}"));
-                }
-            };
-            replay_named_command(app, &project, opts.run)
-        }
+        Some(Commands::Project(args)) => replay_project(app, &crate::project_opts(args)),
         Some(Commands::Eval(args)) => {
             let opts = match crate::try_eval_opts(args) {
                 Ok(opts) => opts,
@@ -670,23 +656,87 @@ fn unsupported_history_action() -> CommandOutcome {
 fn replay_named_command<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
     project: &Project,
-    opts: nixon::app::RunOpts,
+    opts: &RunOpts,
 ) -> CommandOutcome {
-    if opts.insert || opts.list || opts.select {
+    if opts.list {
         return unsupported_history_action();
     }
-    let Some(name) = opts.command else {
-        return CommandOutcome::Error(
-            "Could not replay history: recorded command has no name.".to_owned(),
-        );
-    };
-    let command = app
-        .commands_for(project)
-        .and_then(|commands| App::<GuiPicker, GuiProcessRunner<R>>::find_named(&commands, &name));
-    match command {
-        Ok(command) => run_selected_command_with_args(app, project, &command, &opts.args),
-        Err(error) => CommandOutcome::Error(format!("Could not replay history: {error}")),
+    if !opts.insert && !opts.select {
+        let Some(name) = opts.command.as_deref() else {
+            return replay_error("Recorded command has no name.");
+        };
+        let command = app.commands_for(project).and_then(|commands| {
+            App::<GuiPicker, GuiProcessRunner<R>>::find_named(&commands, name)
+        });
+        return match command {
+            Ok(command) => run_selected_command_with_args(app, project, &command, &opts.args),
+            Err(error) => replay_error(error),
+        };
     }
+    let selection = match app.choose_command(project, opts.command.as_deref()) {
+        Ok(selection) => selection,
+        Err(NixonError::Canceled) => return CommandOutcome::Canceled,
+        Err(error) => return replay_error(error),
+    };
+    let command = match selection {
+        Selection::Selected { mut items, .. } if items.len() == 1 => items.remove(0),
+        Selection::Canceled => return CommandOutcome::Canceled,
+        Selection::Empty => return replay_error("No command selected."),
+        Selection::Selected { .. } => return replay_error("Multiple commands selected."),
+    };
+    if opts.insert {
+        return CommandOutcome::Detail {
+            title: format!("Command source: {}", command.name),
+            body: command.source,
+        };
+    }
+    match app.select_from(project, &command) {
+        Ok(values) => CommandOutcome::Detail {
+            title: format!("Selected values: {}", command.name),
+            body: values.join("\n"),
+        },
+        Err(NixonError::Canceled) => CommandOutcome::Canceled,
+        Err(error) => replay_error(error),
+    }
+}
+
+fn replay_project<R: ProcessRunner>(
+    app: &mut App<GuiPicker, GuiProcessRunner<R>>,
+    opts: &nixon::app::project::ProjectOpts,
+) -> CommandOutcome {
+    if opts.list || opts.run.list {
+        return unsupported_history_action();
+    }
+    let (kind, projects) =
+        match app.pick_projects(opts.project.as_deref(), opts.select || opts.inspect) {
+            Ok(selection) => selection,
+            Err(NixonError::Canceled) => return CommandOutcome::Canceled,
+            Err(error) => return replay_error(error),
+        };
+    if opts.select {
+        return CommandOutcome::Detail {
+            title: "Selected project paths".to_owned(),
+            body: projects
+                .iter()
+                .map(|project| project.path().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        };
+    }
+    if opts.inspect || kind == SelectionType::Show {
+        return CommandOutcome::Detail {
+            title: "Project inspection".to_owned(),
+            body: inspect(&projects),
+        };
+    }
+    let [project] = projects.as_slice() else {
+        return replay_error("Multiple projects selected.");
+    };
+    replay_named_command(app, project, &opts.run)
+}
+
+fn replay_error(error: impl std::fmt::Display) -> CommandOutcome {
+    CommandOutcome::Error(format!("Could not replay history: {error}"))
 }
 
 fn replay_eval<R: ProcessRunner>(
@@ -1012,6 +1062,18 @@ mod tests {
         spawn_error: bool,
     }
 
+    struct FinishedStream;
+
+    impl Running for FinishedStream {
+        fn wait(&mut self) -> io::Result<i32> {
+            Ok(0)
+        }
+
+        fn kill(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
     impl ProcessRunner for CommandRunner {
         fn run(&mut self, _invocation: &Invocation) -> io::Result<i32> {
             Err(io::ErrorKind::Unsupported.into())
@@ -1041,10 +1103,17 @@ mod tests {
 
         fn run_streaming(
             &mut self,
-            _invocation: &Invocation,
-            _sink: Box<dyn FnMut(String) + Send>,
+            invocation: &Invocation,
+            mut sink: Box<dyn FnMut(String) + Send>,
         ) -> io::Result<Box<dyn Running>> {
-            Err(io::ErrorKind::Unsupported.into())
+            let Some(stdout) = self.capture_output.as_ref() else {
+                return Err(io::ErrorKind::Unsupported.into());
+            };
+            self.captures.lock().unwrap().push(invocation.clone());
+            for line in String::from_utf8_lossy(stdout).lines() {
+                sink(line.to_owned());
+            }
+            Ok(Box::new(FinishedStream))
         }
     }
 
@@ -1053,13 +1122,22 @@ mod tests {
         exe: PathBuf,
         spawn_error: bool,
     ) -> (GuiProcessRunner<CommandRunner>, Arc<Mutex<Vec<Invocation>>>) {
+        command_runner_with_output(terminal, exe, spawn_error, None)
+    }
+
+    fn command_runner_with_output(
+        terminal: Option<Vec<String>>,
+        exe: PathBuf,
+        spawn_error: bool,
+        capture_output: Option<Vec<u8>>,
+    ) -> (GuiProcessRunner<CommandRunner>, Arc<Mutex<Vec<Invocation>>>) {
         let calls = Arc::new(Mutex::new(Vec::new()));
         (
             GuiProcessRunner::new(
                 CommandRunner {
                     calls: Arc::clone(&calls),
                     captures: Arc::new(Mutex::new(Vec::new())),
-                    capture_output: None,
+                    capture_output,
                     spawn_error,
                 },
                 terminal,
@@ -1470,12 +1548,16 @@ printf '%s\\n' \"$1\"
     }
 
     fn replay_first_history_entry(app: &mut PreviewApp, ctx: &egui::Context) {
-        let _ = frame(app, ctx, vec![key(egui::Key::H)]);
-        wait_for_text(app, ctx, "History (Enter replays");
-        let output = frame(app, ctx, vec![key(egui::Key::Enter)]);
+        let output = choose_first_history_entry(app, ctx);
         if !closes(&output) {
             wait_for_close(app, ctx);
         }
+    }
+
+    fn choose_first_history_entry(app: &mut PreviewApp, ctx: &egui::Context) -> egui::FullOutput {
+        let _ = frame(app, ctx, vec![key(egui::Key::H)]);
+        wait_for_text(app, ctx, "History (Enter replays");
+        frame(app, ctx, vec![key(egui::Key::Enter)])
     }
 
     fn closes(output: &egui::FullOutput) -> bool {
@@ -2464,6 +2546,182 @@ printf '%s\\n' \"$1\"
         assert_eq!(calls[0].argv[0], project_terminal.to_string_lossy());
         let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
         assert_eq!(payload.cwd, Some(target.path().to_path_buf()));
+    }
+
+    #[test]
+    fn history_insert_replays_show_source_with_copy_for_run_and_project_aliases() {
+        for project_form in [false, true] {
+            let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            let cwd = temp.child("project").path().to_string_lossy().into_owned();
+            let words = if project_form {
+                vec!["project", cwd.as_str(), "-i", "alpha"]
+            } else {
+                vec!["run", "--insert", "alpha"]
+            };
+            write_history(&temp, &[history_entry(&cwd, &words)]);
+            env.exe = Some(temp.child("nixon").path().to_path_buf());
+            let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+            let ctx = egui::Context::default();
+            choose_first_history_entry(&mut app, &ctx);
+            let output = wait_for_text(&mut app, &ctx, "Command source: alpha");
+            assert!(
+                texts(&output)
+                    .iter()
+                    .any(|text| text == "touch selected-marker\n")
+            );
+            let output = click_button(&mut app, &ctx, &output, "Copy");
+            assert_eq!(copied_text(&output), Some("touch selected-marker\n"));
+            assert!(calls.lock().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn history_project_select_and_inspect_show_paths_and_details() {
+        for inspect_project in [false, true] {
+            let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            let cwd = temp.child("project").path().to_string_lossy().into_owned();
+            let flag = if inspect_project { "-I" } else { "--select" };
+            write_history(&temp, &[history_entry(&cwd, &["project", flag, &cwd])]);
+            env.exe = Some(temp.child("nixon").path().to_path_buf());
+            let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+            let ctx = egui::Context::default();
+            choose_first_history_entry(&mut app, &ctx);
+            let title = if inspect_project {
+                "Project inspection"
+            } else {
+                "Selected project paths"
+            };
+            let output = wait_for_text(&mut app, &ctx, title);
+            let body = texts(&output)
+                .into_iter()
+                .find(|text| text.contains(&cwd))
+                .expect("project detail contains path");
+            if !inspect_project {
+                assert_eq!(body, cwd);
+            }
+            let output = click_button(&mut app, &ctx, &output, "Copy");
+            assert_eq!(copied_text(&output), Some(body.as_str()));
+            assert!(calls.lock().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn history_project_select_can_return_multiple_paths() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let (first, second) = discovered_projects(&temp, &mut config);
+        let cwd = temp.child("project").path().to_string_lossy().into_owned();
+        write_history(&temp, &[history_entry(&cwd, &["project", "-s"])]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        choose_first_history_entry(&mut app, &ctx);
+        wait_for_text(&mut app, &ctx, "work-one");
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::Tab)]);
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Tab)]);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::Tab)]);
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        let output = wait_for_text(&mut app, &ctx, "Selected project paths");
+        let expected = format!("{}\n{}", first.display(), second.display());
+        assert!(texts(&output).iter().any(|text| text == &expected));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn history_run_select_uses_gui_value_picker_and_cancellation() {
+        for canceled in [false, true] {
+            let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            let cwd = temp.child("project").path().to_string_lossy().into_owned();
+            write_history(&temp, &[history_entry(&cwd, &["run", "-s", "alpha"])]);
+            env.exe = Some(temp.child("nixon").path().to_path_buf());
+            let exe = env.exe.clone().unwrap();
+            let (runner, calls) =
+                command_runner_with_output(None, exe, false, Some(b"first\nsecond\n".to_vec()));
+            let mut app = PreviewApp::with_command_runner(
+                config,
+                dirs,
+                env,
+                RealRunner,
+                super::SessionMediaTransport,
+                runner,
+            )
+            .unwrap();
+            let ctx = egui::Context::default();
+            choose_first_history_entry(&mut app, &ctx);
+            wait_for_text(&mut app, &ctx, "first");
+            let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+            let action_key = if canceled {
+                egui::Key::Escape
+            } else {
+                egui::Key::Enter
+            };
+            let _ = frame(&mut app, &ctx, vec![key(action_key)]);
+            let output = wait_for_text(
+                &mut app,
+                &ctx,
+                if canceled {
+                    super::PREVIEW_STATUS
+                } else {
+                    "Selected values: alpha"
+                },
+            );
+            if !canceled {
+                assert!(texts(&output).iter().any(|text| text == "first"));
+            }
+            assert!(calls.lock().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn history_run_select_errors_stay_visible() {
+        let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let cwd = temp.child("project").path().to_string_lossy().into_owned();
+        write_history(&temp, &[history_entry(&cwd, &["run", "--select", "alpha"])]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        choose_first_history_entry(&mut app, &ctx);
+        let output = wait_for_text(&mut app, &ctx, "Could not replay history:");
+        assert!(!closes(&output));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn history_data_replay_keeps_stdout_empty() {
+        const SENTINEL: &str = "NIXON_GUI_DETAIL_OUTPUT_9D31";
+        const CHILD: &str = "NIXON_GUI_STDOUT_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let local = format!("# `alpha`\n\n```bash\n{SENTINEL}\n```\n");
+            let (temp, config, dirs, mut env) = fixture(&local);
+            let cwd = temp.child("project").path().to_string_lossy().into_owned();
+            write_history(&temp, &[history_entry(&cwd, &["run", "--insert", "alpha"])]);
+            env.exe = Some(temp.child("nixon").path().to_path_buf());
+            let (mut app, _) = preview_with_fake_command(config, dirs, env);
+            let ctx = egui::Context::default();
+            choose_first_history_entry(&mut app, &ctx);
+            let output = wait_for_text(&mut app, &ctx, "Command source: alpha");
+            assert!(texts(&output).iter().any(|text| text.contains(SENTINEL)));
+            return;
+        }
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "gui::tests::history_data_replay_keeps_stdout_empty",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !String::from_utf8_lossy(&output.stdout).contains(SENTINEL),
+            "GUI data leaked to stdout: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
     }
 
     #[test]

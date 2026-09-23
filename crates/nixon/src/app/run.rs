@@ -59,14 +59,23 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     /// Hidden `_commands` are excluded from the picker but remain available
     /// to placeholders.
     pub fn find_and_handle_cmd(&mut self, project: &Project, opts: &RunOpts) -> Result<ExitCode> {
+        let selection = self.choose_command(project, opts.command.as_deref())?;
+        self.handle_cmd(project, selection, opts)
+    }
+
+    /// Chooses a command with the same exact-name and hidden-command rules as `run`.
+    pub fn choose_command(
+        &mut self,
+        project: &Project,
+        query: Option<&str>,
+    ) -> Result<Selection<Command>> {
         let commands = self.commands_for(project)?;
 
         // A name given in full is an answer, hidden or not: `nixon run
         // _packages` means that command, and it is not in the picker to be
         // chosen from.
-        if let Some(command) = exact(&commands, opts.command.as_deref()) {
-            let selection = Selection::selected(SelectionType::Default, vec![command]);
-            return self.handle_cmd(project, selection, opts);
+        if let Some(command) = exact(&commands, query) {
+            return Ok(Selection::selected(SelectionType::Default, vec![command]));
         }
 
         let visible: Vec<Command> = commands
@@ -75,9 +84,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             .cloned()
             .collect();
 
-        let selection =
-            self.pick_command(project, &visible, "Select command", opts.command.as_deref())?;
-        self.handle_cmd(project, selection, opts)
+        self.pick_command(project, &visible, "Select command", query)
     }
 
     /// Runs a command selection through the picker.

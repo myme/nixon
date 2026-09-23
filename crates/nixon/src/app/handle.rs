@@ -195,7 +195,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     ///
     /// `--select` treats the chosen command as a candidate producer, not as
     /// something to run for its effect; multi-select is forced on.
-    fn select_from(&mut self, project: &Project, command: &Command) -> Result<Vec<String>> {
+    pub fn select_from(&mut self, project: &Project, command: &Command) -> Result<Vec<String>> {
         let config = self.config_for(project)?;
         let commands = self.commands_for(project)?;
         let cache = self.dirs.cache_dir();

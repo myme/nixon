@@ -85,6 +85,11 @@ picker opens this panel too. History (default **H**) opens a searchable picker
 of recent entries, newest first, with the recorded directory beside each
 command. Enter replays a saved `run`, project command, or `eval` invocation
 through the GUI worker, using the selected project's config and terminal.
+Saved `run --insert`, `run --select`, `project --insert`, `project --select`,
+and `project --inspect` actions show their source, selected values, paths, or
+inspection in the read-only panel with Copy and Back. Short flags work too.
+These results stay in the window and are not written to stdout. A selection
+can be canceled with Esc; errors appear in the status bar.
 F1 and Alt-Enter show the recorded command line in a read-only panel with Copy
 and Back. Esc and an empty log return to the menu. Disabled history, log read
 errors, and malformed or unsupported entries remain visible and are reported
