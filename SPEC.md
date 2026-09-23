@@ -333,7 +333,9 @@ launcher:
 
 - [ ] **MUST:** Support Linux X11 and Wayland sessions. Window creation must
   not require `XDG_SESSION_TYPE` to be set; let the window toolkit choose its
-  available backend. A missing display produces a clean diagnostic.
+  available backend. A missing display produces a clean diagnostic. Linux
+  display absence is diagnosed before window creation; packaged X11/Wayland
+  startup verification remains pending.
 - [ ] **MUST:** Request a compact, keyboard-first, frontmost launcher window.
   Do not assume every window manager will honor positioning or always-on-top
   hints. Focus the first actionable control when the window opens.

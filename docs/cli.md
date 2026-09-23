@@ -39,6 +39,8 @@ be overridden either way.
 `nixon --mode gui` (or `nixon -m gui`) opens the configured graphical root
 menu. Its hotkeys come from `launcher.items` in the global config and the
 current project's local file at startup; see [configuration](configuration.md#gui-menu-and-hotkeys).
+On Linux, starting GUI mode without an X11 or Wayland display exits with a
+setup hint on stderr and writes nothing to stdout.
 Commands opens a picker for commands in the current project, with local
 config and hidden-command rules applied. Enter resolves the selected command,
 including options and placeholders, then hands foreground execution to an

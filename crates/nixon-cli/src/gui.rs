@@ -38,6 +38,16 @@ pub fn reject_subcommand(command: Option<&Commands>) -> Result<()> {
 /// Opens the configured menu in the process's native GUI event loop.
 pub fn run(config: Config, dirs: Dirs, env: Environment) -> Result<i32> {
     let app = PreviewApp::new(config, dirs, env)?;
+    #[cfg(target_os = "linux")]
+    if ["DISPLAY", "WAYLAND_DISPLAY", "WAYLAND_SOCKET"]
+        .iter()
+        .all(|name| std::env::var_os(name).is_none_or(|value| value.is_empty()))
+    {
+        return Err(NixonError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No X11 or Wayland display is available; start a graphical session or set DISPLAY or WAYLAND_DISPLAY.",
+        )));
+    }
     eframe::run_native("Nixon", native_options(), Box::new(|_| Ok(Box::new(app))))
         .map_err(|err| NixonError::Io(std::io::Error::other(err.to_string())))?;
     Ok(0)

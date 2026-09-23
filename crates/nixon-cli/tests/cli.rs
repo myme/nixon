@@ -140,6 +140,46 @@ fn gui_preview_rejects_subcommands_before_loading_config_or_opening_a_window() {
         .stderr(contains("GUI preview does not support subcommands"));
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn gui_without_display_reports_a_clean_actionable_error() {
+    let fixture = Fixture::new();
+    for session in [None, Some("wayland")] {
+        let mut command = fixture.nixon();
+        command.args(["--mode", "gui"]);
+        if let Some(session) = session {
+            command.env("XDG_SESSION_TYPE", session);
+        }
+        let output = command.assert().code(1).stdout("").get_output().clone();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("No X11 or Wayland display is available"),
+            "{stderr}"
+        );
+        assert!(stderr.contains("DISPLAY"), "{stderr}");
+        assert!(!stderr.contains("winit"), "{stderr}");
+        assert!(!stderr.contains("linux/mod.rs"), "{stderr}");
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn gui_without_display_keeps_other_startup_errors() {
+    let fixture = Fixture::with_config("```yaml config\nlauncher:\n  items: []\n```\n");
+    let output = fixture
+        .nixon()
+        .args(["--mode", "gui"])
+        .assert()
+        .code(1)
+        .stdout("")
+        .get_output()
+        .clone();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("launcher.items"), "{stderr}");
+    assert!(stderr.contains("nixon.md"), "{stderr}");
+    assert!(!stderr.contains("No X11 or Wayland display"), "{stderr}");
+}
+
 #[test]
 fn the_removed_backend_flags_are_unexpected_arguments() {
     for flag in ["-b", "--backend", "-T", "--force-tty", "-t", "--terminal"] {
