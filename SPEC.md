@@ -1,30 +1,34 @@
 # Nixon GUI launcher — behavioral specification and implementation checklist
 
-This is the proposed contract for bringing a graphical launcher into the Rust
-Nixon workspace. It follows the v2 rewrite spec's checklist style: each item
-is a behavior to implement or an explicit decision to revisit. This document
-is a plan, not a record of implemented behavior.
+This is the contract and implementation checklist for the graphical launcher
+in the Rust Nixon workspace. It follows the v2 rewrite spec's checklist style.
+Checked items have code and test evidence; unchecked items name remaining
+behavior or verification work.
 
-The reference points are the current Nixon Rust tree (`9448c1a`), the original
-v2 spec (`70d2b02:SPEC.md`, especially §8), and the local katapult PoC
-(`../katapult/src/main.rs` at `a0c85af`). Paths below refer to those trees.
+The original reference points were the Nixon Rust tree at `9448c1a`, the v2
+spec (`70d2b02:SPEC.md`, especially §8), and the local katapult PoC
+(`../katapult/src/main.rs` at `a0c85af`). Implementation notes refer to the
+current Rust workspace.
 
-Key source seams: `crates/nixon-picker/src/picker.rs:20` (picker contract),
-`crates/nixon/src/select.rs:1` (candidate mapping),
-`crates/nixon/src/app/mod.rs:85` (application wiring),
-`crates/nixon/src/app/handle.rs:15` (post-selection actions),
-`crates/nixon/src/process.rs:47` (process runner), and
-`../katapult/src/main.rs:5` / `:159` (window and key handling).
+Key source seams: `crates/nixon-picker/src/picker.rs` (picker contract),
+`crates/nixon/src/select.rs` (candidate mapping),
+`crates/nixon/src/app/mod.rs` (application wiring),
+`crates/nixon/src/process.rs` (process runner),
+`crates/nixon-gui/src/window.rs` (window and input), and
+`crates/nixon-cli/src/gui.rs` (GUI workflows).
 
 Legend:
 
 - **MUST** — required for the first usable GUI launcher.
 - **SHOULD** — expected behavior, but may follow the first usable cut.
-- **DECISION** — a deliberate product or architecture choice in this draft.
+- **DECISION** — a deliberate product or architecture choice.
 - **OUT OF SCOPE** — excluded from this integration; changing it needs a new
   decision.
 
-Every checkbox starts unchecked because no GUI implementation exists yet.
+Unchecked requirements may be partially implemented; their notes identify the
+remaining gap. The Linux packaged GUI smoke check is wired into Nix but has
+not run to completion because pinned source fetches returned HTTP 404. Its
+script passed against the development binary under Xvfb on 2026-09-23.
 
 ---
 
@@ -46,18 +50,20 @@ resolution, evaluation, and history as the terminal CLI.
 - [ ] **MUST:** The root offers at least **Commands**, **Projects**,
   **History**, and configured quick actions. Commands use the current project;
   Projects first choose a project and then one of its commands. History uses
-  Nixon's existing history store and replay semantics.
-- [ ] **MUST:** The same GUI picker handles command selection, project
+  Nixon's existing history store and replay semantics. The root and all three
+  pickers work, but GUI replay rejects saved invocations with global options
+  and some valid CLI actions (`nixon-cli/src/gui/history.rs`).
+- [x] **MUST:** The same GUI picker handles command selection, project
   selection, history, command options, and placeholder candidates. A command
   chosen through a mnemonic may still lead to a GUI placeholder pick.
-- [ ] **MUST:** Launching the GUI does not change `nixon`'s default terminal
+- [x] **MUST:** Launching the GUI does not change `nixon`'s default terminal
   picker, shell widgets, or scripting output. There is no implicit switch to
   GUI based on stdin or display environment variables.
 - [x] **DECISION:** One `nixon` binary provides both modes. `--mode tui` is the
   default; `--mode gui` (or `-m gui`) explicitly opens the graphical menu.
   This replaces the earlier separate-binary plan and does not restore
   `nixon -b rofi`.
-- [x] **PREVIEW:** The GUI opens the merged-config menu. Commands and Projects
+- [x] **IMPLEMENTED:** The GUI opens the merged-config menu. Commands and Projects
   discover and run commands through the GUI picker and existing App flow on a
   worker. Browser and media actions run on workers. Project Inspect and command
   Show open a read-only detail panel; Visit hands off to the configured editor
@@ -67,7 +73,7 @@ resolution, evaluation, and history as the terminal CLI.
   Nixon invocation through the GUI worker, while F1 and Alt-Enter show its
   recorded line in the detail panel. Unsupported or malformed replay entries
   stay visible as errors. GUI subcommands and bare command names are explicitly
-  rejected.
+  rejected. History replay currently supports a subset of saved CLI actions.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
   old exit-code/argv protocol. The behavior to recover is GUI selection.
 
@@ -82,10 +88,10 @@ It used an automatically chosen GUI backend when stdin was not a TTY. The v2
 rewrite intentionally removed that backend and its terminal-spawning behavior
 (`70d2b02:ENGINEERING.md` §7.2).
 
-- [ ] **MUST:** Recover the *selection capabilities* above with the built-in
+- [x] **MUST:** Recover the *selection capabilities* above with the built-in
   GUI. Preserve duplicate candidates by stable identity; v1 rofi's
   title-keyed map silently deduplicated them.
-- [ ] **MUST:** Preserve v2's CLI and execution fixes: clean cancellation,
+- [x] **MUST:** Preserve v2's CLI and execution fixes: clean cancellation,
   propagated child status for direct CLI runs, local config precedence, and no
   source mutation to append a shell-specific “press Return” trailer.
 
@@ -100,7 +106,7 @@ Q/Escape/Ctrl-C closes. It creates an always-on-top X11 dialog window.
 `CLAUDE.md` mentions Discord, but the actual `src/main.rs` has no Discord
 view, key, or action. The spec follows the executable code.
 
-- [ ] **MUST:** Preserve the few-key menu interaction and visible key labels.
+- [x] **MUST:** Preserve the few-key menu interaction and visible key labels.
 - [x] **MUST:** Preserve Spotify play/pause, previous, and next on a Linux
   desktop with the Spotify MPRIS service available. A missing service is a
   visible error and leaves the launcher usable.
@@ -119,7 +125,7 @@ The terminal workflow follows `nixon-cli -> nixon -> nixon-picker`.
 commands to picker candidates; `App<P: Picker, R: ProcessRunner>` runs the
 workflows.
 
-- [ ] **MUST:** Add `nixon-gui` as a GUI library crate that owns window state,
+- [x] **MUST:** Add `nixon-gui` as a GUI library crate that owns window state,
   rendering, keyboard routing, and a `GuiPicker` implementation of the
   existing `nixon_picker::Picker` contract. It may depend on `nixon` to
   orchestrate its workflows without duplicating them.
@@ -129,16 +135,17 @@ workflows.
 - [ ] **MUST:** Keep command/project discovery, config merging, resolution,
   evaluation, history, and process execution in `nixon`. GUI code sends typed
   actions into that domain layer; it does not parse markdown or build shell
-  command strings itself.
-- [ ] **MUST:** Reuse `Candidate`, `PickerOptions`, and `Selection` semantics.
+  command strings itself. GUI history parsing and replay dispatch currently
+  live in `nixon-cli/src/gui/history.rs`, outside the shared domain layer.
+- [x] **MUST:** Reuse `Candidate`, `PickerOptions`, and `Selection` semantics.
   Add a domain-neutral UI field to those types only when necessary for both
   pickers. Keep GUI styling out of the domain crate.
-- [ ] **MUST:** Keep one native window and one GUI event loop across nested
+- [x] **MUST:** Keep one native window and one GUI event loop across nested
   selections. Nixon workflows run on a worker; its `GuiPicker` sends typed
   pick/confirm requests to the GUI event loop and waits for typed replies.
   The GUI thread must remain responsive during project discovery, command
   execution, and placeholder production. No nested `eframe::run_native` call.
-- [ ] **MUST:** Route every subprocess through `ProcessRunner` or a small
+- [x] **MUST:** Route every subprocess through `ProcessRunner` or a small
   extension of that seam, so component tests can use a fake runner. Keep the
   workspace's no-`unsafe` rule.
 - [x] **SHOULD:** Implement streaming placeholder candidates through the
@@ -162,51 +169,54 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
   Focus, action routing, and default/configured row rendering are covered by
   GUI component tests. Missing or blank descriptions get GUI hints; supplied
   nonblank descriptions render unchanged.
-- [ ] **MUST:** A mnemonic belongs to one menu level. Duplicate keys at the
+- [x] **MUST:** A mnemonic belongs to one menu level. Duplicate keys at the
   same level are a config error with the menu path; keys in different menus
   may be reused. Matching is case-insensitive for letters, and the displayed
   key remains the configured spelling.
 - [ ] **MUST:** The default root uses **C** Commands, **P** Projects, **H**
   History, **W** Browser, and the PoC's **S** Spotify. The built-in key map
   is documented in the UI and user guide; a replacement menu may reassign
-  keys, and config conflicts are detected at load time.
+  keys, and config conflicts are detected at load time. The defaults, UI, and
+  replacement validation are implemented, but the user guide does not list
+  the complete built-in root key map explicitly.
 - [x] **MUST:** A configured quick action may run a named Nixon command in
   the current project or a named/discovered project. It uses the same local
   config, command options, placeholders, `direnv`/Nix wrapping, and history
   recording as choosing that command from the GUI list.
-- [ ] **MUST:** A menu item may contain child items. The UI keeps a navigation
+- [x] **MUST:** A menu item may contain child items. The UI keeps a navigation
   stack, so Backspace/Ctrl-H returns one level and the root has no parent.
-- [ ] **MUST:** While a text field has focus, printable keys enter text and
+- [x] **MUST:** While a text field has focus, printable keys enter text and
   never trigger mnemonics. The text field owns Backspace. Escape leaves the
   field or current picker; a second Escape at the root closes the window.
-- [ ] **MUST:** A successful one-shot quick action closes the window. A failed
+- [x] **MUST:** A successful one-shot quick action closes the window. A failed
   action displays its error in the window and keeps the current menu open.
   User cancellation makes no error toast.
 - [ ] **SHOULD:** Let the user return to the root after an action that only
   changes external state, such as media control, through a setting for
-  “stay open”; default to closing for PoC parity.
+  “stay open”; default to closing for PoC parity. Successful media actions
+  currently close; no stay-open setting exists.
 - [ ] **DECISION:** General app launching is expressed as Nixon commands,
   which already own cwd, environment, wrapping, and history. Scanning XDG
   `.desktop` entries is a later feature, not part of the PoC or v1 rofi.
 
 ## 5. GUI picker behavior
 
-- [ ] **MUST:** Show a prompt/header, editable query, match count, and a
+- [x] **MUST:** Show a prompt/header, editable query, match count, and a
   scrollable candidate list. Display descriptions and project paths without
   exposing raw ANSI control sequences. Match against the visible text.
-- [ ] **MUST:** Use Nixon's matcher and matching options, including fuzzy vs
+- [x] **MUST:** Use Nixon's matcher and matching options, including fuzzy vs
   exact, smart/forced case handling, initial query, and stable discovery order
   where `no_sort` is set. Do not write a separate GUI matcher.
-- [ ] **MUST:** Enter selects the highlighted row. Up/Down and Ctrl-N/Ctrl-P
+- [x] **MUST:** Enter selects the highlighted row. Up/Down and Ctrl-N/Ctrl-P
   move; Page Up/Down move by a viewport. Mouse selection is supported without
   changing the keyboard path. No match means Enter cannot choose a value.
-- [ ] **MUST:** The query is focused on opening a picker. Typing changes the
+- [x] **MUST:** The query is focused on opening a picker. Typing changes the
   result list immediately. A unique initial match honors `select_one` without
   drawing a picker; an exact candidate value honors `select_exact`.
-- [ ] **MUST:** For a multi-select pick, Tab marks/unmarks the highlighted
+- [x] **MUST:** For a multi-select pick, Tab marks/unmarks the highlighted
   row; marked items retain identity while the query changes. Enter returns
   marked items in candidate order, or the current row if none are marked.
-- [ ] **MUST:** The GUI's `Picker` implementation returns `Empty`, `Canceled`,
+- [x] **MUST:** The GUI's `Picker` implementation returns `Empty`, `Canceled`,
   or `Selected` with the same meaning as the TUI. Escape/Ctrl-C cancels the
   active pick; it does not kill the whole launcher process.
 - [x] **MUST:** Command picks support Default/Run, Edit, Show, and Visit.
@@ -214,15 +224,17 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
   so GUI users need not know the bindings. Picker buttons follow the active
   action bindings: projects show Select/Inspect, history Replay/Show, and
   placeholders Select, without offering unsupported actions.
-- [ ] **MUST:** Command options declared in headings can be toggled before
+- [x] **MUST:** Command options declared in headings can be toggled before
   execution and during placeholder picks. Return the final toggle state from
   `pick_options`/`confirm`; do not silently accept defaults as the trait's
   default implementation does.
-- [ ] **MUST:** Project picks include the full path and support inspect.
+- [x] **MUST:** Project picks include the full path and support inspect.
   Placeholder picks support the declared single/multi behavior and display
   any producer error without losing the launcher window.
 - [ ] **SHOULD:** History search, candidate color, and duplicate titles behave
   like the TUI. Duplicate titles remain separately selectable by stable ID.
+  Search and identity are tested; GUI rows strip ANSI color rather than
+  reproducing TUI candidate color.
 
 ## 6. Actions after selection
 
@@ -242,24 +254,25 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
 - [x] **MUST:** An action that only returns data (`--select`, `--insert`,
   project path/inspect, history show) has an explicit GUI presentation or copy
   action. GUI behavior must not silently send useful output to stdout.
-- [ ] **MUST:** Launch every foreground Nixon command from the GUI in an
+- [x] **MUST:** Launch every foreground Nixon command from the GUI in an
   external terminal with the command's prepared invocation and project cwd.
   The handoff preserves argv, environment, and any resolved stdin values.
   Use argument vectors and a configured terminal launcher; never concatenate
   unescaped source or append a language-specific pause command. Detached `&`
   commands keep their existing detached semantics.
-- [ ] **MUST:** If no terminal launcher is available, show an actionable
+- [x] **MUST:** If no terminal launcher is available, show an actionable
   error before running a foreground command. Do not drop its output into an
   invisible pipe. An explicitly terminal-free action may run detached.
-- [ ] **DECISION:** Do not resurrect v1's automatic foreground-vs-detached
+- [x] **DECISION:** Do not resurrect v1's automatic foreground-vs-detached
   choice based on whether the picker is a GUI. `nixon --mode gui` has an
   explicit terminal execution policy; the command's `&` marker still wins.
-- [ ] **DECISION:** A successful terminal handoff counts as launch success;
+- [x] **DECISION:** A successful terminal handoff counts as launch success;
   the GUI cannot claim the later child exit status after it closes. The
   terminal owns that status. Direct `nixon` CLI runs continue propagating the
   child status.
 - [ ] **SHOULD:** Show a short “running” state and child exit result where the
-  GUI remains open. No work that can block on I/O runs on the UI thread.
+  GUI remains open. No work that can block on I/O runs on the UI thread. The
+  status bar shows pending work; terminal handoff owns the later child status.
 
 ## 7. Configuration and defaults
 
@@ -319,13 +332,13 @@ launcher:
 - [x] **MUST:** Test the right-biased, field-by-field launcher merge. An
   omitted local `items` keeps the global menu; an explicit empty `items` is
   rejected as an unusable root menu.
-- [ ] **MUST:** Parse menu items as typed variants. Each item has exactly one
+- [x] **MUST:** Parse menu items as typed variants. Each item has exactly one
   of `action` or `items`; an empty label, empty key, duplicate sibling key,
   unknown action, or invalid action arguments is a config error with context.
-- [ ] **MUST:** A `command` action may specify a project path or use the
+- [x] **MUST:** A `command` action may specify a project path or use the
   current project. Its name resolves with local commands at action time, so
   a local override takes precedence. A missing command is a visible error.
-- [ ] **MUST:** Keep existing unknown top-level config keys tolerated.
+- [x] **MUST:** Keep existing unknown top-level config keys tolerated.
   Validate every key *inside* `launcher` strictly, where typos could turn a
   keyboard action into a different action.
 - [x] **MUST:** Document terminal launcher argv and its search order:
@@ -337,20 +350,24 @@ launcher:
 - [ ] **MUST:** Support Linux X11 and Wayland sessions. Window creation must
   not require `XDG_SESSION_TYPE` to be set; let the window toolkit choose its
   available backend. A missing display produces a clean diagnostic. Linux
-  display absence is diagnosed before window creation; packaged X11/Wayland
-  startup verification remains pending.
-- [ ] **MUST:** Request a compact, keyboard-first, frontmost launcher window.
+  display absence is diagnosed before window creation, and the development
+  binary passed the Xvfb smoke script. Packaged X11 and Wayland startup remain
+  unverified.
+- [x] **MUST:** Request a compact, keyboard-first, frontmost launcher window.
   Do not assume every window manager will honor positioning or always-on-top
   hints. Focus the first actionable control when the window opens.
-- [ ] **MUST:** Closing the window cancels an active pick and stops any
+- [x] **MUST:** Closing the window cancels an active pick and stops any
   streaming producer. A detached command already handed to the process runner
   remains detached. No orphaned GUI worker waits on an unanswered pick.
 - [ ] **MUST:** GUI errors appear in the window and on stderr when launched
   from a terminal. stdout remains reserved for explicit machine-readable
-  output, as in the CLI.
-- [ ] **DECISION:** Linux is the first GUI package target because the PoC's
-  Spotify control is D-Bus based. The existing terminal CLI remains buildable
-  on macOS. A macOS GUI target requires a separate media-control decision.
+  output, as in the CLI. Headless tests cover visible status, error logging,
+  and empty stdout separately; a launched-process check of all three remains.
+- [x] **DECISION:** Linux is the first packaged GUI target. The user confirmed
+  that the GUI launches on macOS; GUI colors follow light and dark system
+  themes and adapt to changes while open (headless theme tests). MPRIS control
+  is Linux-only and reports an error on macOS. A packaged macOS GUI and native
+  media-control behavior remain unverified.
 - [ ] **OUT OF SCOPE:** A resident daemon, global hotkey registration, tray
   icon, and display-server-specific window focus tricks. The desktop binds a
   shortcut to start `nixon --mode gui`.
@@ -361,7 +378,7 @@ Tests should prove the behavior at the seam where it can fail. A screenshot
 snapshot alone cannot prove that a command received the right cwd or that a
 placeholder producer was cancelled.
 
-- [ ] **MUST:** Unit-test menu parsing and navigation: defaults, duplicate
+- [x] **MUST:** Unit-test menu parsing and navigation: defaults, duplicate
   sibling keys, nested keys, text-field focus, Backspace/Escape, and invalid
   action shape.
 - [x] **MUST:** Test GUI picker mapping with duplicate titles, ANSI in titles,
@@ -377,7 +394,7 @@ placeholder producer was cancelled.
   without reaching real D-Bus.
 - [x] **MUST:** Test browser URL/domain/search classification and a failed
   URL opener without reaching a real browser.
-- [ ] **MUST:** Test GUI terminal-launch argv with paths and arguments
+- [x] **MUST:** Test GUI terminal-launch argv with paths and arguments
   containing spaces or quotes, plus resolved stdin and environment values.
   Verify no command source is rewritten.
 - [x] **MUST:** Component-test the Commands default action with a fake
@@ -390,12 +407,13 @@ placeholder producer was cancelled.
   passed against the development binary under Xvfb on 2026-09-23. Packaged
   execution remains unverified because the pinned Nix build could not fetch
   `mpc-1.3.1.tar.gz` (HTTP 404); the full flake check also stopped at the
-  pinned `bash53-001` patch fetch (HTTP 404).
+  pinned `bash53-001` patch fetch (HTTP 404). Neither is a GUI test failure.
 - [ ] **SHOULD:** Exercise X11 and Wayland in packaging/CI where runners
   support them; manual verification is recorded for any session type CI
-  cannot provide.
+  cannot provide. Development X11 passed under Xvfb; packaged X11 and Wayland
+  runs and a Wayland manual record remain outstanding.
 
-## 10. Suggested implementation cuts
+## 10. Implementation cuts
 
 1. Add the typed launcher config and menu model, plus tests; no GUI code.
 2. Add the `nixon-gui` event loop and picker bridge. Prove a GUI project and
@@ -404,6 +422,8 @@ placeholder producer was cancelled.
    placeholder workflow end to end.
 4. Add mnemonic menus and the PoC's browser/MPRIS actions.
 5. Package `nixon --mode gui` for Linux, document keys/config, and run the
-   functional smoke tests.
+   functional smoke tests. The Linux smoke gate is wired but has not completed
+   against the packaged binary; the full built-in key map needs a user-guide
+   listing.
 
 No cut is complete if its user-facing path can only be used from a terminal.
