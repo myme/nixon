@@ -6,6 +6,8 @@ use serde::Deserialize;
 
 use crate::project::{ProjectMarker, ProjectType};
 
+use super::launcher::LauncherConfigSpec;
+
 /// A config block's fields. Unknown keys are ignored.
 ///
 /// v1's `terminal` went with the backend concept, so it now falls under the
@@ -31,6 +33,8 @@ pub struct ConfigBlock {
     pub git_worktrees: Option<bool>,
     /// Whether executed commands are recorded.
     pub history: Option<bool>,
+    /// Graphical launcher settings.
+    pub launcher: Option<LauncherConfigSpec>,
 }
 
 /// One entry of `project_types`. `name` and `desc` are required.

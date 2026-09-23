@@ -1,5 +1,6 @@
 //! The effective configuration and how its sources combine.
 
+pub mod launcher;
 pub mod load;
 pub mod schema;
 pub mod yaml;
@@ -68,6 +69,8 @@ pub struct Config {
     pub git_worktrees: Option<bool>,
     /// Whether executed commands are recorded.
     pub history: Option<bool>,
+    /// Menu and launch settings for the graphical launcher.
+    pub launcher: launcher::LauncherConfig,
 }
 
 impl Config {
@@ -78,6 +81,7 @@ impl Config {
             // Worktree discovery is on unless turned off.
             git_worktrees: Some(true),
             history: Some(true),
+            launcher: launcher::LauncherConfig::defaults(),
             ..Self::default()
         }
     }
@@ -114,13 +118,22 @@ impl Config {
         self.loglevel = rhs.loglevel.or(self.loglevel);
         self.git_worktrees = rhs.git_worktrees.or(self.git_worktrees);
         self.history = rhs.history.or(self.history);
+        self.launcher = self.launcher.merge(rhs.launcher);
         self
     }
 }
 
-impl From<schema::ConfigBlock> for Config {
-    fn from(block: schema::ConfigBlock) -> Self {
-        Self {
+impl TryFrom<schema::ConfigBlock> for Config {
+    type Error = ConfigError;
+
+    fn try_from(block: schema::ConfigBlock) -> Result<Self, Self::Error> {
+        let launcher = block
+            .launcher
+            .map(launcher::LauncherConfig::try_from)
+            .transpose()
+            .map_err(ConfigError::ParseError)?
+            .unwrap_or_default();
+        Ok(Self {
             bin_dirs: block.bin_dirs,
             exact_match: block.exact_match,
             ignore_case: block.ignore_case,
@@ -132,7 +145,8 @@ impl From<schema::ConfigBlock> for Config {
             loglevel: None,
             git_worktrees: block.git_worktrees,
             history: block.history,
-        }
+            launcher,
+        })
     }
 }
 
@@ -150,7 +164,7 @@ pub fn parse_block(lang: &str, source: &str) -> Result<Config, ConfigError> {
             )));
         }
     };
-    Ok(block.into())
+    block.try_into()
 }
 
 #[cfg(test)]
