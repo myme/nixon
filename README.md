@@ -26,6 +26,11 @@ To preview the graphical menu from a checkout, enter `nix develop` and run
 `cargo run -- -m gui`. Re-enter the dev shell after updating it so the GUI
 runtime library paths take effect.
 
+On x86_64 Linux, `nix build .#checks.x86_64-linux.gui-smoke` runs the packaged
+GUI under Xvfb. It checks Commands and Projects navigation with synthetic keys,
+then verifies a clean exit without running a fixture command. `nix flake check`
+includes this check.
+
 ## Quick start
 
 Write a `nixon.md` in a project:

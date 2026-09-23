@@ -11,6 +11,12 @@ let
 
   # Nix and repo-wide checks run over the whole tree, not the cargo source.
   repoSrc = lib.cleanSource ./..;
+  englishTessdata = pkgs.linkFarm "nixon-tessdata-eng" [
+    {
+      name = "eng.traineddata";
+      path = pkgs.tesseract.languages.eng;
+    }
+  ];
 
   runCheck =
     name: deps: script:
@@ -176,11 +182,11 @@ in
         touch $out
       '';
 
-  # Only the bash widget: shellcheck has no zsh or fish support, and
-  # checking those as bash reports their own syntax as errors.
+  # Shellcheck has no zsh or fish support; check the bash widget and GUI
+  # smoke script without misreading the other widgets as bash.
   shellcheck = runCheck "shellcheck" [
     pkgs.shellcheck
-  ] "shellcheck --shell=bash extra/*.bash";
+  ] "shellcheck --shell=bash extra/*.bash nix/gui-smoke.sh";
 
   typos = runCheck "typos" [ pkgs.typos ] "typos";
   statix = runCheck "statix" [ pkgs.statix ] "statix check .";
@@ -195,4 +201,24 @@ in
       cargoLlvmCovExtraArgs = "--html --output-dir $out";
     }
   );
+}
+// lib.optionalAttrs pkgs.stdenv.isLinux {
+  # Drive the installed wrapper, including its runtime library paths, under
+  # an X11 server. The script checks screen content and never runs a command.
+  gui-smoke =
+    pkgs.runCommand "nixon-check-gui-smoke"
+      {
+        nativeBuildInputs = [
+          pkgs.xorg-server
+          pkgs.xdotool
+          pkgs.scrot
+          pkgs.tesseract
+          pkgs.util-linux
+        ];
+      }
+      ''
+        export TESSDATA_PREFIX=${englishTessdata}
+        bash ${./gui-smoke.sh} ${nixon}/bin/nixon
+        touch $out
+      '';
 }

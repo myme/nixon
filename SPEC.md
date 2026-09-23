@@ -382,7 +382,12 @@ placeholder producer was cancelled.
   placeholder continuation, cancellation, detached `&`, and visible launch errors.
 - [ ] **MUST:** Smoke-test the packaged GUI under an available virtual
   display, including open, keyboard navigation, cancel, and a second nested
-  pick. Run the established `nix flake check` gates for the CLI as well.
+  pick. Run the established `nix flake check` gates for the CLI as well. A
+  Linux Nix check is wired to exercise the wrapped binary; the same script
+  passed against the development binary under Xvfb on 2026-09-23. Packaged
+  execution remains unverified because the pinned Nix build could not fetch
+  `mpc-1.3.1.tar.gz` (HTTP 404); the full flake check also stopped at the
+  pinned `bash53-001` patch fetch (HTTP 404).
 - [ ] **SHOULD:** Exercise X11 and Wayland in packaging/CI where runners
   support them; manual verification is recorded for any session type CI
   cannot provide.
