@@ -1622,6 +1622,55 @@ fn history_insert_replays_show_source_with_copy_for_run_and_project_aliases() {
 }
 
 #[test]
+fn history_run_list_replays_to_copyable_detail_without_launching() {
+    for (flag, query, expected) in [
+        ("--list", None, "_hidden\nalpha\nbeta\nzeta"),
+        ("-l", Some("alpha"), "alpha"),
+        ("--list", Some("missing"), "No commands."),
+    ] {
+        let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let cwd = temp.child("project").path().to_string_lossy().into_owned();
+        let mut words = vec!["run", flag];
+        words.extend(query);
+        write_history(&temp, &[history_entry(&cwd, &words)]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        choose_first_history_entry(&mut app, &ctx);
+        let output = wait_for_text(&mut app, &ctx, "Command list");
+        assert!(texts(&output).iter().any(|text| text == expected));
+        let output = click_button(&mut app, &ctx, &output, "Copy");
+        assert_eq!(copied_text(&output), Some(expected));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn history_project_list_replays_to_copyable_detail_without_launching() {
+    for (flag, query, expected) in [
+        ("--list", None, "~/projects/work-one\n~/projects/work-two"),
+        ("-l", Some("work-two"), "~/projects/work-two"),
+        ("--list", Some("missing"), "No projects."),
+    ] {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        discovered_projects(&temp, &mut config);
+        let cwd = temp.child("project").path().to_string_lossy().into_owned();
+        let mut words = vec!["project", flag];
+        words.extend(query);
+        write_history(&temp, &[history_entry(&cwd, &words)]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        choose_first_history_entry(&mut app, &ctx);
+        let output = wait_for_text(&mut app, &ctx, "Project list");
+        assert!(texts(&output).iter().any(|text| text == expected));
+        let output = click_button(&mut app, &ctx, &output, "Copy");
+        assert_eq!(copied_text(&output), Some(expected));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
 fn history_project_select_and_inspect_show_paths_and_details() {
     for inspect_project in [false, true] {
         let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
@@ -1769,6 +1818,68 @@ fn history_data_replay_keeps_stdout_empty() {
     assert!(
         !String::from_utf8_lossy(&output.stdout).contains(SENTINEL),
         "GUI data leaked to stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn history_list_replay_keeps_stdout_empty() {
+    const SENTINEL: &str = "NIXON_GUI_LIST_STDOUT_9D31";
+    const CHILD: &str = "NIXON_GUI_LIST_STDOUT_TEST_CHILD";
+    if std::env::var_os(CHILD).is_some() {
+        for project_form in [false, true] {
+            let local = format!("# `{SENTINEL}`\n\n```bash\necho listed\n```\n");
+            let (temp, mut config, dirs, mut env) = fixture(&local);
+            if project_form {
+                let source = temp.child("projects");
+                let target = source.child(SENTINEL);
+                target.child(".git").create_dir_all().unwrap();
+                config.project_dirs.push(source.path().to_path_buf());
+                config.project_types.push(ProjectType {
+                    id: "git".to_owned(),
+                    markers: vec![ProjectMarker::Path(PathBuf::from(".git"))],
+                    description: "Git".to_owned(),
+                });
+            }
+            let cwd = temp.child("project").path().to_string_lossy().into_owned();
+            let words = if project_form {
+                vec!["project", "--list"]
+            } else {
+                vec!["run", "--list"]
+            };
+            write_history(&temp, &[history_entry(&cwd, &words)]);
+            env.exe = Some(temp.child("nixon").path().to_path_buf());
+            let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+            let ctx = egui::Context::default();
+            choose_first_history_entry(&mut app, &ctx);
+            let title = if project_form {
+                "Project list"
+            } else {
+                "Command list"
+            };
+            let output = wait_for_text(&mut app, &ctx, title);
+            assert!(texts(&output).iter().any(|text| text.contains(SENTINEL)));
+            assert!(calls.lock().unwrap().is_empty());
+        }
+        return;
+    }
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "gui::tests::history_list_replay_keeps_stdout_empty",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !String::from_utf8_lossy(&output.stdout).contains(SENTINEL),
+        "GUI list leaked to stdout: {}",
         String::from_utf8_lossy(&output.stdout)
     );
 }
@@ -2073,7 +2184,6 @@ fn history_replay_rejects_recursive_malformed_and_nonexecution_entries() {
         vec!["--mode", "gui", "history"],
         vec!["--mode", "invalid", "run", "alpha"],
         vec!["eval", "--not-a-real-flag"],
-        vec!["run", "--list"],
         vec!["gc"],
         vec!["eval"],
         vec!["eval", "--file", "missing", "${unterminated"],

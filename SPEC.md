@@ -53,7 +53,8 @@ resolution, evaluation, and history as the terminal CLI.
   Nixon's existing history store and replay semantics. The root and all three
   pickers work. GUI replay accepts saved global flags with the CLI's existing
   ignore-on-replay behavior, bare names, and no-name/fuzzy command picks;
-  list and other non-recordable CLI actions remain unsupported.
+  `run --list` and `project --list` show copyable results in-window. Other
+  non-recordable CLI actions remain unsupported.
 - [x] **MUST:** The same GUI picker handles command selection, project
   selection, history, command options, and placeholder candidates. A command
   chosen through a mnemonic may still lead to a GUI placeholder pick.

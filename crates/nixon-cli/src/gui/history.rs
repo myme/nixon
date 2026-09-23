@@ -1,6 +1,8 @@
 //! History selection and replay in the GUI worker.
 
 use nixon::app::history::{DEFAULT_LIMIT, HistoryReadMode};
+use nixon::app::project::NO_PROJECTS;
+use nixon::app::run::NO_COMMANDS;
 use nixon::app::{App, RunOpts};
 use nixon::error::{NixonError, Result};
 use nixon::process::ProcessRunner;
@@ -124,7 +126,17 @@ fn replay_named_command<R: ProcessRunner>(
     opts: &RunOpts,
 ) -> CommandOutcome {
     if opts.list {
-        return unsupported_history_action();
+        return match app.matching_command_names(project, opts.command.as_deref()) {
+            Ok(lines) => CommandOutcome::Detail {
+                title: "Command list".to_owned(),
+                body: if lines.is_empty() {
+                    NO_COMMANDS.to_owned()
+                } else {
+                    lines.join("\n")
+                },
+            },
+            Err(error) => replay_error(error),
+        };
     }
     let selection = match app.choose_command(project, opts.command.as_deref()) {
         Ok(selection) => selection,
@@ -174,7 +186,20 @@ fn replay_project<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
     opts: &nixon::app::project::ProjectOpts,
 ) -> CommandOutcome {
-    if opts.list || opts.run.list {
+    if opts.list {
+        return match app.matching_project_paths(opts.project.as_deref()) {
+            Ok(lines) => CommandOutcome::Detail {
+                title: "Project list".to_owned(),
+                body: if lines.is_empty() {
+                    NO_PROJECTS.to_owned()
+                } else {
+                    lines.join("\n")
+                },
+            },
+            Err(error) => replay_error(error),
+        };
+    }
+    if opts.run.list {
         return unsupported_history_action();
     }
     let (kind, projects) =

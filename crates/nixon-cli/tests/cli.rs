@@ -606,6 +606,17 @@ fn project_list_prints_discovered_projects() {
 }
 
 #[test]
+fn project_list_with_no_matches_exits_successfully_without_stdout() {
+    Fixture::new()
+        .nixon()
+        .args(["project", "-l", "missing"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr(contains("No projects."));
+}
+
+#[test]
 fn an_unknown_placeholder_command_is_a_clean_error() {
     let fixture = Fixture::with_config("# `uses ${nope}`\n\n```bash\necho \"$1\"\n```\n");
     fixture

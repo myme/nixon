@@ -12,6 +12,9 @@ use crate::project::Project;
 use crate::project::detect::{find_in_project, find_project_types, inspect};
 use crate::select;
 
+/// Message shown when `project --list` has no matches.
+pub const NO_PROJECTS: &str = "No projects.";
+
 /// What `project` was asked to do.
 #[derive(Clone, Debug, Default)]
 pub struct ProjectOpts {
@@ -61,6 +64,18 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
 
     /// Prints matching project paths with `~` for `$HOME`.
     pub fn list_projects(&mut self, query: Option<&str>) -> Result<ExitCode> {
+        let matched = self.matching_project_paths(query)?;
+
+        if matched.is_empty() {
+            tracing::error!("{NO_PROJECTS}");
+            return Ok(0);
+        }
+        output::lines(&matched)?;
+        Ok(0)
+    }
+
+    /// Returns the same plain project lines that `project --list` prints.
+    pub fn matching_project_paths(&self, query: Option<&str>) -> Result<Vec<String>> {
         let projects = self.projects();
         let candidates = select::project_candidates(&projects, &self.dirs.home);
 
@@ -71,19 +86,12 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         };
         let selection = FilterPicker.pick(&options, candidates)?;
 
-        let matched: Vec<String> = selection
+        Ok(selection
             .items()
             .iter()
             // The visible text: display may carry ANSI for the picker.
             .map(Candidate::plain)
-            .collect();
-
-        if matched.is_empty() {
-            tracing::error!("No projects.");
-            return Ok(0);
-        }
-        output::lines(&matched)?;
-        Ok(0)
+            .collect())
     }
 
     /// Picks projects, honouring the `.` shortcut.

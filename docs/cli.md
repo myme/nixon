@@ -113,8 +113,10 @@ or mode. Recursive History and malformed entries are rejected visibly.
 Saved `run --insert`, `run --select`, `project --insert`, `project --select`,
 and `project --inspect` actions show their source, selected values, paths, or
 inspection in the read-only panel with Copy and Back. Short flags work too.
-These results stay in the window and are not written to stdout. A selection
-can be canceled with Esc; errors appear in the status bar.
+Saved `run --list [query]` and `project --list [query]` show the same matching
+command names or project paths as terminal mode, including its no-match
+message. These results stay in the window and are not written to stdout. A
+selection can be canceled with Esc; errors appear in the status bar.
 F1 and Alt-Enter show the recorded command line in a read-only panel with Copy
 and Back. Esc and an empty log return to the menu. Disabled history, log read
 errors, and malformed or unsupported entries remain visible and are reported

@@ -1209,6 +1209,52 @@ fn listing_and_selecting_record_nothing() {
     assert!(fixture.history().is_empty());
 }
 
+#[test]
+fn matching_command_names_include_hidden_commands_and_local_matching() {
+    let fixture = Fixture::new(
+        "```yaml config\nexact_match: true\n```\n\n# `_hidden`\n\n```bash\necho hidden\n```\n\n# `deploy-staging`\n\n```bash\necho staging\n```\n",
+    );
+    let app = fixture.app(picks(&[]), FakeRunner::new());
+    let project = app.current_project();
+
+    assert_eq!(
+        app.matching_command_names(&project, None).unwrap(),
+        ["_hidden", "deploy-staging"]
+    );
+    assert!(
+        app.matching_command_names(&project, Some("dpst"))
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        app.matching_command_names(&project, Some("_hidden"))
+            .unwrap(),
+        ["_hidden"]
+    );
+}
+
+#[test]
+fn matching_project_paths_keep_plain_display_order_and_query() {
+    let mut fixture = Fixture::new("");
+    fixture.sibling_project("work-two");
+    fixture.sibling_project("work-one");
+    let app = fixture.app(picks(&[]), FakeRunner::new());
+
+    assert_eq!(
+        app.matching_project_paths(None).unwrap(),
+        ["~/project", "~/work-one", "~/work-two"]
+    );
+    assert_eq!(
+        app.matching_project_paths(Some("work")).unwrap(),
+        ["~/work-one", "~/work-two"]
+    );
+    assert!(
+        app.matching_project_paths(Some("missing"))
+            .unwrap()
+            .is_empty()
+    );
+}
+
 /// `history: false` writes nothing at all.
 #[test]
 fn the_history_can_be_turned_off() {
