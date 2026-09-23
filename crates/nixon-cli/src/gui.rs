@@ -11,10 +11,12 @@ use nixon::config::launcher::{DEFAULT_SEARCH_URL, LauncherAction, MprisOperation
 use nixon::error::{NixonError, Result};
 use nixon::fs::Dirs;
 use nixon::process::{Invocation, ProcessRunner, RealRunner};
+use nixon::project::Project;
+use nixon::select;
 use nixon_gui::browser::target_url;
 use nixon_gui::picker::GuiPicker;
 use nixon_gui::window::{BrowserInputEvent, MenuWindow, native_options};
-use nixon_picker::{Selection, SelectionType};
+use nixon_picker::{Picker, Selection, SelectionType};
 
 use crate::cli::Commands;
 use crate::gui_process::GuiProcessRunner;
@@ -65,6 +67,7 @@ const PREVIEW_STATUS: &str = "GUI preview: choose an action.";
 enum CommandOutcome {
     Launched,
     Selected { name: String, kind: SelectionType },
+    ProjectInspect { name: String, path: String },
     Empty,
     Canceled,
     Error(String),
@@ -72,6 +75,7 @@ enum CommandOutcome {
 
 enum CommandRequest {
     PickCurrent,
+    PickProject,
     Quick {
         name: String,
         project: Option<String>,
@@ -142,6 +146,7 @@ impl PreviewApp {
             while let Ok(request) = worker_requests.recv() {
                 let outcome = match request {
                     CommandRequest::PickCurrent => pick_current_command(&mut app),
+                    CommandRequest::PickProject => pick_project_command(&mut app),
                     CommandRequest::Quick { name, project } => {
                         launch_quick_command(&mut app, &name, project.as_deref())
                     }
@@ -207,6 +212,9 @@ impl PreviewApp {
                     self.status =
                         format!("Selected command: {name} ({kind:?}). Execution is not wired yet.");
                 }
+                CommandOutcome::ProjectInspect { name, path } => {
+                    self.status = format!("Project inspection preview: {name} ({path}).");
+                }
                 CommandOutcome::Empty => "No commands available.".clone_into(&mut self.status),
                 CommandOutcome::Canceled => PREVIEW_STATUS.clone_into(&mut self.status),
                 CommandOutcome::Error(error) => {
@@ -261,6 +269,21 @@ impl PreviewApp {
                     "Loading commands…".clone_into(&mut self.status);
                 }
             }
+            LauncherAction::Projects => {
+                if !self.busy && !self.browser_busy && !self.media_busy {
+                    if self
+                        .command_requests
+                        .send(CommandRequest::PickProject)
+                        .is_ok()
+                    {
+                        self.busy = true;
+                        "Loading projects…".clone_into(&mut self.status);
+                    } else {
+                        "Command worker is unavailable.".clone_into(&mut self.status);
+                        tracing::error!("{}", self.status);
+                    }
+                }
+            }
             LauncherAction::BrowserInput => {
                 if !self.busy && !self.browser_busy && !self.media_busy {
                     self.menu.open_browser_input();
@@ -296,7 +319,7 @@ impl PreviewApp {
                     }
                 }
             }
-            _ => {
+            LauncherAction::History => {
                 self.status = format!(
                     "{} selected. Execution is not wired yet.",
                     action_name(&action)
@@ -428,12 +451,59 @@ fn pick_current_command<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
 ) -> CommandOutcome {
     let project = app.current_project();
-    let result = app.commands_for(&project).and_then(|commands| {
+    pick_command_for_project(app, &project)
+}
+
+fn pick_project_command<R: ProcessRunner>(
+    app: &mut App<GuiPicker, GuiProcessRunner<R>>,
+) -> CommandOutcome {
+    let projects = app.projects();
+    if projects.is_empty() {
+        return CommandOutcome::Canceled;
+    }
+    let mut options = select::project_options(&app.config, None, false);
+    options.select_one = false;
+    let candidates = select::project_candidates(&projects, &app.dirs.home);
+    let selection = match app.picker.pick(&options, candidates) {
+        Ok(selection) => selection,
+        Err(error) => return CommandOutcome::Error(format!("Could not select project: {error}")),
+    };
+    let (kind, mut items) = match selection {
+        Selection::Selected { kind, items } => (kind, items),
+        Selection::Empty | Selection::Canceled => return CommandOutcome::Canceled,
+    };
+    if items.len() != 1 {
+        return CommandOutcome::Error("Expected one project selection.".to_owned());
+    }
+    let picked = items.remove(0);
+    let Some(project) = projects
+        .into_iter()
+        .find(|project| project.path().to_string_lossy() == picked.value)
+    else {
+        return CommandOutcome::Error(format!("Selected project disappeared: {}", picked.value));
+    };
+    if kind != SelectionType::Default {
+        return CommandOutcome::ProjectInspect {
+            name: project.name.to_string_lossy().into_owned(),
+            path: project.path().to_string_lossy().into_owned(),
+        };
+    }
+    pick_command_for_project(app, &project)
+}
+
+fn pick_command_for_project<R: ProcessRunner>(
+    app: &mut App<GuiPicker, GuiProcessRunner<R>>,
+    project: &Project,
+) -> CommandOutcome {
+    let result = app.commands_for(project).and_then(|commands| {
         let visible: Vec<Command> = commands
             .into_iter()
             .filter(|command| !command.is_hidden)
             .collect();
-        app.pick_command(&project, &visible, "Select command", None)
+        if visible.is_empty() {
+            return Ok(Selection::Empty);
+        }
+        app.pick_command(project, &visible, "Select command", None)
     });
     match result {
         Ok(Selection::Selected {
@@ -444,7 +514,7 @@ fn pick_current_command<R: ProcessRunner>(
                 return CommandOutcome::Error("Expected one command selection.".to_owned());
             }
             let command = items.remove(0);
-            run_selected_command(app, &project, &command)
+            run_selected_command(app, project, &command)
         }
         Ok(Selection::Selected { kind, items }) => {
             let name = items
@@ -837,10 +907,22 @@ printf '%s\\n' \"$1\"
         (first.path().to_path_buf(), second.path().to_path_buf())
     }
 
-    fn placeholder_fixture(quick: bool) -> (TempDir, PreviewApp, InvocationCalls, InvocationCalls) {
+    fn placeholder_fixture(
+        quick: bool,
+        projects: bool,
+    ) -> (TempDir, PreviewApp, InvocationCalls, InvocationCalls) {
         let (temp, mut config, dirs, mut env) = fixture(PLACEHOLDER_COMMANDS);
         if quick {
             add_quick_action(&mut config, "alpha", None);
+        }
+        if projects {
+            let (first, _) = discovered_projects(&temp, &mut config);
+            let local = PLACEHOLDER_COMMANDS.replacen(
+                "# `alpha ${_choices | json}`",
+                "# `alpha --fast ${_choices | json}`\n\n- `--fast`: on",
+                1,
+            );
+            fs::write(first.join("nixon.md"), local).unwrap();
         }
         let terminal = executable(&temp, "terminal");
         config.launcher.terminal = Some(vec![
@@ -1349,7 +1431,7 @@ printf '%s\\n' \"$1\"
 
     #[test]
     fn nested_placeholder_pick_reaches_prepared_terminal_payload() {
-        let (temp, mut app, calls, captures) = placeholder_fixture(false);
+        let (temp, mut app, calls, captures) = placeholder_fixture(false, false);
         let ctx = egui::Context::default();
         open_placeholder_pick(&mut app, &ctx);
         let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
@@ -1377,7 +1459,7 @@ printf '%s\\n' \"$1\"
 
     #[test]
     fn canceling_nested_placeholder_pick_does_not_spawn_terminal() {
-        let (_temp, mut app, calls, captures) = placeholder_fixture(false);
+        let (_temp, mut app, calls, captures) = placeholder_fixture(false, false);
         let ctx = egui::Context::default();
         open_placeholder_pick(&mut app, &ctx);
         let output = frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
@@ -1713,7 +1795,7 @@ printf '%s\\n' \"$1\"
 
     #[test]
     fn quick_command_resolves_nested_placeholder() {
-        let (_temp, mut app, calls, captures) = placeholder_fixture(true);
+        let (_temp, mut app, calls, captures) = placeholder_fixture(true, false);
         let ctx = egui::Context::default();
         let _ = frame(&mut app, &ctx, vec![key(egui::Key::Q)]);
         wait_for_text(&mut app, &ctx, "choice with spaces");
@@ -1728,16 +1810,191 @@ printf '%s\\n' \"$1\"
         assert!(payload.argv.iter().any(|arg| arg == "choice with spaces"));
     }
 
+    fn open_projects(app: &mut PreviewApp, ctx: &egui::Context) -> egui::FullOutput {
+        let _ = frame(app, ctx, vec![key(egui::Key::P)]);
+        wait_for_text(app, ctx, "Select project")
+    }
+
+    fn choose_first_project(app: &mut PreviewApp, ctx: &egui::Context) -> egui::FullOutput {
+        let _ = frame(app, ctx, vec![key(egui::Key::Enter)]);
+        let _ = frame(app, ctx, vec![key_release(egui::Key::Enter)]);
+        wait_for_text(app, ctx, "Select command")
+    }
+
     #[test]
-    fn other_actions_keep_the_preview_status() {
-        let (_temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
-        let mut app = PreviewApp::new(config, dirs, env).unwrap();
+    fn projects_pick_then_command_runs_in_chosen_project() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let (first, _second) = discovered_projects(&temp, &mut config);
+        let terminal = executable(&temp, "terminal");
+        config.launcher.terminal = Some(vec![
+            terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let output = open_projects(&mut app, &ctx);
+        let rows = texts(&output);
+        assert!(
+            rows.iter().any(|row| row == "~/projects/work-one"),
+            "{rows:?}"
+        );
+        assert!(
+            rows.iter().any(|row| row == "~/projects/work-two"),
+            "{rows:?}"
+        );
+        choose_first_project(&mut app, &ctx);
+        let _ = frame(&mut app, &ctx, vec![egui::Event::Text("jump".to_owned())]);
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(payload.cwd, Some(first));
+        let history = fs::read_to_string(temp.child("state/nixon/history").path()).unwrap();
+        assert!(history.contains("nixon project"), "{history}");
+        assert!(history.contains("jump"), "{history}");
+    }
+
+    #[test]
+    fn projects_pick_command_and_placeholder_before_running() {
+        let (temp, mut app, calls, captures) = placeholder_fixture(false, true);
+        let first = temp.child("projects/work-one").path().to_path_buf();
+        let ctx = egui::Context::default();
+        open_projects(&mut app, &ctx);
+        choose_first_project(&mut app, &ctx);
+        let _ = frame(&mut app, &ctx, vec![egui::Event::Text("alpha".to_owned())]);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+        wait_for_text(&mut app, &ctx, "choice with spaces");
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let producer_calls = captures.lock().unwrap().clone();
+        assert_eq!(producer_calls.len(), 1);
+        assert_eq!(producer_calls[0].cwd, Some(first.clone()));
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(payload.cwd, Some(first.clone()));
+        assert!(payload.argv.iter().any(|arg| arg == "choice with spaces"));
+        assert!(payload.argv.iter().any(|arg| arg == "--fast"));
+        assert!(
+            payload
+                .env
+                .iter()
+                .any(|(name, value)| { name == "nixon_opt_fast" && value == "1" })
+        );
+        assert!(payload.env.iter().any(|(name, value)| {
+            name == "nixon_project_path" && value == &first.display().to_string()
+        }));
+        let history = fs::read_to_string(temp.child("state/nixon/history").path()).unwrap();
+        assert!(history.contains("nixon project"), "{history}");
+        assert!(history.contains("alpha"), "{history}");
+    }
+
+    #[test]
+    fn inspecting_project_shows_gui_preview_without_running() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let (first, _) = discovered_projects(&temp, &mut config);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        open_projects(&mut app, &ctx);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::F1)]);
+        let output = wait_for_text(&mut app, &ctx, "Project inspection preview:");
+        assert!(
+            texts(&output)
+                .iter()
+                .any(|row| row.contains(&first.display().to_string()))
+        );
+        assert!(!closes(&output));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn canceling_either_projects_pick_returns_to_menu() {
+        for at_command in [false, true] {
+            let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            discovered_projects(&temp, &mut config);
+            env.exe = Some(temp.child("nixon").path().to_path_buf());
+            let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+            let ctx = egui::Context::default();
+            open_projects(&mut app, &ctx);
+            if at_command {
+                choose_first_project(&mut app, &ctx);
+            }
+            let _ = frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
+            let output = wait_for_text(&mut app, &ctx, super::PREVIEW_STATUS);
+            assert!(!closes(&output));
+            assert!(calls.lock().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn no_discovered_projects_returns_to_menu_quietly() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        config.project_dirs.clear();
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
         let ctx = egui::Context::default();
         let _ = frame(&mut app, &ctx, vec![key(egui::Key::P)]);
-        wait_for_text(
-            &mut app,
-            &ctx,
-            "Projects selected. Execution is not wired yet.",
-        );
+        let output = wait_for_text(&mut app, &ctx, super::PREVIEW_STATUS);
+        assert!(!closes(&output));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn project_without_visible_commands_returns_without_running() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let (first, _) = discovered_projects(&temp, &mut config);
+        config.commands.clear();
+        fs::write(first.join("nixon.md"), "").unwrap();
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        open_projects(&mut app, &ctx);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        let output = wait_for_text(&mut app, &ctx, "No commands available.");
+        assert!(!closes(&output));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn projects_use_chosen_local_config_and_hide_private_commands() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let (first, _) = discovered_projects(&temp, &mut config);
+        let global_terminal = executable(&temp, "global-terminal");
+        let local_terminal = executable(&temp, "local terminal");
+        config.launcher.terminal = Some(vec![
+            global_terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        fs::write(
+            first.join("nixon.md"),
+            format!(
+                "```yaml config\nlauncher:\n  terminal: [{}, '-e']\n```\n\n# `jump`\n\n```bash\necho local\n```\n\n# `_secret`\n\n```bash\necho secret\n```\n",
+                serde_json::to_string(&local_terminal.to_string_lossy()).unwrap()
+            ),
+        ).unwrap();
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        open_projects(&mut app, &ctx);
+        let output = choose_first_project(&mut app, &ctx);
+        assert!(!texts(&output).iter().any(|row| row.contains("_secret")));
+        let _ = frame(&mut app, &ctx, vec![egui::Event::Text("jump".to_owned())]);
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].argv[0], local_terminal.to_string_lossy());
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(payload.cwd, Some(first));
     }
 }

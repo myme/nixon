@@ -57,14 +57,11 @@ resolution, evaluation, and history as the terminal CLI.
   default; `--mode gui` (or `-m gui`) explicitly opens the graphical menu.
   This replaces the earlier separate-binary plan and does not restore
   `nixon -b rofi`.
-- [x] **PREVIEW:** The GUI opens the merged-config menu. Commands discovers
-  current-project commands on a worker and opens the GUI picker. A selection
-  displays the command name and selection type without executing it;
-  cancellation returns to the menu and discovery errors appear in the window.
-  Browser has a focused URL/search input and opens through the process runner
-  on a worker. Other actions show a visible status that execution is not wired
-  yet. GUI subcommands and bare command names are explicitly rejected until
-  the workflows are integrated.
+- [x] **PREVIEW:** The GUI opens the merged-config menu. Commands and Projects
+  discover and run commands through the GUI picker and existing App flow on a
+  worker. Browser and media actions run on workers. Project inspect and command
+  Edit/Show/Visit display preview statuses; History remains a preview. GUI
+  subcommands and bare command names are explicitly rejected.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
   old exit-code/argv protocol. The behavior to recover is GUI selection.
 
@@ -218,7 +215,7 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
 
 ## 6. Actions after selection
 
-- [ ] **MUST:** Run a selected command via Nixon's existing `App` flow. The
+- [x] **MUST:** Run a selected command via Nixon's existing `App` flow. The
   GUI must not duplicate placeholder resolution, option argument placement,
   project environment variables, or history serialization.
 - [ ] **MUST:** Show displays command source in a GUI panel with a way back;
@@ -358,7 +355,7 @@ placeholder producer was cancelled.
 - [ ] **MUST:** Test GUI picker mapping with duplicate titles, ANSI in titles,
   initial query, exact/unique selection, multi marks across query changes,
   selection types, command option toggles, and cancellation.
-- [ ] **MUST:** Component-test a project -> command -> placeholder -> run
+- [x] **MUST:** Component-test a project -> command -> placeholder -> run
   flow with `ScriptedPicker`/`FakeRunner` or the GUI bridge's equivalents.
   Verify the final invocation, cwd, environment, option arguments, and
   history record.

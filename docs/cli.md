@@ -59,7 +59,11 @@ picker query. It uses the project's local config, option and placeholder
 prompts, command history, and the same terminal handoff or detached execution
 as Commands. Successful launches close the window; cancellation returns to the
 menu; missing projects, commands, or launchers stay visible and are reported on
-stderr. Projects and History still show a preview status.
+stderr. Projects (default **P**) opens a searchable list showing each project's
+name and path. Enter opens that project's visible commands; choosing one uses
+its local config, prompts, history, and terminal or detached execution. Esc at
+either pick returns to the menu. F1 on a project shows an inspection preview in
+the window without launching a command. History still shows a preview status.
 F1 in a quick action's project picker returns to the menu without launching.
 GUI mode currently accepts no subcommands; `nixon --mode gui run` and bare
 command names report an error. `--mode tui` and the default retain the terminal
