@@ -59,6 +59,20 @@ impl<R: ProcessRunner> GuiProcessRunner<R> {
         self.configured_terminal = terminal;
     }
 
+    /// Checks the selected editor before closing the GUI for terminal handoff.
+    pub fn ensure_editor_available(&self, editor: &str) -> io::Result<()> {
+        if available(editor, self.path_env.as_deref()) {
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "Editor executable '{editor}' is unavailable; set $EDITOR to an installed executable"
+                ),
+            ))
+        }
+    }
+
     fn terminal_prefix(&self) -> io::Result<Vec<String>> {
         if let Some(prefix) = &self.configured_terminal {
             return validate_prefix(

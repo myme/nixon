@@ -60,7 +60,8 @@ resolution, evaluation, and history as the terminal CLI.
 - [x] **PREVIEW:** The GUI opens the merged-config menu. Commands and Projects
   discover and run commands through the GUI picker and existing App flow on a
   worker. Browser and media actions run on workers. Project Inspect and command
-  Show open a read-only detail panel; Edit/Visit display preview statuses.
+  Show open a read-only detail panel; Visit hands off to the configured editor
+  through the terminal launcher. Edit displays a preview status.
   History remains a preview. GUI subcommands and bare command names are
   explicitly rejected.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
@@ -225,7 +226,7 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
   Submitting runs the edited source with the original command's language,
   placeholders, options, and project; cancelling changes nothing. This
   replaces the terminal-only `nixon_picker::editor` for the GUI path.
-- [ ] **MUST:** Visit opens the command definition in the configured editor
+- [x] **MUST:** Visit opens the command definition in the configured editor
   at its recorded line. Errors are shown in the GUI. The GUI must not assume
   `$EDITOR` names a graphical program; a terminal editor needs the configured
   terminal launcher.

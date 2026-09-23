@@ -111,6 +111,10 @@ launcher:
   terminal: ["kitty", "-e"]
 ```
 
+F2 Visit uses this terminal to open the recorded command file and line in
+`$VISUAL` or `$EDITOR` (falling back to `nano`). The editor setting names an
+executable; its file and line are passed as separate arguments.
+
 If the effective launcher config has no `terminal`, the runner parses
 `$TERMINAL` as arguments, preserving quotes. A bare `alacritty`, `kitty`,
 `foot`, `konsole`, `xterm`, `uxterm`, or `x-terminal-emulator` gets `-e`; a bare

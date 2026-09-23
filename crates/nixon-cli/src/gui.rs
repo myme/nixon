@@ -539,6 +539,16 @@ fn pick_command_for_project<R: ProcessRunner>(
                 body: command.source,
             }
         }
+        Ok(Selection::Selected {
+            kind: SelectionType::Visit,
+            mut items,
+        }) => {
+            if items.len() != 1 {
+                return CommandOutcome::Error("Expected one command selection.".to_owned());
+            }
+            let command = items.remove(0);
+            visit_selected_command(app, project, &command)
+        }
         Ok(Selection::Selected { kind, items }) => {
             let name = items
                 .into_iter()
@@ -593,6 +603,30 @@ fn run_selected_command<R: ProcessRunner>(
         Ok(_) => CommandOutcome::Launched,
         Err(NixonError::Canceled) => CommandOutcome::Canceled,
         Err(error) => CommandOutcome::Error(format!("Could not run {}: {error}", command.name)),
+    }
+}
+
+fn visit_selected_command<R: ProcessRunner>(
+    app: &mut App<GuiPicker, GuiProcessRunner<R>>,
+    project: &Project,
+    command: &Command,
+) -> CommandOutcome {
+    let config = match app.config_for(project) {
+        Ok(config) => config,
+        Err(error) => {
+            return CommandOutcome::Error(format!("Could not load command config: {error}"));
+        }
+    };
+    app.runner.set_configured_terminal(config.launcher.terminal);
+    if command.location.is_some()
+        && let Err(error) = app.runner.ensure_editor_available(app.env.editor())
+    {
+        return CommandOutcome::Error(format!("Could not visit {}: {error}", command.name));
+    }
+    match app.visit_cmd(command) {
+        Ok(()) => CommandOutcome::Launched,
+        Err(NixonError::Canceled) => CommandOutcome::Canceled,
+        Err(error) => CommandOutcome::Error(format!("Could not visit {}: {error}", command.name)),
     }
 }
 
@@ -1334,18 +1368,111 @@ printf '%s\\n' \"$1\"
     }
 
     #[test]
-    fn edit_and_visit_selections_remain_explicit_previews() {
-        for (event, kind) in [
-            (
-                key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT),
-                "Edit",
-            ),
-            (key(egui::Key::F2), "Visit"),
+    fn edit_selection_remains_an_explicit_preview() {
+        let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let exe = temp.child("nixon").path().to_path_buf();
+        env.exe = Some(exe.clone());
+        let (runner, calls) = command_runner(None, exe, false);
+        let mut app = PreviewApp::with_command_runner(
+            config,
+            dirs,
+            env,
+            RealRunner,
+            super::SessionMediaTransport,
+            runner,
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT)],
+        );
+        let output = wait_for_text(&mut app, &ctx, "Selected command: alpha (Edit)");
+        assert!(!closes(&output));
+        assert!(calls.lock().unwrap().is_empty());
+        assert!(!temp.child("project/selected-marker").path().exists());
+    }
+
+    #[test]
+    fn visit_current_command_hands_exact_editor_file_and_line_to_terminal() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let project = temp.child("project with 'spaces'");
+        project.create_dir_all().unwrap();
+        let source = project.child("nixon.md");
+        source
+            .write_str("\n# `alpha`\n\n```bash\ntouch should-not-run\n```\n")
+            .unwrap();
+        let terminal = executable(&temp, "terminal with 'quotes'");
+        let editor = executable(&temp, "editor with 'quotes'");
+        config.launcher.terminal = Some(vec![
+            terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        env.cwd = project.path().to_path_buf();
+        env.editor = Some(editor.to_string_lossy().into_owned());
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let _ = frame(&mut app, &ctx, vec![egui::Event::Text("alpha".to_owned())]);
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::F2)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].argv[0], terminal.to_string_lossy());
+        assert_eq!(calls[0].argv[1], "-e");
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(
+            payload.argv,
+            vec![
+                editor.to_string_lossy().into_owned(),
+                "+2".to_owned(),
+                source.path().to_string_lossy().into_owned(),
+            ]
+        );
+        assert_eq!(payload.cwd, None);
+        assert!(!project.child("should-not-run").path().exists());
+        assert!(!temp.child("state/nixon/history").path().exists());
+    }
+
+    #[test]
+    fn visit_errors_stay_visible_without_running_a_command() {
+        for scenario in [
+            "missing-location",
+            "missing-editor",
+            "missing-terminal",
+            "spawn-error",
         ] {
-            let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            let terminal = executable(&temp, "terminal");
+            let editor = executable(&temp, "editor");
+            if scenario != "missing-terminal" {
+                config.launcher.terminal = Some(vec![
+                    terminal.to_string_lossy().into_owned(),
+                    "-e".to_owned(),
+                ]);
+            }
+            env.editor = Some(if scenario == "missing-editor" {
+                temp.child("missing editor")
+                    .path()
+                    .to_string_lossy()
+                    .into_owned()
+            } else {
+                editor.to_string_lossy().into_owned()
+            });
             let exe = temp.child("nixon").path().to_path_buf();
             env.exe = Some(exe.clone());
-            let (runner, calls) = command_runner(None, exe, false);
+            let (runner, calls) = command_runner(
+                config.launcher.terminal.clone(),
+                exe,
+                scenario == "spawn-error",
+            );
             let mut app = PreviewApp::with_command_runner(
                 config,
                 dirs,
@@ -1358,12 +1485,30 @@ printf '%s\\n' \"$1\"
             let ctx = egui::Context::default();
             let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
             wait_for_text(&mut app, &ctx, "Select command");
-            let _ = frame(&mut app, &ctx, vec![event]);
-            let output =
-                wait_for_text(&mut app, &ctx, &format!("Selected command: alpha ({kind})"));
+            let name = if scenario == "missing-location" {
+                "beta"
+            } else {
+                "alpha"
+            };
+            let _ = frame(&mut app, &ctx, vec![egui::Event::Text(name.to_owned())]);
+            let _ = frame(&mut app, &ctx, vec![key(egui::Key::F2)]);
+            let expected = match scenario {
+                "missing-location" => "Unable to find command location",
+                "missing-editor" => "Editor executable",
+                "missing-terminal" => "No terminal launcher is available",
+                _ => "Could not launch terminal",
+            };
+            let output = wait_for_text(&mut app, &ctx, expected);
             assert!(!closes(&output));
-            assert!(calls.lock().unwrap().is_empty());
+            let calls = calls.lock().unwrap().clone();
+            if scenario == "spawn-error" {
+                assert_eq!(calls.len(), 1);
+                assert!(!std::path::Path::new(calls[0].argv.last().unwrap()).exists());
+            } else {
+                assert!(calls.is_empty());
+            }
             assert!(!temp.child("project/selected-marker").path().exists());
+            assert!(!temp.child("state/nixon/history").path().exists());
         }
     }
 
@@ -1992,6 +2137,51 @@ printf '%s\\n' \"$1\"
             Some("touch jump-marker\n")
         );
         assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn visit_project_command_uses_local_terminal_and_recorded_location() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let (first, _) = discovered_projects(&temp, &mut config);
+        let global_terminal = executable(&temp, "global-terminal");
+        let local_terminal = executable(&temp, "local terminal");
+        let editor = executable(&temp, "editor");
+        config.launcher.terminal = Some(vec![
+            global_terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        fs::write(
+            first.join("nixon.md"),
+            format!(
+                "```yaml config\nlauncher:\n  terminal: [{}, '-e']\n```\n\n# `jump`\n\n```bash\ntouch should-not-run\n```\n",
+                serde_json::to_string(&local_terminal.to_string_lossy()).unwrap()
+            ),
+        ).unwrap();
+        env.editor = Some(editor.to_string_lossy().into_owned());
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        open_projects(&mut app, &ctx);
+        choose_first_project(&mut app, &ctx);
+        let _ = frame(&mut app, &ctx, vec![egui::Event::Text("jump".to_owned())]);
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::F2)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].argv[0], local_terminal.to_string_lossy());
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(
+            payload.argv,
+            vec![
+                editor.to_string_lossy().into_owned(),
+                "+6".to_owned(),
+                first.join("nixon.md").to_string_lossy().into_owned(),
+            ]
+        );
+        assert!(!first.join("should-not-run").exists());
+        assert!(!temp.child("state/nixon/history").path().exists());
     }
 
     #[test]

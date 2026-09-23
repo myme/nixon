@@ -44,8 +44,11 @@ external terminal. A command marked `&` keeps its detached behavior. A
 successful handoff closes the window; a missing terminal or other error stays
 visible and is reported on stderr. Canceling returns to the menu. F1 shows the
 command's exact source in a read-only detail panel; Copy or Ctrl-C copies it,
-and Back or Esc returns to the menu. Edit and Visit selections show explicit
-preview statuses without running the command.
+and Back or Esc returns to the menu. F2 opens the command's definition at its
+recorded line in the configured editor through the selected project's terminal
+launcher. A successful handoff closes the window; a missing location, editor,
+terminal, or launch error stays visible and is reported on stderr. Visit does
+not run the command or add history. Edit still shows a preview status.
 Browser (default **W**, then **O**) opens a focused input. Enter opens a full
 `http://` or `https://` URL unchanged, adds `https://` to a dotted address
 without spaces, or searches through `launcher.search_url`. Empty input does

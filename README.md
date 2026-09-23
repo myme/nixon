@@ -114,7 +114,8 @@ command line has a few deliberate differences.
   window. Configured command actions run a named command in the current or a
   selected project with the same prompts and terminal handoff. Projects picks
   a project and then a command to run there. F1 shows command source or project
-  details in a read-only panel with Copy and Back. History remains a preview.
+  details in a read-only panel with Copy and Back. F2 opens the command's
+  definition in the configured editor. History remains a preview.
 - **Removed flags.** `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went
   with the backend concept. Passing one is now an ordinary argument error.
   Commands run in the terminal you started them from; a command marked `&`
