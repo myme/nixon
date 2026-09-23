@@ -14,7 +14,7 @@ use nixon::error::{NixonError, Result};
 use nixon::fs::Dirs;
 use nixon::process::{Invocation, ProcessRunner, RealRunner};
 use nixon::project::Project;
-use nixon::project::detect::{find_in_project_or_default, inspect};
+use nixon::project::detect::inspect;
 use nixon::select;
 use nixon_gui::browser::target_url;
 use nixon_gui::picker::GuiPicker;
@@ -150,10 +150,13 @@ impl PreviewApp {
         env: Environment,
         browser_runner: R,
         media_transport: M,
-        mut command_runner: GuiProcessRunner<C>,
+        command_runner: GuiProcessRunner<C>,
     ) -> Result<Self> {
-        let launcher = startup_launcher(&config, &env)?;
-        command_runner.set_configured_terminal(launcher.terminal.clone());
+        let (picker, requests) = GuiPicker::channel();
+        let mut app = App::new(config, dirs, env, picker, command_runner);
+        let launcher = startup_launcher(&app)?;
+        app.runner
+            .set_configured_terminal(launcher.terminal.clone());
         let (sender, actions) = mpsc::channel();
         let mut menu = MenuWindow::new(&launcher, sender).ok_or_else(|| {
             NixonError::Io(std::io::Error::new(
@@ -161,7 +164,6 @@ impl PreviewApp {
                 "GUI launcher menu has no items",
             ))
         })?;
-        let (picker, requests) = GuiPicker::channel();
         menu.attach_picker(requests);
         let search_url = launcher
             .search_url
@@ -171,7 +173,6 @@ impl PreviewApp {
         let (command_requests, worker_requests) = mpsc::channel();
         let (worker_results, command_results) = mpsc::channel();
         let worker = thread::spawn(move || {
-            let mut app = App::new(config, dirs, env, picker, command_runner);
             while let Ok(request) = worker_requests.recv() {
                 let outcome = match request {
                     CommandRequest::PickCurrent => pick_current_command(&mut app),
@@ -421,11 +422,11 @@ impl PreviewApp {
     }
 }
 
-fn startup_launcher(config: &Config, env: &Environment) -> Result<LauncherConfig> {
-    let project = find_in_project_or_default(&config.project_types, &env.cwd);
-    let local = load::find_local(&project.path()).map_err(|error| match error {
-        ConfigError::Markdown(markdown) => NixonError::Markdown(markdown),
-        other => {
+fn startup_launcher<P: Picker, R: ProcessRunner>(app: &App<P, R>) -> Result<LauncherConfig> {
+    let project = app.current_project();
+    let config = app.config_for(&project).map_err(|error| match error {
+        NixonError::Config(ConfigError::Markdown(markdown)) => NixonError::Markdown(markdown),
+        NixonError::Config(other) => {
             let path = load::find_local_file(&project.path())
                 .unwrap_or_else(|| project.path().join("nixon.md"));
             NixonError::Config(ConfigError::ParseError(format!(
@@ -433,11 +434,9 @@ fn startup_launcher(config: &Config, env: &Environment) -> Result<LauncherConfig
                 path.display()
             )))
         }
+        other => other,
     })?;
-    Ok(local.map_or_else(
-        || config.launcher.clone(),
-        |local| config.launcher.clone().merge(local.launcher),
-    ))
+    Ok(config.launcher)
 }
 
 const MPRIS_PATH: &str = "/org/mpris/MediaPlayer2";

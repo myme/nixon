@@ -13,14 +13,14 @@ use eframe::egui;
 use nixon::app::{App, Environment};
 use nixon::command::Command;
 use nixon::config::Config;
-use nixon::config::launcher::{LauncherAction, MenuItem, MenuKey, MprisOperation};
+use nixon::config::launcher::{LauncherAction, LauncherConfig, MenuItem, MenuKey, MprisOperation};
 use nixon::fs::Dirs;
 use nixon::history::Entry;
 use nixon::process::{Captured, Invocation, ProcessRunner, RealRunner, Running};
 use nixon::project::{ProjectMarker, ProjectType};
 use nixon_gui::picker::{GuiPicker, PickerRequest};
-use nixon_picker::Selection;
 use nixon_picker::matcher::Case;
+use nixon_picker::{FilterPicker, Selection};
 
 use crate::gui_exec::read_payload;
 use crate::gui_process::GuiProcessRunner;
@@ -284,6 +284,21 @@ fn fixture(local: &str) -> (TempDir, Config, Dirs, Environment) {
         ..Environment::default()
     };
     (temp, config, dirs, env)
+}
+
+fn startup_launcher(
+    config: &Config,
+    dirs: &Dirs,
+    env: &Environment,
+) -> nixon::error::Result<LauncherConfig> {
+    let app = App::new(
+        config.clone(),
+        dirs.clone(),
+        env.clone(),
+        FilterPicker,
+        RealRunner,
+    );
+    super::startup_launcher(&app)
 }
 
 fn write_history(temp: &TempDir, entries: &[Entry]) {
@@ -2313,7 +2328,7 @@ fn startup_local_launcher_merges_fields_and_browser_search() {
     let (temp, mut config, dirs, env) = fixture(local);
     let terminal = executable(&temp, "global-terminal");
     config.launcher.terminal = Some(vec![terminal.to_string_lossy().into_owned(), "-e".into()]);
-    let launcher = super::startup_launcher(&config, &env).unwrap();
+    let launcher = startup_launcher(&config, &dirs, &env).unwrap();
     assert_eq!(launcher.items, config.launcher.items);
     assert_eq!(launcher.terminal, config.launcher.terminal);
     assert_eq!(
@@ -2356,7 +2371,7 @@ fn startup_local_terminal_does_not_leak_to_selected_project() {
     temp.child("project/nixon.md")
         .write_str(&local.replace("STARTUP_TERMINAL", &startup_terminal.to_string_lossy()))
         .unwrap();
-    let launcher = super::startup_launcher(&config, &env).unwrap();
+    let launcher = startup_launcher(&config, &dirs, &env).unwrap();
     assert!(
         launcher
             .items
@@ -2407,7 +2422,7 @@ fn missing_startup_local_file_uses_default_menu() {
     let (temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
     fs::remove_file(temp.child("project/nixon.md").path()).unwrap();
     assert_eq!(
-        super::startup_launcher(&config, &env).unwrap(),
+        startup_launcher(&config, &dirs, &env).unwrap(),
         config.launcher
     );
     let mut app = PreviewApp::new(config, dirs, env).unwrap();
@@ -2415,6 +2430,41 @@ fn missing_startup_local_file_uses_default_menu() {
     let shown = texts(&frame(&mut app, &ctx, Vec::new()));
     assert!(shown.iter().any(|text| text == "Commands"));
     assert!(shown.iter().any(|text| text == "Browser"));
+}
+
+#[test]
+fn startup_launcher_uses_current_project_root_not_nested_cwd() {
+    let root = "```yaml config\nlauncher:\n  search_url: https://root.example/?q={query}\n```\n";
+    let (temp, mut config, dirs, mut env) = fixture(root);
+    let marker = format!(
+        "{}-project-root",
+        temp.path().file_name().unwrap().to_string_lossy()
+    );
+    temp.child(format!("project/{marker}"))
+        .write_str("")
+        .unwrap();
+    config.project_types.push(ProjectType {
+        id: "test".to_owned(),
+        markers: vec![ProjectMarker::Path(PathBuf::from(marker))],
+        description: "Test".to_owned(),
+    });
+    let nested = temp.child("project/nested");
+    nested.create_dir_all().unwrap();
+    nested
+        .child("nixon.md")
+        .write_str(
+            "```yaml config\nlauncher:\n  search_url: https://nested.example/?q={query}\n```\n",
+        )
+        .unwrap();
+    env.cwd = nested.path().to_path_buf();
+
+    assert_eq!(
+        startup_launcher(&config, &dirs, &env)
+            .unwrap()
+            .search_url
+            .as_deref(),
+        Some("https://root.example/?q={query}")
+    );
 }
 
 #[test]

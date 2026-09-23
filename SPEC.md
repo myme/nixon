@@ -138,9 +138,10 @@ workflows.
 - [ ] **MUST:** Keep command/project discovery, config merging, resolution,
   evaluation, history, and process execution in `nixon`. GUI code sends typed
   actions into that domain layer; it does not parse markdown or build shell
-  command strings itself. History loading, candidate construction, and picker
-  orchestration now share `nixon::app::history`; GUI replay dispatch still
-  lives in `nixon-cli/src/gui/history.rs`.
+  command strings itself. GUI startup now takes its effective launcher config
+  from `App::config_for`. History loading, candidate construction, and picker
+  orchestration share `nixon::app::history`; GUI replay dispatch still lives in
+  `nixon-cli/src/gui/history.rs`.
 - [x] **MUST:** Reuse `Candidate`, `PickerOptions`, and `Selection` semantics.
   Add a domain-neutral UI field to those types only when necessary for both
   pickers. Keep GUI styling out of the domain crate.
