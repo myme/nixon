@@ -10,6 +10,7 @@ use nixon::config::launcher::{DEFAULT_SEARCH_URL, LauncherAction, LauncherConfig
 use nixon::config::{Config, ConfigError, load};
 use nixon::error::{NixonError, Result};
 use nixon::fs::Dirs;
+use nixon::history;
 use nixon::process::{Invocation, ProcessRunner, RealRunner};
 use nixon::project::Project;
 use nixon::project::detect::{find_in_project_or_default, inspect};
@@ -84,6 +85,7 @@ enum CommandOutcome {
 enum CommandRequest {
     PickCurrent,
     PickProject,
+    PickHistory,
     Quick {
         name: String,
         project: Option<String>,
@@ -161,6 +163,7 @@ impl PreviewApp {
                 let outcome = match request {
                     CommandRequest::PickCurrent => pick_current_command(&mut app),
                     CommandRequest::PickProject => pick_project_command(&mut app),
+                    CommandRequest::PickHistory => pick_history(&mut app),
                     CommandRequest::Quick { name, project } => {
                         launch_quick_command(&mut app, &name, project.as_deref())
                     }
@@ -352,10 +355,19 @@ impl PreviewApp {
                 }
             }
             LauncherAction::History => {
-                self.status = format!(
-                    "{} selected. Execution is not wired yet.",
-                    action_name(&action)
-                );
+                if !self.busy && !self.browser_busy && !self.media_busy {
+                    if self
+                        .command_requests
+                        .send(CommandRequest::PickHistory)
+                        .is_ok()
+                    {
+                        self.busy = true;
+                        "Loading history…".clone_into(&mut self.status);
+                    } else {
+                        "Command worker is unavailable.".clone_into(&mut self.status);
+                        tracing::error!("{}", self.status);
+                    }
+                }
             }
         }
     }
@@ -532,6 +544,55 @@ fn pick_current_command<R: ProcessRunner>(
 ) -> CommandOutcome {
     let project = app.current_project();
     pick_command_for_project(app, &project)
+}
+
+fn pick_history<R: ProcessRunner>(app: &mut App<GuiPicker, GuiProcessRunner<R>>) -> CommandOutcome {
+    let config = match app.config_for(&app.current_project()) {
+        Ok(config) => config,
+        Err(error) => return CommandOutcome::Error(format!("Could not load history: {error}")),
+    };
+    if !config.records_history() {
+        return CommandOutcome::Error(NixonError::HistoryDisabled.to_string());
+    }
+    let path = app.dirs.history_file();
+    let limit = Some(nixon::app::history::DEFAULT_LIMIT);
+    let entries = match history::read_checked(&path, limit) {
+        Ok(entries) => history::recent(entries, limit),
+        Err(error) => {
+            return CommandOutcome::Error(format!(
+                "Could not load history from {}: {error}",
+                path.display()
+            ));
+        }
+    };
+    if entries.is_empty() {
+        return CommandOutcome::Canceled;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs());
+    let candidates = select::history_candidates(&entries, &app.dirs.home, now);
+    let mut options = select::history_options(&config, None);
+    options.header = Some("History (Enter previews; F1 or Alt-Enter shows)".to_owned());
+    match app.picker.pick(&options, candidates) {
+        Ok(Selection::Selected { kind, mut items }) if items.len() == 1 => {
+            let line = items.remove(0).value;
+            let title = if matches!(kind, SelectionType::Show | SelectionType::Edit) {
+                "History command"
+            } else {
+                "History preview (replay unavailable)"
+            };
+            CommandOutcome::Detail {
+                title: title.to_owned(),
+                body: line,
+            }
+        }
+        Ok(Selection::Empty | Selection::Canceled) => CommandOutcome::Canceled,
+        Ok(Selection::Selected { .. }) => {
+            CommandOutcome::Error("Expected one history selection.".to_owned())
+        }
+        Err(error) => CommandOutcome::Error(format!("Could not select history: {error}")),
+    }
 }
 
 fn pick_project_command<R: ProcessRunner>(
@@ -736,17 +797,6 @@ impl eframe::App for PreviewApp {
     }
 }
 
-const fn action_name(action: &LauncherAction) -> &str {
-    match action {
-        LauncherAction::Commands => "Commands",
-        LauncherAction::Projects => "Projects",
-        LauncherAction::History => "History",
-        LauncherAction::BrowserInput => "Browser",
-        LauncherAction::Mpris { .. } => "Media control",
-        LauncherAction::Command { .. } => "Command",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
@@ -766,6 +816,7 @@ mod tests {
     use nixon::config::Config;
     use nixon::config::launcher::{LauncherAction, MenuItem, MenuKey, MprisOperation};
     use nixon::fs::Dirs;
+    use nixon::history::Entry;
     use nixon::process::{Captured, Invocation, ProcessRunner, RealRunner, Running};
     use nixon::project::{ProjectMarker, ProjectType};
     use nixon_gui::picker::{GuiPicker, PickerRequest};
@@ -1006,6 +1057,24 @@ printf '%s\\n' \"$1\"
             ..Environment::default()
         };
         (temp, config, dirs, env)
+    }
+
+    fn write_history(temp: &TempDir, entries: &[Entry]) {
+        let path = temp.child("state/nixon/history");
+        fs::create_dir_all(path.path().parent().unwrap()).unwrap();
+        fs::write(
+            path.path(),
+            entries.iter().map(Entry::line).collect::<String>(),
+        )
+        .unwrap();
+    }
+
+    fn history_entry(cwd: &str, words: &[&str]) -> Entry {
+        Entry {
+            at: 1_700_000_000,
+            cwd: cwd.to_owned(),
+            invocation: words.iter().map(|word| (*word).to_owned()).collect(),
+        }
     }
 
     fn add_quick_action(config: &mut Config, name: &str, project: Option<String>) {
@@ -1291,6 +1360,18 @@ printf '%s\\n' \"$1\"
                 "action did not close the window; visible text: {:?}",
                 texts(&output)
             );
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    fn wait_for_idle(app: &mut PreviewApp, ctx: &egui::Context) -> egui::FullOutput {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let _ = frame(app, ctx, Vec::new());
+            if !app.busy {
+                return frame(app, ctx, Vec::new());
+            }
+            assert!(Instant::now() < deadline, "command worker did not finish");
             thread::sleep(Duration::from_millis(1));
         }
     }
@@ -2086,6 +2167,149 @@ printf '%s\\n' \"$1\"
         let _ = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
         let output = wait_for_text(&mut app, &ctx, "Could not load commands:");
         assert!(texts(&output).iter().any(|text| text == "Projects"));
+    }
+
+    #[test]
+    fn history_picker_keeps_recent_order_duplicates_and_filters_query() {
+        let (temp, mut config, dirs, mut env) = fixture("```yaml config\nhistory: true\n```\n");
+        config.history = Some(false);
+        let cwd = temp.child("project").path().to_string_lossy().into_owned();
+        let other = temp.child("other").path().to_string_lossy().into_owned();
+        write_history(
+            &temp,
+            &[
+                history_entry(&cwd, &["run", "alpha"]),
+                history_entry(&cwd, &["run", "alpha"]),
+                history_entry(&other, &["run", "beta", "two words"]),
+                history_entry(&cwd, &["run", "alpha"]),
+            ],
+        );
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::H)]);
+        let output = wait_for_text(&mut app, &ctx, "History (Enter previews");
+        let rows: Vec<String> = texts(&output)
+            .into_iter()
+            .filter(|text| text.contains("nixon run "))
+            .collect();
+        assert_eq!(rows.len(), 3, "{rows:?}");
+        assert_eq!(rows[0], rows[2], "separate duplicate entries were lost");
+        assert!(rows[0].contains("~/project") && rows[0].contains("nixon run alpha"));
+        assert!(rows[1].contains("~/other") && rows[1].contains("nixon run beta"));
+        let _ = frame(&mut app, &ctx, vec![egui::Event::Text("beta".to_owned())]);
+        let output = wait_for_text(&mut app, &ctx, "1/3");
+        let filtered: Vec<String> = texts(&output)
+            .into_iter()
+            .filter(|text| text.contains("nixon run "))
+            .collect();
+        assert_eq!(filtered.len(), 1, "{filtered:?}");
+        assert!(filtered[0].contains("nixon run beta"));
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::F1)]);
+        let output = wait_for_text(&mut app, &ctx, "History command");
+        assert!(
+            texts(&output)
+                .iter()
+                .any(|text| text == "nixon run beta 'two words'")
+        );
+        let output = click_button(&mut app, &ctx, &output, "Copy");
+        assert_eq!(copied_text(&output), Some("nixon run beta 'two words'"));
+        click_button(&mut app, &ctx, &output, "Back");
+        wait_for_text(&mut app, &ctx, super::PREVIEW_STATUS);
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn history_enter_and_alt_enter_preview_without_replay() {
+        for alt in [false, true] {
+            let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            let cwd = temp.child("project").path().to_string_lossy().into_owned();
+            write_history(&temp, &[history_entry(&cwd, &["run", "alpha"])]);
+            env.exe = Some(temp.child("nixon").path().to_path_buf());
+            let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+            let ctx = egui::Context::default();
+            let _ = frame(&mut app, &ctx, vec![key(egui::Key::H)]);
+            wait_for_text(&mut app, &ctx, "History (Enter previews");
+            let event = if alt {
+                key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT)
+            } else {
+                key(egui::Key::Enter)
+            };
+            let _ = frame(&mut app, &ctx, vec![event]);
+            let output = wait_for_text(
+                &mut app,
+                &ctx,
+                if alt {
+                    "History command"
+                } else {
+                    "History preview"
+                },
+            );
+            assert!(texts(&output).iter().any(|text| text == "nixon run alpha"));
+            assert!(calls.lock().unwrap().is_empty());
+            assert_eq!(
+                fs::read_to_string(temp.child("state/nixon/history").path())
+                    .unwrap()
+                    .lines()
+                    .count(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn history_empty_and_cancel_return_to_menu() {
+        for scenario in ["empty", "cancel"] {
+            let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            if scenario == "cancel" {
+                let cwd = temp.child("project").path().to_string_lossy().into_owned();
+                write_history(&temp, &[history_entry(&cwd, &["run", "alpha"])]);
+            }
+            env.exe = Some(temp.child("nixon").path().to_path_buf());
+            let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+            let ctx = egui::Context::default();
+            let _ = frame(&mut app, &ctx, vec![key(egui::Key::H)]);
+            if scenario == "cancel" {
+                wait_for_text(&mut app, &ctx, "History (Enter previews");
+                let _ = frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
+            }
+            let output = wait_for_idle(&mut app, &ctx);
+            let shown = texts(&output);
+            assert!(shown.iter().any(|text| text == "History"), "{shown:?}");
+            assert!(shown.iter().any(|text| text == super::PREVIEW_STATUS));
+            assert!(calls.lock().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn history_disabled_in_local_config_is_visible() {
+        let (temp, config, dirs, mut env) = fixture("```yaml config\nhistory: false\n```\n");
+        let cwd = temp.child("project").path().to_string_lossy().into_owned();
+        write_history(&temp, &[history_entry(&cwd, &["run", "alpha"])]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::H)]);
+        let output = wait_for_text(&mut app, &ctx, "history is disabled in the configuration");
+        assert!(!closes(&output));
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn history_read_error_is_visible_in_gui() {
+        let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        temp.child("state/nixon/history").create_dir_all().unwrap();
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::H)]);
+        let output = wait_for_text(&mut app, &ctx, "Could not load history from");
+        assert!(
+            texts(&output)
+                .iter()
+                .any(|text| text.contains("state/nixon/history"))
+        );
+        assert!(calls.lock().unwrap().is_empty());
     }
 
     #[test]

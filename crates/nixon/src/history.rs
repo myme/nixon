@@ -112,18 +112,29 @@ const CHUNK: u64 = 64 * 1024;
 /// The last `limit` entries, oldest first, or all of them for `None`.
 ///
 /// Read from the end: a log grows for as long as nixon is used, and the
-/// picker only ever shows its tail. A log that cannot be read is an empty
-/// one — there is nothing to show, and nothing the user can act on.
-pub fn read(path: &Path, limit: Option<usize>) -> Vec<Entry> {
+/// picker only ever shows its tail. A missing file is empty; other read
+/// failures are returned so a GUI can show them.
+pub fn read_checked(path: &Path, limit: Option<usize>) -> std::io::Result<Vec<Entry>> {
     let Some(limit) = limit else {
         return std::fs::read_to_string(path)
-            .unwrap_or_default()
-            .lines()
-            .filter_map(parse)
-            .collect();
+            .map(|text| text.lines().filter_map(parse).collect())
+            .or_else(missing_is_empty);
     };
 
-    tail(path, limit).unwrap_or_default()
+    tail(path, limit).or_else(missing_is_empty)
+}
+
+fn missing_is_empty(error: std::io::Error) -> std::io::Result<Vec<Entry>> {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        Ok(Vec::new())
+    } else {
+        Err(error)
+    }
+}
+
+/// Reads history for the terminal CLI, which treats an unreadable log as empty.
+pub fn read(path: &Path, limit: Option<usize>) -> Vec<Entry> {
+    read_checked(path, limit).unwrap_or_default()
 }
 
 /// How many of `byte` are in `buffer`.
@@ -364,7 +375,7 @@ mod reading {
     use assert_fs::TempDir;
     use assert_fs::prelude::*;
 
-    use super::{Entry, ago, read, recent};
+    use super::{Entry, ago, read, read_checked, recent};
 
     fn entry(at: u64, invocation: &[&str]) -> Entry {
         Entry {
@@ -382,6 +393,20 @@ mod reading {
         path.write_str(&original.line()).unwrap();
 
         assert_eq!(read(path.path(), None), [original]);
+    }
+
+    #[test]
+    fn checked_read_distinguishes_missing_log_from_read_error() {
+        let temp = TempDir::new().unwrap();
+        assert!(
+            read_checked(temp.child("missing").path(), Some(10))
+                .unwrap()
+                .is_empty()
+        );
+        let directory = temp.child("history");
+        directory.create_dir_all().unwrap();
+        assert!(read_checked(directory.path(), Some(10)).is_err());
+        assert!(read(directory.path(), Some(10)).is_empty());
     }
 
     /// A directory may be named anything at all, including with the field

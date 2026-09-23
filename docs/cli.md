@@ -76,7 +76,12 @@ its local config, prompts, history, and terminal or detached execution. Esc at
 either pick returns to the menu. F1 on a project opens a read-only detail panel
 with Nixon's name, path, and type information. The panel has the same Copy and
 Back controls and does not launch a command. F1 in a quick action's project
-picker opens this panel too. History still shows a preview status.
+picker opens this panel too. History (default **H**) opens a searchable picker
+of recent entries, newest first, with the recorded directory beside each
+command. F1 and Alt-Enter show the recorded command line in a read-only panel
+with Copy and Back. Enter opens a replay preview; it does not execute the
+entry. Esc and an empty log return to the menu. Disabled history and log read
+errors remain visible and are reported on stderr.
 GUI mode currently accepts no subcommands; `nixon --mode gui run` and bare
 command names report an error. `--mode tui` and the default retain the terminal
 behavior.

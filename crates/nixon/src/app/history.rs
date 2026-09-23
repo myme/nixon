@@ -11,7 +11,7 @@ use crate::process::{ExitCode, ProcessRunner};
 use crate::select;
 
 /// How far back the picker looks when nothing says otherwise.
-const DEFAULT_LIMIT: usize = 1000;
+pub const DEFAULT_LIMIT: usize = 1000;
 
 /// What `history` was asked to do.
 #[derive(Clone, Debug, Default)]
