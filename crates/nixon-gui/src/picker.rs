@@ -47,7 +47,7 @@ pub struct PickRequest {
     pub options: PickerOptions,
     /// Rows offered for selection.
     pub candidates: Vec<Candidate>,
-    reply: Sender<Selection<Candidate>>,
+    pub(crate) reply: Sender<Selection<Candidate>>,
 }
 
 impl PickRequest {
@@ -67,7 +67,7 @@ pub struct PickOptionsRequest {
     pub options: PickerOptions,
     /// Rows offered for selection.
     pub candidates: Vec<Candidate>,
-    reply: Sender<PickOptionsReply>,
+    pub(crate) reply: Sender<PickOptionsReply>,
 }
 
 impl PickOptionsRequest {
@@ -91,7 +91,7 @@ pub struct PickOptionsReply {
 pub struct ConfirmRequest {
     /// Prompt and initial toggle state.
     pub options: PickerOptions,
-    reply: Sender<Option<Vec<bool>>>,
+    pub(crate) reply: Sender<Option<Vec<bool>>>,
 }
 
 impl ConfirmRequest {

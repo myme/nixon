@@ -6,12 +6,15 @@ use eframe::egui;
 use nixon::config::launcher::{LauncherAction, LauncherConfig, MenuItem, MenuKey};
 
 use crate::menu::{InputFocus, MenuInput, MenuOutcome, MenuState};
+use crate::picker::GuiPickerRequests;
+use crate::picker_view::PickerView;
 
 /// The menu view and its action output channel.
 pub struct MenuWindow {
     menu: MenuState,
     actions: Sender<LauncherAction>,
     focus_first_row: bool,
+    picker: Option<PickerView>,
 }
 
 impl MenuWindow {
@@ -22,7 +25,13 @@ impl MenuWindow {
             menu: MenuState::new(config)?,
             actions,
             focus_first_row: true,
+            picker: None,
         })
+    }
+
+    /// Attaches the UI side of a worker's picker bridge.
+    pub fn attach_picker(&mut self, requests: GuiPickerRequests) {
+        self.picker = Some(PickerView::new(requests));
     }
 
     /// The menu currently shown by the window.
@@ -33,6 +42,15 @@ impl MenuWindow {
 
     /// Handles one egui frame without running the selected action.
     pub fn show(&mut self, ctx: &egui::Context) {
+        if self.picker.as_mut().is_some_and(|picker| picker.show(ctx)) {
+            self.focus_first_row = true;
+            return;
+        }
+
+        self.show_menu(ctx);
+    }
+
+    fn show_menu(&mut self, ctx: &egui::Context) {
         let inputs = ctx.input(|input| {
             input
                 .events
@@ -244,13 +262,17 @@ fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
+    use std::thread;
+    use std::time::{Duration, Instant};
 
     use eframe::egui;
     use nixon::config::Config;
     use nixon::config::launcher::{LauncherAction, MprisOperation};
     use nixon::config::parse_block;
+    use nixon_picker::{Candidate, Picker, PickerOption, PickerOptions, Selection, SelectionType};
 
     use super::MenuWindow;
+    use crate::picker::GuiPicker;
 
     fn frame(
         ctx: &egui::Context,
@@ -278,6 +300,74 @@ mod tests {
             repeat: false,
             modifiers,
         }
+    }
+
+    fn release(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: false,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    fn candidates(values: &[&str]) -> Vec<Candidate> {
+        values
+            .iter()
+            .map(|value| Candidate::identity(*value))
+            .collect()
+    }
+
+    fn texts(output: &egui::FullOutput) -> Vec<String> {
+        output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(shape) => Some(shape.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn wait_for_text(
+        ctx: &egui::Context,
+        window: &mut MenuWindow,
+        expected: &str,
+    ) -> egui::FullOutput {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let output = frame(ctx, window, Vec::new());
+            if texts(&output).iter().any(|text| text.contains(expected)) {
+                return output;
+            }
+            assert!(Instant::now() < deadline, "did not render {expected}");
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    fn wait_for_reply<T>(
+        ctx: &egui::Context,
+        window: &mut MenuWindow,
+        receiver: &mpsc::Receiver<T>,
+    ) -> T {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if let Ok(reply) = receiver.try_recv() {
+                return reply;
+            }
+            assert!(Instant::now() < deadline, "picker reply timed out");
+            frame(ctx, window, Vec::new());
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    fn window_with_picker() -> (MenuWindow, GuiPicker) {
+        let (actions, _receiver) = mpsc::channel();
+        let mut window = MenuWindow::new(&Config::defaults().launcher, actions).unwrap();
+        let (picker, requests) = GuiPicker::channel();
+        window.attach_picker(requests);
+        (window, picker)
     }
 
     #[test]
@@ -426,5 +516,252 @@ mod tests {
         frame(&ctx, &mut window, vec![key(egui::Key::P, ctrl)]);
         assert!(receiver.try_recv().is_err());
         assert_eq!(window.menu().depth(), 0);
+    }
+
+    #[test]
+    fn gui_pick_filters_query_and_returns_to_menu() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let result = picker
+                .pick(
+                    &PickerOptions::default().header("Choose a command"),
+                    candidates(&["alpha", "beta", "delta"]),
+                )
+                .unwrap();
+            done.send(result).unwrap();
+        });
+        let ctx = egui::Context::default();
+        let output = wait_for_text(&ctx, &mut window, "alpha");
+        assert!(texts(&output).iter().any(|text| text.contains("3/3")));
+        frame(
+            &ctx,
+            &mut window,
+            vec![
+                key(egui::Key::D, egui::Modifiers::default()),
+                egui::Event::Text("d".to_owned()),
+                key(egui::Key::E, egui::Modifiers::default()),
+                egui::Event::Text("e".to_owned()),
+            ],
+        );
+        let output = wait_for_text(&ctx, &mut window, "delta");
+        assert!(texts(&output).iter().any(|text| text == "> de▏"));
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        let answer = wait_for_reply(&ctx, &mut window, &replies);
+        assert_eq!(answer.items()[0].value, "delta");
+        wait_for_text(&ctx, &mut window, "Nixon");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn gui_pick_preserves_edit_show_and_visit_bindings() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            for title in ["Edit pick", "Show pick", "Visit pick"] {
+                let result = picker
+                    .pick(
+                        &PickerOptions::default().header(title),
+                        candidates(&["alpha", "beta"]),
+                    )
+                    .unwrap();
+                done.send(result).unwrap();
+            }
+        });
+        let ctx = egui::Context::default();
+        let alt = egui::Modifiers {
+            alt: true,
+            ..egui::Modifiers::default()
+        };
+        for (title, event, expected) in [
+            ("Edit pick", key(egui::Key::Enter, alt), SelectionType::Edit),
+            (
+                "Show pick",
+                key(egui::Key::F1, egui::Modifiers::default()),
+                SelectionType::Show,
+            ),
+            (
+                "Visit pick",
+                key(egui::Key::F2, egui::Modifiers::default()),
+                SelectionType::Visit,
+            ),
+        ] {
+            wait_for_text(&ctx, &mut window, title);
+            frame(&ctx, &mut window, vec![event]);
+            let answer = wait_for_reply(&ctx, &mut window, &replies);
+            assert!(matches!(answer, Selection::Selected { kind, .. } if kind == expected));
+        }
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn clicking_a_picker_row_selects_it() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let selection = picker
+                .pick(&PickerOptions::default(), candidates(&["alpha", "beta"]))
+                .unwrap();
+            done.send(selection).unwrap();
+        });
+        let ctx = egui::Context::default();
+        let output = wait_for_text(&ctx, &mut window, "alpha");
+        let position = output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(shape) if shape.galley.text() == "alpha" => {
+                    Some(shape.pos + egui::vec2(5.0, 5.0))
+                }
+                _ => None,
+            })
+            .unwrap();
+        frame(
+            &ctx,
+            &mut window,
+            vec![
+                egui::Event::PointerMoved(position),
+                egui::Event::PointerButton {
+                    pos: position,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::default(),
+                },
+            ],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![egui::Event::PointerButton {
+                pos: position,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::default(),
+            }],
+        );
+        let selection = wait_for_reply(&ctx, &mut window, &replies);
+        assert_eq!(selection.items()[0].value, "alpha");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn gui_pick_marks_multiple_rows_and_returns_option_changes() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let options = PickerOptions::default()
+                .header("Multi pick")
+                .multi(true)
+                .options(vec![PickerOption::new("--force", false)]);
+            let result = picker
+                .pick_options(&options, candidates(&["alpha", "beta"]))
+                .unwrap();
+            done.send(result).unwrap();
+        });
+        let ctx = egui::Context::default();
+        wait_for_text(&ctx, &mut window, "Multi pick");
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![release(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(
+                egui::Key::Num1,
+                egui::Modifiers {
+                    alt: true,
+                    ..egui::Modifiers::default()
+                },
+            )],
+        );
+        let output = wait_for_text(&ctx, &mut window, "[x] --force");
+        assert!(
+            texts(&output).iter().any(|text| text.contains("(2)")),
+            "{:?}",
+            texts(&output)
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        let (selection, toggles) = wait_for_reply(&ctx, &mut window, &replies);
+        assert_eq!(
+            selection
+                .items()
+                .iter()
+                .map(|item| item.value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["alpha", "beta"]
+        );
+        assert_eq!(toggles, [true]);
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn gui_confirm_and_second_request_use_the_same_window() {
+        let (mut window, mut picker) = window_with_picker();
+        let (confirm_done, confirm_replies) = mpsc::channel();
+        let (pick_done, pick_replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let first = picker
+                .confirm(
+                    &PickerOptions::default()
+                        .header("Confirm flags")
+                        .options(vec![PickerOption::new("--force", false)]),
+                )
+                .unwrap();
+            confirm_done.send(first).unwrap();
+            let second = picker
+                .pick(
+                    &PickerOptions::default().header("Second pick"),
+                    candidates(&["one", "two"]),
+                )
+                .unwrap();
+            pick_done.send(second).unwrap();
+        });
+        let ctx = egui::Context::default();
+        wait_for_text(&ctx, &mut window, "Confirm flags");
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Space, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        assert_eq!(
+            wait_for_reply(&ctx, &mut window, &confirm_replies),
+            Some(vec![true])
+        );
+        wait_for_text(&ctx, &mut window, "Second pick");
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Escape, egui::Modifiers::default())],
+        );
+        assert_eq!(
+            wait_for_reply(&ctx, &mut window, &pick_replies),
+            Selection::Canceled
+        );
+        worker.join().unwrap();
     }
 }

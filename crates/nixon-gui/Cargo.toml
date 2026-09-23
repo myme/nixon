@@ -9,6 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+crossterm.workspace = true
 eframe.workspace = true
 nixon.workspace = true
 nixon-picker.workspace = true

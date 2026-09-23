@@ -4,4 +4,5 @@
 
 pub mod menu;
 pub mod picker;
+mod picker_view;
 pub mod window;
