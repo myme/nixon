@@ -98,7 +98,7 @@ Q/Escape/Ctrl-C closes. It creates an always-on-top X11 dialog window.
 view, key, or action. The spec follows the executable code.
 
 - [ ] **MUST:** Preserve the few-key menu interaction and visible key labels.
-- [ ] **MUST:** Preserve Spotify play/pause, previous, and next on a Linux
+- [x] **MUST:** Preserve Spotify play/pause, previous, and next on a Linux
   desktop with the Spotify MPRIS service available. A missing service is a
   visible error and leaves the launcher usable.
 - [x] **MUST:** Preserve browser open/search: an `http://` or `https://` input
@@ -362,7 +362,7 @@ placeholder producer was cancelled.
   flow with `ScriptedPicker`/`FakeRunner` or the GUI bridge's equivalents.
   Verify the final invocation, cwd, environment, option arguments, and
   history record.
-- [ ] **MUST:** Test Spotify success/failure behind a media-control seam
+- [x] **MUST:** Test Spotify success/failure behind a media-control seam
   without reaching real D-Bus.
 - [x] **MUST:** Test browser URL/domain/search classification and a failed
   URL opener without reaching a real browser.

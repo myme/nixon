@@ -46,8 +46,12 @@ Browser (default **W**, then **O**) opens a focused input. Enter opens a full
 without spaces, or searches through `launcher.search_url`. Empty input does
 nothing; Esc returns to the menu. A successful opener closes the window, and
 an opener error remains visible in the window and is reported on stderr.
-Projects, History, media control, and custom command actions still show a
-preview status.
+Spotify (default **S**) uses Space for play/pause, **P** for previous, and
+**N** for next through the session MPRIS service on Linux. The configured
+`player` selects `org.mpris.MediaPlayer2.<player>`. A successful call closes
+the window; an unavailable service or other D-Bus error stays visible in the
+window and is reported on stderr. Projects, History, and custom command
+actions still show a preview status.
 GUI mode currently accepts no subcommands; `nixon --mode gui run` and bare
 command names report an error. `--mode tui` and the default retain the terminal
 behavior.

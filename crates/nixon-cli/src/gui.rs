@@ -7,7 +7,7 @@ use eframe::egui;
 use nixon::app::{App, Environment};
 use nixon::command::Command;
 use nixon::config::Config;
-use nixon::config::launcher::{DEFAULT_SEARCH_URL, LauncherAction};
+use nixon::config::launcher::{DEFAULT_SEARCH_URL, LauncherAction, MprisOperation};
 use nixon::error::{NixonError, Result};
 use nixon::fs::Dirs;
 use nixon::process::{Invocation, ProcessRunner, RealRunner};
@@ -46,12 +46,19 @@ struct PreviewApp {
     browser_requests: Sender<String>,
     browser_results: Receiver<BrowserResult>,
     _browser_worker: JoinHandle<()>,
+    media_requests: Sender<MediaRequest>,
+    media_results: Receiver<MediaResult>,
+    _media_worker: JoinHandle<()>,
     busy: bool,
     browser_busy: bool,
+    media_busy: bool,
     status: String,
 }
 
 type BrowserResult = std::result::Result<bool, String>;
+type MediaRequest = (MprisOperation, String);
+type MediaResult = std::result::Result<(), String>;
+type MediaWorker = (Sender<MediaRequest>, Receiver<MediaResult>, JoinHandle<()>);
 const PREVIEW_STATUS: &str = "GUI preview: choose an action.";
 
 enum CommandOutcome {
@@ -63,14 +70,25 @@ enum CommandOutcome {
 
 impl PreviewApp {
     fn new(config: Config, dirs: Dirs, env: Environment) -> Result<Self> {
-        Self::with_browser_runner(config, dirs, env, RealRunner)
+        Self::with_workers(config, dirs, env, RealRunner, SessionMediaTransport)
     }
 
+    #[cfg(test)]
     fn with_browser_runner<R: ProcessRunner + Send + 'static>(
         config: Config,
         dirs: Dirs,
         env: Environment,
         browser_runner: R,
+    ) -> Result<Self> {
+        Self::with_workers(config, dirs, env, browser_runner, SessionMediaTransport)
+    }
+
+    fn with_workers<R: ProcessRunner + Send + 'static, M: MediaTransport>(
+        config: Config,
+        dirs: Dirs,
+        env: Environment,
+        browser_runner: R,
+        media_transport: M,
     ) -> Result<Self> {
         let (sender, actions) = mpsc::channel();
         let mut menu = MenuWindow::new(&config.launcher, sender).ok_or_else(|| {
@@ -100,6 +118,7 @@ impl PreviewApp {
         });
         let (browser_requests, browser_results, browser_worker) =
             start_browser_worker(browser_runner, search_url);
+        let (media_requests, media_results, media_worker) = start_media_worker(media_transport);
         Ok(Self {
             menu,
             actions,
@@ -109,8 +128,12 @@ impl PreviewApp {
             browser_requests,
             browser_results,
             _browser_worker: browser_worker,
+            media_requests,
+            media_results,
+            _media_worker: media_worker,
             busy: false,
             browser_busy: false,
+            media_busy: false,
             status: PREVIEW_STATUS.to_owned(),
         })
     }
@@ -122,14 +145,28 @@ impl PreviewApp {
         self.menu.show(ctx);
         for action in self.actions.try_iter() {
             if action == LauncherAction::Commands {
-                if !self.busy && !self.browser_busy && self.command_requests.send(()).is_ok() {
+                if !self.busy
+                    && !self.browser_busy
+                    && !self.media_busy
+                    && self.command_requests.send(()).is_ok()
+                {
                     self.busy = true;
                     "Loading commands…".clone_into(&mut self.status);
                 }
             } else if action == LauncherAction::BrowserInput {
-                if !self.busy && !self.browser_busy {
+                if !self.busy && !self.browser_busy && !self.media_busy {
                     self.menu.open_browser_input();
                     "Enter a URL or search terms.".clone_into(&mut self.status);
+                }
+            } else if let LauncherAction::Mpris { operation, player } = action {
+                if !self.busy && !self.browser_busy && !self.media_busy {
+                    if self.media_requests.send((operation, player)).is_ok() {
+                        self.media_busy = true;
+                        "Controlling media…".clone_into(&mut self.status);
+                    } else {
+                        "Media controller is unavailable.".clone_into(&mut self.status);
+                        tracing::error!("{}", self.status);
+                    }
                 }
             } else {
                 self.status = format!(
@@ -182,10 +219,91 @@ impl PreviewApp {
             }
             ctx.request_repaint();
         }
-        if self.busy || self.browser_busy {
+        for result in self.media_results.try_iter() {
+            self.media_busy = false;
+            match result {
+                Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                Err(message) => {
+                    tracing::error!("{message}");
+                    self.status = message;
+                }
+            }
+            ctx.request_repaint();
+        }
+        if self.busy || self.browser_busy || self.media_busy {
             ctx.request_repaint_after(std::time::Duration::from_millis(30));
         }
     }
+}
+
+const MPRIS_PATH: &str = "/org/mpris/MediaPlayer2";
+const MPRIS_INTERFACE: &str = "org.mpris.MediaPlayer2.Player";
+
+trait MediaTransport: Send + 'static {
+    fn call(
+        &mut self,
+        destination: &str,
+        path: &str,
+        interface: &str,
+        method: &str,
+    ) -> std::result::Result<(), String>;
+}
+
+struct SessionMediaTransport;
+
+impl MediaTransport for SessionMediaTransport {
+    fn call(
+        &mut self,
+        destination: &str,
+        path: &str,
+        interface: &str,
+        method: &str,
+    ) -> std::result::Result<(), String> {
+        #[cfg(target_os = "linux")]
+        {
+            let connection =
+                zbus::blocking::Connection::session().map_err(|err| err.to_string())?;
+            connection
+                .call_method(Some(destination), path, Some(interface), method, &())
+                .map_err(|err| err.to_string())?;
+            Ok(())
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = (destination, path, interface, method);
+            Err("MPRIS media control is available only on Linux.".to_owned())
+        }
+    }
+}
+
+fn start_media_worker<M: MediaTransport>(mut transport: M) -> MediaWorker {
+    let (requests, input) = mpsc::channel::<MediaRequest>();
+    let (output, results) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        while let Ok((operation, player)) = input.recv() {
+            let result = control_media(&mut transport, operation, &player);
+            if output.send(result).is_err() {
+                break;
+            }
+        }
+    });
+    (requests, results, worker)
+}
+
+fn control_media<M: MediaTransport>(
+    transport: &mut M,
+    operation: MprisOperation,
+    player: &str,
+) -> std::result::Result<(), String> {
+    let destination = format!("org.mpris.MediaPlayer2.{player}");
+    let method = match operation {
+        MprisOperation::PlayPause => "PlayPause",
+        MprisOperation::Previous => "Previous",
+        MprisOperation::Next => "Next",
+    };
+    transport
+        .call(&destination, MPRIS_PATH, MPRIS_INTERFACE, method)
+        .map_err(|err| format!("Could not control {player}: {err}"))
 }
 
 fn start_browser_worker<R: ProcessRunner + Send + 'static>(
@@ -291,13 +409,55 @@ mod tests {
     use nixon::app::{App, Environment};
     use nixon::command::Command;
     use nixon::config::Config;
+    use nixon::config::launcher::{LauncherAction, MenuItem, MprisOperation};
     use nixon::fs::Dirs;
     use nixon::process::{Captured, Invocation, ProcessRunner, RealRunner, Running};
     use nixon_gui::picker::{GuiPicker, PickerRequest};
     use nixon_picker::Selection;
     use nixon_picker::matcher::Case;
 
-    use super::{CommandOutcome, PreviewApp, browser_opener, launch_browser, pick_current_command};
+    use super::{
+        CommandOutcome, MediaTransport, PreviewApp, browser_opener, launch_browser,
+        pick_current_command,
+    };
+
+    type MediaCall = (String, String, String, String);
+
+    struct FakeMediaTransport {
+        calls: Arc<Mutex<Vec<MediaCall>>>,
+        result: std::result::Result<(), String>,
+    }
+
+    impl MediaTransport for FakeMediaTransport {
+        fn call(
+            &mut self,
+            destination: &str,
+            path: &str,
+            interface: &str,
+            method: &str,
+        ) -> std::result::Result<(), String> {
+            self.calls.lock().unwrap().push((
+                destination.to_owned(),
+                path.to_owned(),
+                interface.to_owned(),
+                method.to_owned(),
+            ));
+            self.result.clone()
+        }
+    }
+
+    fn fake_media(
+        result: std::result::Result<(), String>,
+    ) -> (FakeMediaTransport, Arc<Mutex<Vec<MediaCall>>>) {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        (
+            FakeMediaTransport {
+                calls: Arc::clone(&calls),
+                result,
+            },
+            calls,
+        )
+    }
 
     struct BrowserRunner {
         calls: Arc<Mutex<Vec<Invocation>>>,
@@ -460,6 +620,96 @@ echo hidden
                 .iter()
                 .any(|command| matches!(command, egui::ViewportCommand::Close))
         })
+    }
+
+    fn wait_for_close(app: &mut PreviewApp, ctx: &egui::Context) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if closes(&frame(app, ctx, Vec::new())) {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "media action did not close the window"
+            );
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[test]
+    fn default_spotify_shortcuts_call_exact_mpris_methods_and_close() {
+        for (shortcut, method) in [
+            (egui::Key::Space, "PlayPause"),
+            (egui::Key::P, "Previous"),
+            (egui::Key::N, "Next"),
+        ] {
+            let (_temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
+            let (transport, calls) = fake_media(Ok(()));
+            let (browser, _) = browser_runner(Ok(0));
+            let mut app = PreviewApp::with_workers(config, dirs, env, browser, transport).unwrap();
+            let ctx = egui::Context::default();
+            let _ = frame(&mut app, &ctx, vec![key(egui::Key::S)]);
+            let output = frame(&mut app, &ctx, vec![key(shortcut)]);
+            if !closes(&output) {
+                wait_for_close(&mut app, &ctx);
+            }
+            assert_eq!(
+                *calls.lock().unwrap(),
+                [(
+                    "org.mpris.MediaPlayer2.spotify".to_owned(),
+                    "/org/mpris/MediaPlayer2".to_owned(),
+                    "org.mpris.MediaPlayer2.Player".to_owned(),
+                    method.to_owned(),
+                )]
+            );
+        }
+    }
+
+    #[test]
+    fn configured_player_failure_is_visible_and_keeps_menu_open() {
+        let (_temp, mut config, dirs, env) = fixture(LOCAL_COMMANDS);
+        let Some(items) = config.launcher.items.as_mut() else {
+            panic!("default launcher has no items");
+        };
+        let Some(MenuItem::Submenu { items, .. }) = items
+            .iter_mut()
+            .find(|item| matches!(item, MenuItem::Submenu { label, .. } if label == "Spotify"))
+        else {
+            panic!("default launcher has no Spotify menu");
+        };
+        let Some(MenuItem::Action {
+            action: LauncherAction::Mpris { player, operation },
+            ..
+        }) = items.first_mut()
+        else {
+            panic!("default launcher has no PlayPause action");
+        };
+        *player = "vlc".to_owned();
+        assert_eq!(*operation, MprisOperation::PlayPause);
+
+        let (transport, calls) = fake_media(Err("service unavailable".to_owned()));
+        let (browser, _) = browser_runner(Ok(0));
+        let mut app = PreviewApp::with_workers(config, dirs, env, browser, transport).unwrap();
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::S)]);
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Space)]);
+        assert!(!closes(&output));
+        let output = wait_for_text(&mut app, &ctx, "Could not control vlc: service unavailable");
+        assert!(!closes(&output));
+        assert!(texts(&output).iter().any(|text| text == "Play/Pause"));
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::N)]);
+        assert!(!closes(&output));
+        let output = wait_for_text(
+            &mut app,
+            &ctx,
+            "Could not control spotify: service unavailable",
+        );
+        assert!(!closes(&output));
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].0, "org.mpris.MediaPlayer2.vlc");
+        assert_eq!(calls[1].0, "org.mpris.MediaPlayer2.spotify");
+        assert_eq!(calls[1].3, "Next");
     }
 
     #[test]
