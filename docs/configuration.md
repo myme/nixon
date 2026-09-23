@@ -99,6 +99,28 @@ no whitespace gets `https://` prepended. Other input uses the search URL.
 On Linux, the opener is `xdg-open`; the Nix package and development shell
 include it.
 
+## GUI terminal launcher
+
+The foreground runner prepared for GUI command actions uses
+`launcher.terminal` as an argument vector. Put
+the terminal's execute flag in its own element, for example:
+
+```yaml
+launcher:
+  terminal: ["kitty", "-e"]
+```
+
+If the effective launcher config has no `terminal`, the runner parses
+`$TERMINAL` as arguments, preserving quotes. A bare `alacritty`, `kitty`,
+`foot`, `konsole`, `xterm`, `uxterm`, or `x-terminal-emulator` gets `-e`; a bare
+`gnome-terminal` gets `--`. If `$TERMINAL` contains more than the executable,
+include its execute flag yourself. An unknown bare terminal is rejected with
+that instruction. If neither setting is present on Linux, an available
+`x-terminal-emulator -e` is used. An unavailable configured terminal or an
+incomplete argument vector produces an error before the command is handed off.
+The runner passes the prepared command through a private one-use payload,
+without joining arguments into a shell command.
+
 ## Project types
 
 A project type gives a name commands can be scoped to, and the markers that

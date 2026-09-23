@@ -2635,6 +2635,7 @@ dependencies = [
  "nixon-picker",
  "predicates",
  "serde_json",
+ "shell-words",
  "tempfile",
  "tracing",
  "tracing-subscriber",

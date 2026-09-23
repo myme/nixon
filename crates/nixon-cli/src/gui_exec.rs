@@ -11,10 +11,6 @@ use nixon::process::{Invocation, ProcessRunner as _, RealRunner};
 ///
 /// The caller owns the path after this returns. A failed handoff must remove
 /// it; `read_payload` removes it as soon as the receiving process reads it.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the GUI terminal handoff will call this writer")
-)]
 pub fn write_payload(invocation: &Invocation) -> io::Result<PathBuf> {
     let mut file = tempfile::Builder::new()
         .prefix("nixon-gui-exec-")

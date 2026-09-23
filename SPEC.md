@@ -321,7 +321,7 @@ launcher:
 - [ ] **MUST:** Keep existing unknown top-level config keys tolerated.
   Validate every key *inside* `launcher` strictly, where typos could turn a
   keyboard action into a different action.
-- [ ] **MUST:** Document terminal launcher argv and its search order:
+- [x] **MUST:** Document terminal launcher argv and its search order:
   `launcher.terminal`, then `$TERMINAL` parsed as argv, then an available
   platform fallback. Report a missing launcher clearly.
 
