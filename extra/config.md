@@ -40,6 +40,25 @@ project_types:
     desc: Rust project,
   - name: project
     desc: Generic project
+
+# GUI root menu. Setting items replaces the inherited menu.
+launcher:
+  items:
+    - key: C
+      label: Commands
+      action: commands
+    - key: P
+      label: Projects
+      action: projects
+    - key: W
+      label: Browser
+      items:
+        - key: O
+          label: Open URL or search
+          action: browser_input
+    - key: E
+      label: Emacs
+      action: { command: emacs }
 ```
 
 ## Generic commands

@@ -255,15 +255,14 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
 
 ## 7. Configuration and defaults
 
-The new settings live in an existing `nixon.md` config block. The current
-preview uses defaults merged with the global file for the menu and browser
-search URL. The full launcher will also allow the current project's local
-file to override those settings. At window startup, launcher settings will
-merge field by field: local `terminal`
-and `search_url` replace global values when set, and local `items` replaces
-the whole global menu when set. Absent fields inherit. The menu stays fixed
-for that window; selecting another project applies its local config to that
-project's commands, not to the already open menu.
+The new settings live in an existing `nixon.md` config block. At window
+startup, the menu and browser search URL use built-in defaults, global config,
+and the current project's local file. Launcher settings merge field by field:
+local `terminal` and `search_url` replace inherited values when set, and
+local `items` replaces the whole inherited menu when set. Absent fields
+inherit. The menu stays fixed for that window; selecting another project
+applies its local config to that project's commands, without inheriting the
+startup project's launcher settings.
 
 Proposed shape (names are part of this draft's contract):
 
@@ -306,10 +305,10 @@ launcher:
 ```
 ````
 
-- [ ] **MUST:** The built-in root and the PoC actions work when there is no
+- [x] **MUST:** The built-in root and the PoC actions work when there is no
   global config file. A supplied `launcher.items` replaces the inherited menu
   tree, making it possible to omit Spotify or rearrange keys deliberately.
-- [ ] **MUST:** Test the right-biased, field-by-field launcher merge. An
+- [x] **MUST:** Test the right-biased, field-by-field launcher merge. An
   omitted local `items` keeps the global menu; an explicit empty `items` is
   rejected as an unusable root menu.
 - [ ] **MUST:** Parse menu items as typed variants. Each item has exactly one

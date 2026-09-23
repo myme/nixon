@@ -37,7 +37,9 @@ Global options come before the subcommand. Each on/off flag has a hidden
 be overridden either way.
 
 `nixon --mode gui` (or `nixon -m gui`) opens the configured graphical root
-menu. Commands opens a picker for commands in the current project, with local
+menu. Its hotkeys come from `launcher.items` in the global config and the
+current project's local file at startup; see [configuration](configuration.md#gui-menu-and-hotkeys).
+Commands opens a picker for commands in the current project, with local
 config and hidden-command rules applied. Enter resolves the selected command,
 including options and placeholders, then hands foreground execution to an
 external terminal. A command marked `&` keeps its detached behavior. A

@@ -32,6 +32,8 @@ line — each merged over the last:
 - `project_dirs`, `bin_dirs` and `project_types` concatenate.
 - Commands concatenate **right-first**, so a local command of the same name
   shadows a global one.
+- `launcher.terminal` and `launcher.search_url` replace inherited values when
+  supplied. `launcher.items` replaces the whole inherited menu tree.
 
 ## The config block
 
@@ -82,10 +84,40 @@ silently win.
 An undefined `$VAR` in `project_dirs` expands to the empty string, and a glob
 that matches nothing contributes nothing.
 
+## GUI menu and hotkeys
+
+The GUI builds its root menu from built-in defaults, the global config, and
+the current project's local `nixon.md` when the window opens. Set
+`launcher.items` in either file to replace the entire inherited menu. Each
+item has one `key`, a `label`, and either an `action` or nested `items`.
+Omitted launcher fields inherit their prior values. The menu stays fixed
+while the window is open; picking another project uses that project's local
+settings for its commands and terminal, without changing the menu.
+
+```yaml
+launcher:
+  items:
+    - key: C
+      label: Commands
+      action: commands
+    - key: T
+      label: Tools
+      items:
+        - key: E
+          label: Edit project
+          action: { command: edit }
+```
+
+Keys are ASCII letters or digits, or `Space`. Sibling keys must be unique.
+Actions include `commands`, `projects`, `history`, `browser_input`, a named
+`command` (optionally with `project`), and `mpris`. An empty menu or invalid
+launcher field is an error reported with its config file context before the
+window opens.
+
 ## GUI browser search
 
-The graphical menu's Browser action uses `launcher.search_url` from the global
-config file. The value must contain `{query}`; the typed search text replaces
+The graphical menu's Browser action uses the effective `launcher.search_url`
+at startup. The value must contain `{query}`; the typed search text replaces
 that placeholder after UTF-8 URL encoding. The default is
 `https://www.google.com/search?q={query}`.
 

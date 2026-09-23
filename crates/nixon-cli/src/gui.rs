@@ -6,13 +6,13 @@ use std::thread::{self, JoinHandle};
 use eframe::egui;
 use nixon::app::{App, Environment};
 use nixon::command::Command;
-use nixon::config::Config;
-use nixon::config::launcher::{DEFAULT_SEARCH_URL, LauncherAction, MprisOperation};
+use nixon::config::launcher::{DEFAULT_SEARCH_URL, LauncherAction, LauncherConfig, MprisOperation};
+use nixon::config::{Config, ConfigError, load};
 use nixon::error::{NixonError, Result};
 use nixon::fs::Dirs;
 use nixon::process::{Invocation, ProcessRunner, RealRunner};
 use nixon::project::Project;
-use nixon::project::detect::inspect;
+use nixon::project::detect::{find_in_project_or_default, inspect};
 use nixon::select;
 use nixon_gui::browser::target_url;
 use nixon_gui::picker::GuiPicker;
@@ -135,10 +135,12 @@ impl PreviewApp {
         env: Environment,
         browser_runner: R,
         media_transport: M,
-        command_runner: GuiProcessRunner<C>,
+        mut command_runner: GuiProcessRunner<C>,
     ) -> Result<Self> {
+        let launcher = startup_launcher(&config, &env)?;
+        command_runner.set_configured_terminal(launcher.terminal.clone());
         let (sender, actions) = mpsc::channel();
-        let mut menu = MenuWindow::new(&config.launcher, sender).ok_or_else(|| {
+        let mut menu = MenuWindow::new(&launcher, sender).ok_or_else(|| {
             NixonError::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "GUI launcher menu has no items",
@@ -146,8 +148,7 @@ impl PreviewApp {
         })?;
         let (picker, requests) = GuiPicker::channel();
         menu.attach_picker(requests);
-        let search_url = config
-            .launcher
+        let search_url = launcher
             .search_url
             .as_deref()
             .unwrap_or(DEFAULT_SEARCH_URL)
@@ -387,6 +388,25 @@ impl PreviewApp {
             }
         }
     }
+}
+
+fn startup_launcher(config: &Config, env: &Environment) -> Result<LauncherConfig> {
+    let project = find_in_project_or_default(&config.project_types, &env.cwd);
+    let local = load::find_local(&project.path()).map_err(|error| match error {
+        ConfigError::Markdown(markdown) => NixonError::Markdown(markdown),
+        other => {
+            let path = load::find_local_file(&project.path())
+                .unwrap_or_else(|| project.path().join("nixon.md"));
+            NixonError::Config(ConfigError::ParseError(format!(
+                "{}: {other}",
+                path.display()
+            )))
+        }
+    })?;
+    Ok(local.map_or_else(
+        || config.launcher.clone(),
+        |local| config.launcher.clone().merge(local.launcher),
+    ))
 }
 
 const MPRIS_PATH: &str = "/org/mpris/MediaPlayer2";
@@ -2057,12 +2077,166 @@ printf '%s\\n' \"$1\"
 
     #[test]
     fn discovery_error_is_visible_in_the_window() {
-        let (_temp, config, dirs, env) = fixture("# `broken`\n\nno source block\n");
+        let (temp, mut config, dirs, env) = fixture(LOCAL_COMMANDS);
+        let (first, _) = discovered_projects(&temp, &mut config);
+        fs::write(first.join("nixon.md"), "# `broken`\n\nno source block\n").unwrap();
         let mut app = PreviewApp::new(config, dirs, env).unwrap();
         let ctx = egui::Context::default();
-        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        open_projects(&mut app, &ctx);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
         let output = wait_for_text(&mut app, &ctx, "Could not load commands:");
-        assert!(texts(&output).iter().any(|text| text == "Commands"));
+        assert!(texts(&output).iter().any(|text| text == "Projects"));
+    }
+
+    #[test]
+    fn startup_local_items_replace_default_hotkeys_and_run_nested_command() {
+        let local = "```yaml config\nlauncher:\n  items:\n    - key: X\n      label: Pick commands\n      action: commands\n    - key: 'N'\n      label: Tools\n      items:\n        - key: J\n          label: Jump\n          action: { command: alpha }\n```\n\n# `alpha`\n\n```bash\ntouch selected-marker\n```\n";
+        let (temp, mut config, dirs, mut env) = fixture(local);
+        let terminal = executable(&temp, "terminal");
+        config.launcher.terminal = Some(vec![terminal.to_string_lossy().into_owned(), "-e".into()]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let output = frame(&mut app, &ctx, Vec::new());
+        let shown = texts(&output);
+        assert!(shown.iter().any(|text| text == "Pick commands"));
+        assert!(shown.iter().any(|text| text == "Tools"));
+        assert!(!shown.iter().any(|text| text == "Commands"));
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        assert!(texts(&output).iter().any(|text| text == "Pick commands"));
+        assert!(calls.lock().unwrap().is_empty());
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::C)]);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::X)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::X)]);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
+        wait_for_text(&mut app, &ctx, super::PREVIEW_STATUS);
+        assert!(!app.busy);
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Escape)]);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::N)]);
+        wait_for_text(&mut app, &ctx, "Jump");
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::N)]);
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::J)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].argv[0], terminal.to_string_lossy());
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(
+            payload.cwd,
+            Some(temp.child("project").path().to_path_buf())
+        );
+        assert!(payload.argv.iter().any(|arg| arg == "bash"));
+    }
+
+    #[test]
+    fn startup_local_launcher_merges_fields_and_browser_search() {
+        let local =
+            "```yaml config\nlauncher:\n  search_url: https://local.example/?q={query}\n```\n";
+        let (temp, mut config, dirs, env) = fixture(local);
+        let terminal = executable(&temp, "global-terminal");
+        config.launcher.terminal = Some(vec![terminal.to_string_lossy().into_owned(), "-e".into()]);
+        let launcher = super::startup_launcher(&config, &env).unwrap();
+        assert_eq!(launcher.items, config.launcher.items);
+        assert_eq!(launcher.terminal, config.launcher.terminal);
+        assert_eq!(
+            launcher.search_url.as_deref(),
+            Some("https://local.example/?q={query}")
+        );
+        let (runner, calls) = browser_runner(Ok(0));
+        let mut app = PreviewApp::with_browser_runner(config, dirs, env, runner).unwrap();
+        let ctx = egui::Context::default();
+        let shown = texts(&frame(&mut app, &ctx, Vec::new()));
+        assert!(shown.iter().any(|text| text == "Commands"));
+        open_browser_input(&mut app, &ctx);
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![egui::Event::Text("cat tea".to_owned())],
+        );
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        assert_eq!(
+            calls.lock().unwrap()[0].argv[1],
+            "https://local.example/?q=cat%20tea"
+        );
+    }
+
+    #[test]
+    fn startup_local_terminal_does_not_leak_to_selected_project() {
+        let local = "```yaml config\nlauncher:\n  terminal: [STARTUP_TERMINAL, '-e']\n  items:\n    - key: Q\n      label: Jump to work\n      action: { command: jump, project: work-one }\n```\n";
+        let (temp, mut config, dirs, mut env) = fixture(local);
+        let (first, _) = discovered_projects(&temp, &mut config);
+        temp.child("project/.git").create_dir_all().unwrap();
+        let global_terminal = executable(&temp, "global-terminal");
+        let startup_terminal = executable(&temp, "startup-terminal");
+        config.launcher.terminal = Some(vec![
+            global_terminal.to_string_lossy().into_owned(),
+            "-e".into(),
+        ]);
+        temp.child("project/nixon.md")
+            .write_str(&local.replace("STARTUP_TERMINAL", &startup_terminal.to_string_lossy()))
+            .unwrap();
+        let launcher = super::startup_launcher(&config, &env).unwrap();
+        assert!(
+            launcher.items.as_ref().unwrap().iter().any(
+                |item| matches!(item, MenuItem::Action { label, .. } if label == "Jump to work")
+            )
+        );
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Q)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].argv[0], global_terminal.to_string_lossy());
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(payload.cwd, Some(first));
+    }
+
+    #[test]
+    fn invalid_startup_local_launcher_reports_file_and_line_before_opening() {
+        let (temp, config, dirs, env) = fixture(
+            "```yaml config\nlauncher:\n  items:\n    - key: C\n      label: One\n      action: commands\n    - key: C\n      label: Two\n      action: projects\n```\n",
+        );
+        match PreviewApp::new(config, dirs, env) {
+            Err(nixon::error::NixonError::Markdown(error)) => {
+                assert_eq!(
+                    error.file,
+                    temp.child("project/nixon.md").path().to_string_lossy()
+                );
+                assert!(error.line.is_some());
+                assert!(
+                    error
+                        .message
+                        .contains("launcher.items: duplicate sibling key 'C'")
+                );
+            }
+            Err(other) => panic!("unexpected error: {other}"),
+            Ok(_) => panic!("invalid local launcher opened a window"),
+        }
+    }
+
+    #[test]
+    fn missing_startup_local_file_uses_default_menu() {
+        let (temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
+        fs::remove_file(temp.child("project/nixon.md").path()).unwrap();
+        assert_eq!(
+            super::startup_launcher(&config, &env).unwrap(),
+            config.launcher
+        );
+        let mut app = PreviewApp::new(config, dirs, env).unwrap();
+        let ctx = egui::Context::default();
+        let shown = texts(&frame(&mut app, &ctx, Vec::new()));
+        assert!(shown.iter().any(|text| text == "Commands"));
+        assert!(shown.iter().any(|text| text == "Browser"));
     }
 
     #[test]
