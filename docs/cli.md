@@ -39,6 +39,21 @@ be overridden either way.
 `nixon --mode gui` (or `nixon -m gui`) opens the configured graphical root
 menu. Its hotkeys come from `launcher.items` in the global config and the
 current project's local file at startup; see [configuration](configuration.md#gui-menu-and-hotkeys).
+Without a custom menu, the built-in keys are:
+
+| Root key | Opens | Next key |
+|---|---|---|
+| **C** | Commands in the current project | Choose from the picker. |
+| **P** | Projects | Choose a project, then a command. |
+| **H** | History | Choose a recorded invocation. |
+| **W** | Browser | **O** opens URL or search input. |
+| **S** | Spotify | **Space** toggles play/pause; **P** plays the previous track; **N** plays the next. |
+
+Keys in a menu work regardless of letter case. Backspace, Ctrl-H, or Esc goes
+up one menu level; at the root, any of them closes the window. Esc in a picker
+cancels that pick and returns to the menu. In browser input, Backspace edits
+the text and Esc returns to the Browser menu.
+
 On Linux, starting GUI mode without an X11 or Wayland display exits with a
 setup hint on stderr and writes nothing to stdout.
 Commands opens a picker for commands in the current project, with local

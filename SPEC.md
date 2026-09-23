@@ -173,12 +173,11 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
   same level are a config error with the menu path; keys in different menus
   may be reused. Matching is case-insensitive for letters, and the displayed
   key remains the configured spelling.
-- [ ] **MUST:** The default root uses **C** Commands, **P** Projects, **H**
+- [x] **MUST:** The default root uses **C** Commands, **P** Projects, **H**
   History, **W** Browser, and the PoC's **S** Spotify. The built-in key map
   is documented in the UI and user guide; a replacement menu may reassign
-  keys, and config conflicts are detected at load time. The defaults, UI, and
-  replacement validation are implemented, but the user guide does not list
-  the complete built-in root key map explicitly.
+  keys, and config conflicts are detected at load time. The root and nested
+  keys are listed in `docs/cli.md`.
 - [x] **MUST:** A configured quick action may run a named Nixon command in
   the current project or a named/discovered project. It uses the same local
   config, command options, placeholders, `direnv`/Nix wrapping, and history
