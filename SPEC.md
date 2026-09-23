@@ -26,9 +26,9 @@ Legend:
   decision.
 
 Unchecked requirements may be partially implemented; their notes identify the
-remaining gap. The Linux packaged GUI smoke check is wired into Nix but has
-not run to completion because pinned source fetches returned HTTP 404. Its
-script passed against the development binary under Xvfb on 2026-09-23.
+remaining gap. The Linux packaged GUI smoke check passed under Xvfb on
+2026-09-23. The full `nix flake check` remains blocked by two existing test
+literals rejected by its typos check; Wayland remains unverified.
 
 ---
 
@@ -353,8 +353,8 @@ launcher:
   not require `XDG_SESSION_TYPE` to be set; let the window toolkit choose its
   available backend. A missing display produces a clean diagnostic. Linux
   display absence is diagnosed before window creation, and the development
-  binary passed the Xvfb smoke script. Packaged X11 and Wayland startup remain
-  unverified.
+  binary and the packaged Linux binary passed the Xvfb smoke script. Wayland
+  startup remains unverified.
 - [x] **MUST:** Request a compact, keyboard-first, frontmost launcher window.
   Do not assume every window manager will honor positioning or always-on-top
   hints. Focus the first actionable control when the window opens.
@@ -365,8 +365,7 @@ launcher:
   from a terminal. stdout remains reserved for explicit machine-readable
   output, as in the CLI. The Xvfb smoke script triggers disabled History and
   checks the visible error, stderr, and empty stdout in one launched process;
-  it passed against the development binary on 2026-09-23. Packaged execution
-  remains subject to the separate smoke gate below.
+  it passed against the development and packaged Linux binaries on 2026-09-23.
 - [x] **DECISION:** Linux is the first packaged GUI target. The user confirmed
   that the GUI launches on macOS; GUI colors follow light and dark system
   themes and adapt to changes while open (headless theme tests). MPRIS control
@@ -407,15 +406,14 @@ placeholder producer was cancelled.
 - [ ] **MUST:** Smoke-test the packaged GUI under an available virtual
   display, including open, keyboard navigation, cancel, and a second nested
   pick. Run the established `nix flake check` gates for the CLI as well. A
-  Linux Nix check is wired to exercise the wrapped binary; the same script
-  passed against the development binary under Xvfb on 2026-09-23. Packaged
-  execution remains unverified because the pinned Nix build could not fetch
-  `mpc-1.3.1.tar.gz` (HTTP 404); the full flake check also stopped at the
-  pinned `bash53-001` patch fetch (HTTP 404). Neither is a GUI test failure.
+  Linux Nix check exercises the wrapped binary and passed under Xvfb on
+  2026-09-23, including the visible History error, stderr, and empty stdout.
+  The full `nix flake check` reached `checks.x86_64-linux.typos` and failed on
+  the existing test literals `bui` and `serch`; the combined gate remains open.
 - [ ] **SHOULD:** Exercise X11 and Wayland in packaging/CI where runners
   support them; manual verification is recorded for any session type CI
-  cannot provide. Development X11 passed under Xvfb; packaged X11 and Wayland
-  runs and a Wayland manual record remain outstanding.
+  cannot provide. Development and packaged X11 passed under Xvfb; a Wayland
+  run and manual record remain outstanding.
 
 ## 10. Implementation cuts
 
@@ -426,8 +424,7 @@ placeholder producer was cancelled.
    placeholder workflow end to end.
 4. Add mnemonic menus and the PoC's browser/MPRIS actions.
 5. Package `nixon --mode gui` for Linux, document keys/config, and run the
-   functional smoke tests. The Linux smoke gate is wired but has not completed
-   against the packaged binary; the full built-in key map needs a user-guide
-   listing.
+   functional smoke tests. The packaged Linux smoke gate passes, and the
+   built-in key map is listed in the user guide.
 
 No cut is complete if its user-facing path can only be used from a terminal.

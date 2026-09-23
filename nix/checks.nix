@@ -215,10 +215,15 @@ in
           pkgs.tesseract
           pkgs.ffmpeg
           pkgs.util-linux
+          pkgs.mesa
         ];
       }
       ''
         export TESSDATA_PREFIX=${englishTessdata}
+        export __EGL_VENDOR_LIBRARY_FILENAMES=${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json
+        export LIBGL_DRIVERS_PATH=${pkgs.mesa}/lib/dri
+        export __GLX_VENDOR_LIBRARY_NAME=mesa
+        export LD_LIBRARY_PATH=${pkgs.mesa}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
         bash ${./gui-smoke.sh} ${nixon}/bin/nixon
         touch $out
       '';
