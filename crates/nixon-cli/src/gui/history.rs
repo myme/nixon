@@ -1,7 +1,7 @@
 //! History selection and replay in the GUI worker.
 
 use nixon::app::history::{DEFAULT_LIMIT, HistoryReadMode};
-use nixon::app::project::NO_PROJECTS;
+use nixon::app::project::{NO_PROJECTS, ProjectDecision};
 use nixon::app::run::{NO_COMMANDS, RunDecision};
 use nixon::app::{App, RunOpts};
 use nixon::error::{NixonError, Result};
@@ -130,6 +130,14 @@ fn replay_named_command<R: ProcessRunner>(
         Err(NixonError::Canceled) => return CommandOutcome::Canceled,
         Err(error) => return replay_error(error),
     };
+    present_run_decision(app, project, decision)
+}
+
+fn present_run_decision<R: ProcessRunner>(
+    app: &mut App<GuiPicker, GuiProcessRunner<R>>,
+    project: &Project,
+    decision: RunDecision,
+) -> CommandOutcome {
     match decision {
         RunDecision::List(lines) => CommandOutcome::Detail {
             title: "Command list".to_owned(),
@@ -167,48 +175,36 @@ fn replay_project<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
     opts: &nixon::app::project::ProjectOpts,
 ) -> CommandOutcome {
-    if opts.list {
-        return match app.matching_project_paths(opts.project.as_deref()) {
-            Ok(lines) => CommandOutcome::Detail {
-                title: "Project list".to_owned(),
-                body: if lines.is_empty() {
-                    NO_PROJECTS.to_owned()
-                } else {
-                    lines.join("\n")
-                },
+    let decision = match app.prepare_project(opts) {
+        Ok(decision) => decision,
+        Err(NixonError::Canceled) => return CommandOutcome::Canceled,
+        Err(error) => return replay_error(error),
+    };
+    match decision {
+        ProjectDecision::List(lines) => CommandOutcome::Detail {
+            title: "Project list".to_owned(),
+            body: if lines.is_empty() {
+                NO_PROJECTS.to_owned()
+            } else {
+                lines.join("\n")
             },
-            Err(error) => replay_error(error),
-        };
-    }
-    if opts.run.list {
-        return unsupported_history_action();
-    }
-    let (kind, projects) =
-        match app.pick_projects(opts.project.as_deref(), opts.select || opts.inspect) {
-            Ok(selection) => selection,
-            Err(NixonError::Canceled) => return CommandOutcome::Canceled,
-            Err(error) => return replay_error(error),
-        };
-    if opts.select {
-        return CommandOutcome::Detail {
+        },
+        ProjectDecision::SelectedPaths(projects) => CommandOutcome::Detail {
             title: "Selected project paths".to_owned(),
             body: projects
                 .iter()
                 .map(|project| project.path().to_string_lossy().into_owned())
                 .collect::<Vec<_>>()
                 .join("\n"),
-        };
-    }
-    if opts.inspect || kind == SelectionType::Show {
-        return CommandOutcome::Detail {
+        },
+        ProjectDecision::Inspect(projects) => CommandOutcome::Detail {
             title: "Project inspection".to_owned(),
             body: inspect(&projects),
-        };
+        },
+        ProjectDecision::Command { project, decision } => {
+            present_run_decision(app, &project, *decision)
+        }
     }
-    let [project] = projects.as_slice() else {
-        return replay_error("Multiple projects selected.");
-    };
-    replay_named_command(app, project, &opts.run)
 }
 
 fn replay_error(error: impl std::fmt::Display) -> CommandOutcome {

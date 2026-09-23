@@ -1705,6 +1705,52 @@ fn history_project_list_replays_to_copyable_detail_without_launching() {
 }
 
 #[test]
+fn history_project_list_precedes_select_and_inspect() {
+    let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    write_history(
+        &temp,
+        &[history_entry(
+            &cwd,
+            &["project", "--list", "--select", "--inspect", "missing"],
+        )],
+    );
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+    choose_first_history_entry(&mut app, &ctx);
+    let output = wait_for_text(&mut app, &ctx, "Project list");
+    assert!(texts(&output).iter().any(|text| text == "No projects."));
+    assert_eq!(
+        copied_text(&copy_detail(&mut app, &ctx)),
+        Some("No projects.")
+    );
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn history_project_picker_show_uses_inspection_detail() {
+    let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let (first, _) = discovered_projects(&temp, &mut config);
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    write_history(&temp, &[history_entry(&cwd, &["project"])]);
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+    choose_first_history_entry(&mut app, &ctx);
+    wait_for_text(&mut app, &ctx, "Select project");
+    frame(&mut app, &ctx, vec![key(egui::Key::F1)]);
+    let output = wait_for_text(&mut app, &ctx, "Project inspection");
+    let expected = format!("Name: work-one\nPath: {}\nTypes: git\n", first.display());
+    assert_eq!(
+        copied_text(&copy_detail(&mut app, &ctx)),
+        Some(expected.as_str())
+    );
+    assert!(!closes(&output));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
 fn history_project_select_and_inspect_show_paths_and_details() {
     for inspect_project in [false, true] {
         let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);

@@ -636,6 +636,28 @@ fn project_list_with_no_matches_exits_successfully_without_stdout() {
 }
 
 #[test]
+fn project_list_and_select_keep_cli_output_precedence() {
+    let fixture = Fixture::new();
+    fixture
+        .nixon()
+        .args(["project", "--list", "--select", "--inspect", "missing"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr(contains("No projects."));
+
+    fixture
+        .nixon()
+        .args(["project", "--select", "--inspect", "."])
+        .assert()
+        .success()
+        .stdout(format!(
+            "{}\n",
+            fixture.temp.child("project").path().display()
+        ));
+}
+
+#[test]
 fn an_unknown_placeholder_command_is_a_clean_error() {
     let fixture = Fixture::with_config("# `uses ${nope}`\n\n```bash\necho \"$1\"\n```\n");
     fixture

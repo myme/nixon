@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection, SelectionType};
 
+use super::run::RunDecision;
 use super::{App, RunOpts};
 use crate::error::{NixonError, Result};
 use crate::output;
@@ -30,48 +31,95 @@ pub struct ProjectOpts {
     pub inspect: bool,
 }
 
+/// A project choice ready for a caller to present or execute.
+#[derive(Debug)]
+pub enum ProjectDecision {
+    /// Matching project paths, with the home directory shortened for display.
+    List(Vec<String>),
+    /// Paths chosen with `--select`, in picker order.
+    SelectedPaths(Vec<Project>),
+    /// Projects chosen with `--inspect` or the picker's Show action.
+    Inspect(Vec<Project>),
+    /// One project and its prepared command action.
+    Command {
+        /// Project whose local config applies to the command.
+        project: Project,
+        /// Command action selected within that project.
+        decision: Box<RunDecision>,
+    },
+}
+
 impl<P: Picker, R: ProcessRunner> App<P, R> {
     /// Selects a project and then a command in it.
     pub fn project(&mut self, opts: &ProjectOpts) -> Result<ExitCode> {
+        let decision = self.prepare_project(opts)?;
+        self.finish_project_decision(decision)
+    }
+
+    /// Chooses a project action without writing to stdout or running a command.
+    pub fn prepare_project(&mut self, opts: &ProjectOpts) -> Result<ProjectDecision> {
         if opts.list {
-            return self.list_projects(opts.project.as_deref());
+            return self
+                .matching_project_paths(opts.project.as_deref())
+                .map(ProjectDecision::List);
         }
 
         let multiple = opts.select || opts.inspect;
         let (kind, projects) = self.pick_projects(opts.project.as_deref(), multiple)?;
 
         if opts.select {
-            let paths: Vec<String> = projects
-                .iter()
-                .map(|project| project.path().to_string_lossy().into_owned())
-                .collect();
-            output::lines(&paths)?;
-            return Ok(0);
+            return Ok(ProjectDecision::SelectedPaths(projects));
         }
 
         if opts.inspect || kind == SelectionType::Show {
-            output::raw(&inspect(&projects))?;
-            return Ok(0);
+            return Ok(ProjectDecision::Inspect(projects));
         }
 
-        match projects.len() {
-            1 => self.find_and_handle_cmd(&projects[0], &opts.run),
-            _ => Err(NixonError::NothingSelected(
+        let [project] = projects.as_slice() else {
+            return Err(NixonError::NothingSelected(
                 "Multiple projects selected.".to_owned(),
-            )),
+            ));
+        };
+        let selection = self.choose_command(project, opts.run.command.as_deref())?;
+        let decision = self.prepare_selected_command(project, selection, &opts.run)?;
+        Ok(ProjectDecision::Command {
+            project: project.clone(),
+            decision: Box::new(decision),
+        })
+    }
+
+    fn finish_project_decision(&mut self, decision: ProjectDecision) -> Result<ExitCode> {
+        match decision {
+            ProjectDecision::List(lines) => {
+                if lines.is_empty() {
+                    tracing::error!("{NO_PROJECTS}");
+                } else {
+                    output::lines(&lines)?;
+                }
+                Ok(0)
+            }
+            ProjectDecision::SelectedPaths(projects) => {
+                let paths: Vec<String> = projects
+                    .iter()
+                    .map(|project| project.path().to_string_lossy().into_owned())
+                    .collect();
+                output::lines(&paths)?;
+                Ok(0)
+            }
+            ProjectDecision::Inspect(projects) => {
+                output::raw(&inspect(&projects))?;
+                Ok(0)
+            }
+            ProjectDecision::Command { project, decision } => {
+                self.finish_run_decision(&project, *decision)
+            }
         }
     }
 
     /// Prints matching project paths with `~` for `$HOME`.
     pub fn list_projects(&mut self, query: Option<&str>) -> Result<ExitCode> {
         let matched = self.matching_project_paths(query)?;
-
-        if matched.is_empty() {
-            tracing::error!("{NO_PROJECTS}");
-            return Ok(0);
-        }
-        output::lines(&matched)?;
-        Ok(0)
+        self.finish_project_decision(ProjectDecision::List(matched))
     }
 
     /// Returns the same plain project lines that `project --list` prints.

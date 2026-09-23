@@ -8,7 +8,7 @@ use assert_fs::TempDir;
 use assert_fs::prelude::*;
 use nixon::app::history::{HistoryOpts, HistoryReadMode};
 use nixon::app::new::NewOpts;
-use nixon::app::project::ProjectOpts;
+use nixon::app::project::{ProjectDecision, ProjectOpts};
 use nixon::app::run::RunDecision;
 use nixon::app::{App, Environment, RunOpts};
 use nixon::config::Config;
@@ -935,6 +935,122 @@ fn explicit_project_show_maps_the_candidate_to_its_detected_project() {
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].path(), path);
     assert_eq!(items[0].types[0].id, "marked");
+}
+
+#[test]
+fn project_decision_list_precedes_select_inspect_and_picker() {
+    let mut fixture = Fixture::new(VIM_FILE_MD);
+    fixture.sibling_project("project-two");
+    let mut app = fixture.app(
+        ScriptedPicker::new(vec![Selection::Canceled]),
+        FakeRunner::new(),
+    );
+    let decision = app
+        .prepare_project(&ProjectOpts {
+            project: Some("project".to_owned()),
+            list: true,
+            select: true,
+            inspect: true,
+            ..ProjectOpts::default()
+        })
+        .unwrap();
+    let ProjectDecision::List(lines) = decision else {
+        panic!("project --list should win");
+    };
+    assert_eq!(lines.len(), 2);
+    assert!(app.picker.calls.is_empty());
+    assert!(app.runner.calls.is_empty());
+}
+
+#[test]
+fn project_decision_preserves_multi_select_and_show_without_running() {
+    let mut fixture = Fixture::new(VIM_FILE_MD);
+    fixture.sibling_project("project-two");
+    let first = fixture.project_path();
+    let second = fixture.temp.child("project-two").to_path_buf();
+    let picker = ScriptedPicker::new(vec![Selection::selected(
+        SelectionType::Default,
+        vec![
+            Candidate::identity(first.to_string_lossy().into_owned()),
+            Candidate::identity(second.to_string_lossy().into_owned()),
+        ],
+    )]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+    let decision = app
+        .prepare_project(&ProjectOpts {
+            select: true,
+            inspect: true,
+            ..ProjectOpts::default()
+        })
+        .unwrap();
+    let ProjectDecision::SelectedPaths(projects) = decision else {
+        panic!("--select should win over --inspect");
+    };
+    assert_eq!(
+        projects
+            .iter()
+            .map(nixon::project::Project::path)
+            .collect::<Vec<_>>(),
+        [first.as_path(), second.as_path()]
+    );
+    assert!(app.picker.calls[0].0.multi);
+    assert!(app.runner.calls.is_empty());
+
+    let picker = ScriptedPicker::new(vec![Selection::selected(
+        SelectionType::Show,
+        vec![Candidate::identity(first.to_string_lossy().into_owned())],
+    )]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+    assert!(matches!(
+        app.prepare_project(&ProjectOpts::default()),
+        Ok(ProjectDecision::Inspect(projects)) if projects.len() == 1 && projects[0].path() == first
+    ));
+    assert!(app.runner.calls.is_empty());
+}
+
+#[test]
+fn project_decision_prepares_local_command_and_retains_arguments() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    let decision = app
+        .prepare_project(&ProjectOpts {
+            project: Some(fixture.project_path().to_string_lossy().into_owned()),
+            run: RunOpts {
+                command: Some("git-files".to_owned()),
+                args: vec!["two words".to_owned()],
+                ..RunOpts::default()
+            },
+            ..ProjectOpts::default()
+        })
+        .unwrap();
+    let ProjectDecision::Command { project, decision } = decision else {
+        panic!("expected project command");
+    };
+    assert_eq!(project.path(), fixture.project_path());
+    assert!(matches!(
+        *decision,
+        RunDecision::Run(command, args)
+            if command.name == "git-files"
+                && command.source.contains("git ls-files")
+                && args == ["two words"]
+    ));
+    assert!(app.picker.calls.is_empty());
+    assert!(app.runner.calls.is_empty());
+}
+
+#[test]
+fn project_decision_preserves_picker_cancellation() {
+    let mut fixture = Fixture::new(VIM_FILE_MD);
+    fixture.sibling_project("project-two");
+    let mut app = fixture.app(
+        ScriptedPicker::new(vec![Selection::Canceled]),
+        FakeRunner::new(),
+    );
+    assert!(matches!(
+        app.prepare_project(&ProjectOpts::default()),
+        Err(NixonError::Canceled)
+    ));
+    assert!(app.runner.calls.is_empty());
 }
 
 /// A path is already an answer: no discovery, no picker.
