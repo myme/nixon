@@ -3,7 +3,7 @@
 use std::sync::mpsc::Sender;
 
 use eframe::egui;
-use nixon::config::launcher::{LauncherAction, LauncherConfig, MenuItem, MenuKey};
+use nixon::config::launcher::{LauncherAction, LauncherConfig, MenuItem, MenuKey, MprisOperation};
 
 use crate::browser_view::{BrowserInputOutcome, BrowserInputView};
 use crate::detail_view::{DetailOutcome, DetailView};
@@ -291,21 +291,12 @@ fn menu_input(event: &egui::Event) -> Option<MenuInput> {
 }
 
 fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
-    let (key, label, description, submenu) = match item {
-        MenuItem::Submenu {
-            key,
-            label,
-            description,
-            ..
-        } => (key, label, description, true),
-        MenuItem::Action {
-            key,
-            label,
-            description,
-            ..
-        } => (key, label, description, false),
+    let (key, label, submenu) = match item {
+        MenuItem::Submenu { key, label, .. } => (key, label, true),
+        MenuItem::Action { key, label, .. } => (key, label, false),
     };
-    let height = if description.is_some() { 58.0 } else { 46.0 };
+    let description = menu_description(item);
+    let height = 58.0;
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), height),
         egui::Sense::click(),
@@ -337,27 +328,20 @@ fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
     );
 
     let text_x = badge.max.x + 12.0;
-    let label_y = if description.is_some() {
-        rect.center().y - 9.0
-    } else {
-        rect.center().y
-    };
     painter.text(
-        egui::pos2(text_x, label_y),
+        egui::pos2(text_x, rect.center().y - 9.0),
         egui::Align2::LEFT_CENTER,
         label,
         egui::FontId::proportional(16.0),
         egui::Color32::WHITE,
     );
-    if let Some(description) = description {
-        painter.text(
-            egui::pos2(text_x, rect.center().y + 12.0),
-            egui::Align2::LEFT_CENTER,
-            description,
-            egui::FontId::proportional(12.0),
-            egui::Color32::LIGHT_GRAY,
-        );
-    }
+    painter.text(
+        egui::pos2(text_x, rect.center().y + 12.0),
+        egui::Align2::LEFT_CENTER,
+        description,
+        egui::FontId::proportional(12.0),
+        egui::Color32::LIGHT_GRAY,
+    );
     if submenu {
         painter.text(
             egui::pos2(rect.max.x - 18.0, rect.center().y),
@@ -368,6 +352,60 @@ fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
         );
     }
     response
+}
+
+fn menu_description(item: &MenuItem) -> &str {
+    match item {
+        MenuItem::Action {
+            description: Some(description),
+            ..
+        }
+        | MenuItem::Submenu {
+            description: Some(description),
+            ..
+        } if !description.trim().is_empty() => description,
+        MenuItem::Action { action, .. } => match action {
+            LauncherAction::Commands => "Find and run a command",
+            LauncherAction::Projects => "Choose a project and its command",
+            LauncherAction::History => "Replay a recent command",
+            LauncherAction::BrowserInput => "Open a URL or search",
+            LauncherAction::Mpris { operation, .. } => match operation {
+                MprisOperation::PlayPause => "Play or pause playback",
+                MprisOperation::Previous => "Go to the previous track",
+                MprisOperation::Next => "Skip to the next track",
+            },
+            LauncherAction::Command { project: None, .. } => "Run in the current project",
+            LauncherAction::Command {
+                project: Some(_), ..
+            } => "Run in the configured project",
+        },
+        MenuItem::Submenu { items, .. }
+            if items.len() == 1
+                && matches!(
+                    items.first(),
+                    Some(MenuItem::Action {
+                        action: LauncherAction::BrowserInput,
+                        ..
+                    })
+                ) =>
+        {
+            "Open a URL or search"
+        }
+        MenuItem::Submenu { items, .. }
+            if items.iter().all(|item| {
+                matches!(
+                    item,
+                    MenuItem::Action {
+                        action: LauncherAction::Mpris { .. },
+                        ..
+                    }
+                )
+            }) =>
+        {
+            "Control media playback"
+        }
+        MenuItem::Submenu { .. } => "Open more actions",
+    }
 }
 
 #[cfg(test)]
@@ -586,28 +624,122 @@ mod tests {
     }
 
     #[test]
-    fn configured_rows_render_key_label_and_description_and_take_focus() {
+    fn default_root_and_nested_rows_render_keys_labels_and_descriptions() {
+        let (actions, _receiver) = mpsc::channel();
+        let mut window = MenuWindow::new(&Config::defaults().launcher, actions).unwrap();
+        let ctx = egui::Context::default();
+        let shown = texts(&frame(&ctx, &mut window, Vec::new()));
+        for expected in [
+            "C",
+            "Commands",
+            "Find and run a command",
+            "P",
+            "Projects",
+            "Choose a project and its command",
+            "H",
+            "History",
+            "Replay a recent command",
+            "W",
+            "Browser",
+            "Open a URL or search",
+            "S",
+            "Spotify",
+            "Control media playback",
+        ] {
+            assert!(
+                shown.iter().any(|text| text == expected),
+                "missing {expected}: {shown:?}"
+            );
+        }
+
+        let shown = texts(&frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::W, egui::Modifiers::default())],
+        ));
+        for expected in ["O", "Open URL or search", "Open a URL or search"] {
+            assert!(
+                shown.iter().any(|text| text == expected),
+                "missing {expected}: {shown:?}"
+            );
+        }
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Escape, egui::Modifiers::default())],
+        );
+        let shown = texts(&frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::S, egui::Modifiers::default())],
+        ));
+        for expected in [
+            "Space",
+            "Play/Pause",
+            "Play or pause playback",
+            "P",
+            "Previous",
+            "Go to the previous track",
+            "N",
+            "Next",
+            "Skip to the next track",
+        ] {
+            assert!(
+                shown.iter().any(|text| text == expected),
+                "missing {expected}: {shown:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn configured_rows_render_supplied_and_fallback_descriptions_and_take_focus() {
         let config = parse_block(
             "yaml",
-            "launcher:\n  items:\n    - key: a\n      label: Alpha\n      description: Open the alpha command\n      action: commands\n    - key: Space\n      label: Pause\n      action: history\n",
+            "launcher:\n  items:\n    - key: a\n      label: Alpha\n      description: '  Open the alpha command  '\n      action: commands\n    - key: Space\n      label: Recent\n      action: history\n    - key: 7\n      label: Blank hint\n      description: '   '\n      action: commands\n    - key: t\n      label: Tools\n      items:\n        - key: e\n          label: Edit project\n          action: { command: edit }\n        - key: p\n          label: Build project\n          action: { command: build, project: ../app }\n",
         )
         .unwrap();
         let (actions, _receiver) = mpsc::channel();
         let mut window = MenuWindow::new(&config.launcher, actions).unwrap();
         let ctx = egui::Context::default();
-        let output = frame(&ctx, &mut window, Vec::new());
-        let texts = output
-            .shapes
-            .iter()
-            .filter_map(|clipped| match &clipped.shape {
-                egui::Shape::Text(shape) => Some(shape.galley.text()),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        for expected in ["a", "Alpha", "Open the alpha command", "Space", "Pause"] {
-            assert!(texts.contains(&expected), "missing {expected}: {texts:?}");
+        let shown = texts(&frame(&ctx, &mut window, Vec::new()));
+        for expected in [
+            "a",
+            "Alpha",
+            "  Open the alpha command  ",
+            "Space",
+            "Recent",
+            "Replay a recent command",
+            "7",
+            "Blank hint",
+            "Find and run a command",
+            "t",
+            "Tools",
+            "Open more actions",
+        ] {
+            assert!(
+                shown.iter().any(|text| text == expected),
+                "missing {expected}: {shown:?}"
+            );
         }
         assert!(ctx.memory(|memory| memory.focused().is_some()));
+        let shown = texts(&frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::T, egui::Modifiers::default())],
+        ));
+        for expected in [
+            "e",
+            "Edit project",
+            "Run in the current project",
+            "p",
+            "Build project",
+            "Run in the configured project",
+        ] {
+            assert!(
+                shown.iter().any(|text| text == expected),
+                "missing {expected}: {shown:?}"
+            );
+        }
     }
 
     #[test]

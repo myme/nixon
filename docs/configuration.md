@@ -90,6 +90,8 @@ The GUI builds its root menu from built-in defaults, the global config, and
 the current project's local `nixon.md` when the window opens. Set
 `launcher.items` in either file to replace the entire inherited menu. Each
 item has one `key`, a `label`, and either an `action` or nested `items`.
+An optional nonblank `description` appears below the label exactly as written.
+When omitted or blank, the GUI shows a short hint based on the action or submenu.
 Omitted launcher fields inherit their prior values. The menu stays fixed
 while the window is open; picking another project uses that project's local
 settings for its commands and terminal, without changing the menu.

@@ -156,9 +156,12 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
 
 ## 4. Root menu and quick actions
 
-- [ ] **MUST:** A fresh window focuses the root menu. Every visible action
+- [x] **MUST:** A fresh window focuses the root menu. Every visible action
   shows its mnemonic, name, and short description. Pressing its key enters a
   submenu, starts a pick, or executes the action immediately, as configured.
+  Focus, action routing, and default/configured row rendering are covered by
+  GUI component tests. Missing or blank descriptions get GUI hints; supplied
+  nonblank descriptions render unchanged.
 - [ ] **MUST:** A mnemonic belongs to one menu level. Duplicate keys at the
   same level are a config error with the menu path; keys in different menus
   may be reused. Matching is case-insensitive for letters, and the displayed
