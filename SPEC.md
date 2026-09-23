@@ -48,7 +48,7 @@ resolution, evaluation, and history as the terminal CLI.
 - [x] **MUST:** Provide `nixon --mode gui` (also `nixon -m gui`) for a
   desktop shortcut or window manager binding. Starting it opens the root
   launcher window without needing a controlling terminal.
-- [ ] **MUST:** The root offers at least **Commands**, **Projects**,
+- [x] **MUST:** The root offers at least **Commands**, **Projects**,
   **History**, and configured quick actions. Commands use the current project;
   Projects first choose a project and then one of its commands. History uses
   Nixon's existing history store and replay semantics. The root and all three
@@ -75,8 +75,12 @@ resolution, evaluation, and history as the terminal CLI.
   searchable picker of recent entries; Enter parses and replays the selected
   Nixon invocation through the GUI worker, while F1 and Alt-Enter show its
   recorded line in the detail panel. Unsupported or malformed replay entries
-  stay visible as errors. GUI subcommands and bare command names are explicitly
-  rejected. History replay currently supports a subset of saved CLI actions.
+  stay visible as errors. Starting with `--mode gui` rejects subcommands and
+  bare command names. Within History, replay accepts saved bare names and
+  Nixon-written `run`, `project`, and `eval` entries, including empty eval
+  source. GUI tests cover saved flags, fuzzy picks, list details, and the
+  Nixon-written empty eval round trip. Other non-recordable CLI actions remain
+  unsupported.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
   old exit-code/argv protocol. The behavior to recover is GUI selection.
 
@@ -135,7 +139,7 @@ workflows.
 - [x] **MUST:** Use the existing `nixon-cli` binary for config/env loading,
   GUI startup, and error/exit reporting. It depends on `nixon-gui` and `nixon`;
   neither `nixon` nor `nixon-picker` depends on GUI types.
-- [ ] **MUST:** Keep command/project discovery, config merging, resolution,
+- [x] **MUST:** Keep command/project discovery, config merging, resolution,
   evaluation, history, and process execution in `nixon`. GUI code sends typed
   actions into that domain layer; it does not parse markdown or build shell
   command strings itself. GUI startup now takes its effective launcher config
@@ -144,8 +148,8 @@ workflows.
   its `RunDecision`. History loading, candidate construction, and picker
   orchestration share `nixon::app::history`; CLI and GUI replay share
   output-neutral `RunDecision` and `ProjectDecision` choices. CLI eval and GUI
-  replay share `App::prepare_eval` for project selection. History argument
-  parsing and eval replay presentation still live in `nixon-cli/src/gui/history.rs`.
+  replay share `App::prepare_eval` for project selection. Parsing recorded CLI
+  syntax and presenting GUI replay outcomes remain in `nixon-cli`.
 - [x] **MUST:** Reuse `Candidate`, `PickerOptions`, and `Selection` semantics.
   Add a domain-neutral UI field to those types only when necessary for both
   pickers. Keep GUI styling out of the domain crate.
