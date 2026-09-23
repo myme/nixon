@@ -68,7 +68,7 @@ struct PreviewApp {
     busy: bool,
     browser_busy: bool,
     media_busy: bool,
-    pending_edit: Option<(Project, Box<Command>)>,
+    pending_edit: Option<(Project, Box<Command>, Vec<String>)>,
     status: String,
 }
 
@@ -83,6 +83,7 @@ enum CommandOutcome {
     Edit {
         project: Project,
         command: Box<Command>,
+        args: Vec<String>,
     },
     Detail {
         title: String,
@@ -105,6 +106,7 @@ enum CommandRequest {
         project: Project,
         command: Box<Command>,
         source: String,
+        args: Vec<String>,
     },
 }
 
@@ -182,7 +184,8 @@ impl PreviewApp {
                         project,
                         command,
                         source,
-                    } => run_edited_command(&mut app, &project, *command, &source),
+                        args,
+                    } => run_edited_command(&mut app, &project, *command, &source, &args),
                 };
                 if worker_results.send(outcome).is_err() {
                     break;
@@ -249,13 +252,17 @@ impl PreviewApp {
             self.busy = false;
             match outcome {
                 CommandOutcome::Launched => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-                CommandOutcome::Edit { project, command } => {
+                CommandOutcome::Edit {
+                    project,
+                    command,
+                    args,
+                } => {
                     self.status = format!("Editing {}.", command.name);
                     self.menu.open_edit(
                         format!("Edit command: {}", command.name),
                         command.source.clone(),
                     );
-                    self.pending_edit = Some((project, command));
+                    self.pending_edit = Some((project, command, args));
                 }
                 CommandOutcome::Detail { title, body } => {
                     self.status = format!("Showing {title}.");
@@ -390,7 +397,7 @@ impl PreviewApp {
                 PREVIEW_STATUS.clone_into(&mut self.status);
             }
             EditEvent::Submitted(source) => {
-                if let Some((project, command)) = self.pending_edit.take() {
+                if let Some((project, command, args)) = self.pending_edit.take() {
                     let name = command.name.clone();
                     if self
                         .command_requests
@@ -398,6 +405,7 @@ impl PreviewApp {
                             project,
                             command,
                             source,
+                            args,
                         })
                         .is_ok()
                     {
@@ -657,6 +665,7 @@ fn pick_command_for_project<R: ProcessRunner>(
             CommandOutcome::Edit {
                 project: project.clone(),
                 command: Box::new(items.remove(0)),
+                args: Vec::new(),
             }
         }
         Ok(Selection::Empty) => CommandOutcome::Empty,
@@ -722,6 +731,7 @@ fn run_edited_command<R: ProcessRunner>(
     project: &Project,
     command: Command,
     source: &str,
+    args: &[String],
 ) -> CommandOutcome {
     let config = match app.config_for(project) {
         Ok(config) => config,
@@ -731,7 +741,7 @@ fn run_edited_command<R: ProcessRunner>(
     };
     app.runner.set_configured_terminal(config.launcher.terminal);
     let name = command.name.clone();
-    match app.run_edited_cmd(project, command, source, &[]) {
+    match app.run_edited_cmd(project, command, source, args) {
         Ok(_) => CommandOutcome::Launched,
         Err(NixonError::Canceled) => CommandOutcome::Canceled,
         Err(error) => CommandOutcome::Error(format!("Could not run edited {name}: {error}")),

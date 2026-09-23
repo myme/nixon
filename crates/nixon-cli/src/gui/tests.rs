@@ -1707,11 +1707,14 @@ fn history_data_replay_keeps_stdout_empty() {
         let local = format!("# `alpha`\n\n```bash\n{SENTINEL}\n```\n");
         let (temp, config, dirs, mut env) = fixture(&local);
         let cwd = temp.child("project").path().to_string_lossy().into_owned();
-        write_history(&temp, &[history_entry(&cwd, &["run", "--insert", "alpha"])]);
+        write_history(&temp, &[history_entry(&cwd, &["run", "--insert", "a"])]);
         env.exe = Some(temp.child("nixon").path().to_path_buf());
         let (mut app, _) = preview_with_fake_command(config, dirs, env);
         let ctx = egui::Context::default();
         choose_first_history_entry(&mut app, &ctx);
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
         let output = wait_for_text(&mut app, &ctx, "Command source: alpha");
         assert!(texts(&output).iter().any(|text| text.contains(SENTINEL)));
         return;
@@ -1824,13 +1827,221 @@ fn history_eval_replay_uses_explicit_project_and_quoted_source() {
 }
 
 #[test]
+fn history_bare_command_accepts_saved_globals_without_reapplying_them() {
+    let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let terminal = executable(&temp, "terminal");
+    config.launcher.terminal = Some(vec![terminal.to_string_lossy().into_owned(), "-e".into()]);
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    let missing_config = temp
+        .child("missing-config.md")
+        .path()
+        .to_string_lossy()
+        .into_owned();
+    let missing_path = temp
+        .child("missing-projects")
+        .path()
+        .to_string_lossy()
+        .into_owned();
+    let argument = "two quoted words";
+    write_history(
+        &temp,
+        &[history_entry(
+            &cwd,
+            &[
+                "--mode",
+                "gui",
+                "-C",
+                &missing_config,
+                "--no-exact",
+                "-i",
+                "-p",
+                &missing_path,
+                "-d",
+                "-n",
+                "-L",
+                "debug",
+                "alpha",
+                argument,
+            ],
+        )],
+    );
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+    replay_first_history_entry(&mut app, &ctx);
+    let calls = calls.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].argv[0], terminal.to_string_lossy());
+    let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+    assert_eq!(
+        payload.cwd,
+        Some(temp.child("project").path().to_path_buf())
+    );
+    assert_eq!(payload.argv[0], "bash");
+    assert!(payload.argv.iter().any(|arg| arg == argument));
+    assert!(
+        !payload
+            .argv
+            .iter()
+            .any(|arg| arg == "direnv" || arg == "nix-shell")
+    );
+}
+
+#[test]
+fn history_run_and_project_without_command_use_gui_picker() {
+    for form in ["run", "project"] {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let terminal = executable(&temp, "terminal");
+        config.launcher.terminal = Some(vec![terminal.to_string_lossy().into_owned(), "-e".into()]);
+        let cwd = temp.child("project").path().to_string_lossy().into_owned();
+        let words = if form == "project" {
+            vec!["project", cwd.as_str()]
+        } else {
+            vec!["run"]
+        };
+        write_history(&temp, &[history_entry(&cwd, &words)]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        choose_first_history_entry(&mut app, &ctx);
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let _ = frame(&mut app, &ctx, vec![egui::Event::Text("alpha".to_owned())]);
+        wait_for_text(&mut app, &ctx, "> alpha");
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1, "form={form}");
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(
+            payload.cwd,
+            Some(temp.child("project").path().to_path_buf())
+        );
+        assert_eq!(
+            fs::read_to_string(&payload.argv[1]).unwrap(),
+            "touch selected-marker\n"
+        );
+    }
+}
+
+#[test]
+fn history_fuzzy_run_and_project_use_gui_picker_and_cancel_stays_quiet() {
+    for project_form in [false, true] {
+        for cancel in [false, true] {
+            let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            let terminal = executable(&temp, "terminal");
+            config.launcher.terminal =
+                Some(vec![terminal.to_string_lossy().into_owned(), "-e".into()]);
+            let cwd = temp.child("project").path().to_string_lossy().into_owned();
+            let words = if project_form {
+                vec!["project", cwd.as_str(), "a"]
+            } else {
+                vec!["run", "a"]
+            };
+            write_history(&temp, &[history_entry(&cwd, &words)]);
+            env.exe = Some(temp.child("nixon").path().to_path_buf());
+            let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+            let ctx = egui::Context::default();
+            choose_first_history_entry(&mut app, &ctx);
+            let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+            let output = wait_for_text(&mut app, &ctx, "Select command");
+            assert!(texts(&output).iter().any(|text| text.contains("> a")));
+            let choice = if cancel {
+                egui::Key::Escape
+            } else {
+                egui::Key::Enter
+            };
+            let output = frame(&mut app, &ctx, vec![key(choice)]);
+            if cancel {
+                let output = wait_for_text(&mut app, &ctx, super::PREVIEW_STATUS);
+                assert!(!closes(&output));
+                assert!(calls.lock().unwrap().is_empty());
+            } else {
+                if !closes(&output) {
+                    wait_for_close(&mut app, &ctx);
+                }
+                let calls = calls.lock().unwrap().clone();
+                assert_eq!(calls.len(), 1);
+                let payload =
+                    read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+                assert_eq!(
+                    fs::read_to_string(&payload.argv[1]).unwrap(),
+                    "touch selected-marker\n"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn history_fuzzy_picker_show_opens_detail_without_running() {
+    let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    write_history(&temp, &[history_entry(&cwd, &["run", "a"])]);
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+    choose_first_history_entry(&mut app, &ctx);
+    let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+    wait_for_text(&mut app, &ctx, "Select command");
+    let _ = frame(&mut app, &ctx, vec![key(egui::Key::F1)]);
+    let output = wait_for_text(&mut app, &ctx, "Command: alpha");
+    assert!(
+        texts(&output)
+            .iter()
+            .any(|text| text == "touch selected-marker\n")
+    );
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn history_picker_edit_keeps_recorded_argument() {
+    let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let terminal = executable(&temp, "terminal");
+    config.launcher.terminal = Some(vec![terminal.to_string_lossy().into_owned(), "-e".into()]);
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    let argument = "a quoted value";
+    write_history(&temp, &[history_entry(&cwd, &["run", "a", argument])]);
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+    choose_first_history_entry(&mut app, &ctx);
+    let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+    wait_for_text(&mut app, &ctx, "Select command");
+    let _ = frame(
+        &mut app,
+        &ctx,
+        vec![key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT)],
+    );
+    let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+    wait_for_text(&mut app, &ctx, "Edit command: alpha");
+    replace_edit_text(&mut app, &ctx, "printf '%s' \"$1\"");
+    let output = frame(&mut app, &ctx, Vec::new());
+    let output = click_button(&mut app, &ctx, &output, "Submit");
+    if !closes(&output) {
+        wait_for_close(&mut app, &ctx);
+    }
+    let calls = calls.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+    assert!(payload.argv.iter().any(|arg| arg == argument));
+    assert_eq!(
+        fs::read_to_string(&payload.argv[1]).unwrap(),
+        "printf '%s' \"$1\"\n"
+    );
+}
+
+#[test]
 fn history_replay_rejects_recursive_malformed_and_nonexecution_entries() {
     for words in [
         vec!["history"],
+        vec!["--mode", "gui", "history"],
+        vec!["--mode", "invalid", "run", "alpha"],
         vec!["eval", "--not-a-real-flag"],
         vec!["run", "--list"],
         vec!["gc"],
-        vec!["alpha"],
         vec!["eval"],
         vec!["eval", "--file", "missing", "${unterminated"],
     ] {

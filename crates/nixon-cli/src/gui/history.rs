@@ -1,7 +1,6 @@
 //! History selection and replay in the GUI worker.
 
 use nixon::app::{App, RunOpts};
-use nixon::config::Config;
 use nixon::error::{NixonError, Result};
 use nixon::history;
 use nixon::process::ProcessRunner;
@@ -11,10 +10,12 @@ use nixon::select;
 use nixon_gui::picker::GuiPicker;
 use nixon_picker::{Picker, Selection, SelectionType};
 
-use crate::cli::{Commands, Mode};
+use crate::cli::Commands;
 use crate::gui_process::GuiProcessRunner;
 
-use super::{CommandOutcome, project_detail, run_selected_command_with_args};
+use super::{
+    CommandOutcome, project_detail, run_selected_command_with_args, visit_selected_command,
+};
 
 pub(super) fn pick_history<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
@@ -87,18 +88,16 @@ fn replay_history_line<R: ProcessRunner>(
         Ok(parsed) => parsed,
         Err(error) => return CommandOutcome::Error(format!("Could not replay history: {error}")),
     };
-    if parsed.global.mode != Mode::Tui
-        || parsed.global.config.is_some()
-        || parsed.global.to_config() != Config::default()
-    {
-        return CommandOutcome::Error(
-            "Could not replay history: global options are unsupported in GUI history.".to_owned(),
-        );
-    }
+    // As in the CLI's history rerun, parsed global flags do not rebuild the
+    // already-running application.
     match parsed.command {
         Some(Commands::Run(args)) => {
             let project = app.current_project();
             replay_named_command(app, &project, &crate::run_opts(args))
+        }
+        Some(Commands::External(args)) => {
+            let project = app.current_project();
+            replay_named_command(app, &project, &crate::external_opts(args))
         }
         Some(Commands::Project(args)) => replay_project(app, &crate::project_opts(args)),
         Some(Commands::Eval(args)) => {
@@ -133,25 +132,13 @@ fn replay_named_command<R: ProcessRunner>(
     if opts.list {
         return unsupported_history_action();
     }
-    if !opts.insert && !opts.select {
-        let Some(name) = opts.command.as_deref() else {
-            return replay_error("Recorded command has no name.");
-        };
-        let command = app.commands_for(project).and_then(|commands| {
-            App::<GuiPicker, GuiProcessRunner<R>>::find_named(&commands, name)
-        });
-        return match command {
-            Ok(command) => run_selected_command_with_args(app, project, &command, &opts.args),
-            Err(error) => replay_error(error),
-        };
-    }
     let selection = match app.choose_command(project, opts.command.as_deref()) {
         Ok(selection) => selection,
         Err(NixonError::Canceled) => return CommandOutcome::Canceled,
         Err(error) => return replay_error(error),
     };
-    let command = match selection {
-        Selection::Selected { mut items, .. } if items.len() == 1 => items.remove(0),
+    let (kind, command) = match selection {
+        Selection::Selected { kind, mut items } if items.len() == 1 => (kind, items.remove(0)),
         Selection::Canceled => return CommandOutcome::Canceled,
         Selection::Empty => return replay_error("No command selected."),
         Selection::Selected { .. } => return replay_error("Multiple commands selected."),
@@ -162,13 +149,30 @@ fn replay_named_command<R: ProcessRunner>(
             body: command.source,
         };
     }
-    match app.select_from(project, &command) {
-        Ok(values) => CommandOutcome::Detail {
-            title: format!("Selected values: {}", command.name),
-            body: values.join("\n"),
+    if opts.select {
+        return match app.select_from(project, &command) {
+            Ok(values) => CommandOutcome::Detail {
+                title: format!("Selected values: {}", command.name),
+                body: values.join("\n"),
+            },
+            Err(NixonError::Canceled) => CommandOutcome::Canceled,
+            Err(error) => replay_error(error),
+        };
+    }
+    match kind {
+        SelectionType::Default => {
+            run_selected_command_with_args(app, project, &command, &opts.args)
+        }
+        SelectionType::Show => CommandOutcome::Detail {
+            title: format!("Command: {}", command.name),
+            body: command.source,
         },
-        Err(NixonError::Canceled) => CommandOutcome::Canceled,
-        Err(error) => replay_error(error),
+        SelectionType::Edit => CommandOutcome::Edit {
+            project: project.clone(),
+            command: Box::new(command),
+            args: opts.args.clone(),
+        },
+        SelectionType::Visit => visit_selected_command(app, project, &command),
     }
 }
 

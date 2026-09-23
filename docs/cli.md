@@ -106,6 +106,10 @@ picker opens this panel too. History (default **H**) opens a searchable picker
 of recent entries, newest first, with the recorded directory beside each
 command. Enter replays a saved `run`, project command, or `eval` invocation
 through the GUI worker, using the selected project's config and terminal.
+Older entries with a bare command name, or a `run`/`project` entry without an
+exact command name, use the GUI command picker. As in terminal History, saved
+global flags are parsed but do not replace the launcher's active configuration
+or mode. Recursive History and malformed entries are rejected visibly.
 Saved `run --insert`, `run --select`, `project --insert`, `project --select`,
 and `project --inspect` actions show their source, selected values, paths, or
 inspection in the read-only panel with Copy and Back. Short flags work too.

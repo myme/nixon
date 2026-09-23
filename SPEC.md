@@ -51,8 +51,9 @@ resolution, evaluation, and history as the terminal CLI.
   **History**, and configured quick actions. Commands use the current project;
   Projects first choose a project and then one of its commands. History uses
   Nixon's existing history store and replay semantics. The root and all three
-  pickers work, but GUI replay rejects saved invocations with global options
-  and some valid CLI actions (`nixon-cli/src/gui/history.rs`).
+  pickers work. GUI replay accepts saved global flags with the CLI's existing
+  ignore-on-replay behavior, bare names, and no-name/fuzzy command picks;
+  list and other non-recordable CLI actions remain unsupported.
 - [x] **MUST:** The same GUI picker handles command selection, project
   selection, history, command options, and placeholder candidates. A command
   chosen through a mnemonic may still lead to a GUI placeholder pick.
