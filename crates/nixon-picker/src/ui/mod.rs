@@ -15,7 +15,7 @@ use nucleo_matcher::Matcher;
 
 use crate::candidate::Candidate;
 use crate::matcher::match_indices;
-use crate::options::{PickerOption, PickerOptions};
+use crate::options::{PickerAction, PickerOption, PickerOptions};
 use crate::selection::{Selection, SelectionType};
 use crate::textbuf::TextBuffer;
 use keymap::{Action, action_for};
@@ -153,6 +153,11 @@ impl App {
     /// The header shown above the query.
     pub fn header(&self) -> Option<&str> {
         self.options.header.as_deref()
+    }
+
+    /// Confirmation buttons supported by this pick.
+    pub fn actions(&self) -> Vec<PickerAction> {
+        self.options.actions()
     }
 
     /// Whether more than one row may be marked.

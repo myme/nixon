@@ -1,6 +1,6 @@
 //! How one pick is configured.
 
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::matcher::MatchOptions;
 use crate::selection::SelectionType;
@@ -34,6 +34,17 @@ impl PickerOption {
     }
 }
 
+/// One visible confirmation action and the key it sends to the picker.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PickerAction {
+    /// Button text.
+    pub label: String,
+    /// The existing keyboard binding for this action.
+    pub key: KeyEvent,
+    /// The selection type returned by that binding.
+    pub kind: SelectionType,
+}
+
 /// Everything that varies between picks.
 #[derive(Clone, Debug, Default)]
 pub struct PickerOptions {
@@ -47,6 +58,8 @@ pub struct PickerOptions {
     pub multi: bool,
     /// Extra keys that confirm with a particular [`SelectionType`].
     pub expect: Vec<(KeyEvent, SelectionType)>,
+    /// Labels for confirmation actions. Availability still comes from `expect`.
+    pub action_labels: Vec<(SelectionType, String)>,
     /// fzf's `-1`: a query matching exactly one row selects it without
     /// drawing anything.
     pub select_one: bool,
@@ -93,6 +106,48 @@ impl PickerOptions {
         self
     }
 
+    /// Names a confirmation action without changing its key or selection type.
+    #[must_use]
+    pub fn action_label(mut self, kind: SelectionType, label: impl Into<String>) -> Self {
+        self.action_labels.push((kind, label.into()));
+        self
+    }
+
+    /// Actions the GUI can offer as buttons, in keyboard binding order.
+    pub fn actions(&self) -> Vec<PickerAction> {
+        let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let mut actions = Vec::with_capacity(self.expect.len() + 1);
+        if !self
+            .expect
+            .iter()
+            .any(|(key, _)| key.code == enter.code && key.modifiers == enter.modifiers)
+        {
+            actions.push(self.action(enter, SelectionType::Default));
+        }
+        actions.extend(
+            self.expect
+                .iter()
+                .map(|(key, kind)| self.action(*key, *kind)),
+        );
+        actions
+    }
+
+    fn action(&self, key: KeyEvent, kind: SelectionType) -> PickerAction {
+        let fallback = match kind {
+            SelectionType::Default => "Select",
+            SelectionType::Edit => "Edit",
+            SelectionType::Show => "Show",
+            SelectionType::Visit => "Visit",
+        };
+        let label = self
+            .action_labels
+            .iter()
+            .rev()
+            .find(|(type_, _)| *type_ == kind)
+            .map_or_else(|| fallback.to_owned(), |(_, label)| label.clone());
+        PickerAction { label, key, kind }
+    }
+
     /// The toggles shown below the query.
     #[must_use]
     pub fn options(mut self, options: Vec<PickerOption>) -> Self {
@@ -112,5 +167,46 @@ impl PickerOptions {
     pub const fn select_exact(mut self, select_exact: bool) -> Self {
         self.select_exact = select_exact;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    use super::PickerOptions;
+    use crate::selection::SelectionType;
+
+    #[test]
+    fn actions_follow_expect_bindings_and_label_overrides() {
+        let options = PickerOptions::default()
+            .action_label(SelectionType::Default, "Replay")
+            .action_label(SelectionType::Show, "Inspect")
+            .expect(
+                KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE),
+                SelectionType::Show,
+            );
+        let actions = options.actions();
+        assert_eq!(actions.len(), 2);
+        assert_eq!(
+            (actions[0].label.as_str(), actions[0].kind),
+            ("Replay", SelectionType::Default)
+        );
+        assert_eq!(
+            (actions[1].label.as_str(), actions[1].kind),
+            ("Inspect", SelectionType::Show)
+        );
+        assert_eq!(actions[1].key.code, KeyCode::F(1));
+    }
+
+    #[test]
+    fn expect_can_override_the_default_enter_action() {
+        let options = PickerOptions::default().expect(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            SelectionType::Show,
+        );
+        let actions = options.actions();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].kind, SelectionType::Show);
     }
 }

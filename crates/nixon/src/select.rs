@@ -83,6 +83,7 @@ pub fn command_options(
     .no_sort();
 
     options.expect = expect_keys();
+    options.action_labels = vec![(SelectionType::Default, "Run".to_owned())];
     options
 }
 
@@ -128,6 +129,7 @@ pub fn history_options(config: &Config, query: Option<&str>) -> PickerOptions {
     // Newest first is the order; ranking would undo it.
     .no_sort();
     options.expect = vec![(key(KeyCode::F(1)), SelectionType::Show)];
+    options.action_labels = vec![(SelectionType::Default, "Replay".to_owned())];
     options
 }
 
@@ -161,6 +163,7 @@ pub fn project_options(config: &Config, query: Option<&str>, multi: bool) -> Pic
         matching: matcher_options(config),
         multi,
         expect: vec![(key(KeyCode::F(1)), SelectionType::Show)],
+        action_labels: vec![(SelectionType::Show, "Inspect".to_owned())],
         select_one: true,
         select_exact: false,
         options: Vec::new(),

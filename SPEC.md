@@ -206,9 +206,11 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
 - [ ] **MUST:** The GUI's `Picker` implementation returns `Empty`, `Canceled`,
   or `Selected` with the same meaning as the TUI. Escape/Ctrl-C cancels the
   active pick; it does not kill the whole launcher process.
-- [ ] **MUST:** Command picks support Default/Run, Edit, Show, and Visit.
+- [x] **MUST:** Command picks support Default/Run, Edit, Show, and Visit.
   Preserve Enter, Alt-Enter, F1, and F2 as keys and expose the actions visibly
-  so GUI users need not know the bindings.
+  so GUI users need not know the bindings. Picker buttons follow the active
+  action bindings: projects show Select/Inspect, history Replay/Show, and
+  placeholders Select, without offering unsupported actions.
 - [ ] **MUST:** Command options declared in headings can be toggled before
   execution and during placeholder picks. Return the final toggle state from
   `pick_options`/`confirm`; do not silently accept defaults as the trait's

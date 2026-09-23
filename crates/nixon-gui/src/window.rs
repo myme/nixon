@@ -382,6 +382,8 @@ mod tests {
     use nixon::config::Config;
     use nixon::config::launcher::{LauncherAction, MprisOperation};
     use nixon::config::parse_block;
+    use nixon::project::Project;
+    use nixon::select;
     use nixon_picker::{
         Candidate, CandidateStream, Picker, PickerOption, PickerOptions, Selection, SelectionType,
     };
@@ -524,6 +526,19 @@ mod tests {
         let (picker, requests) = GuiPicker::channel();
         window.attach_picker(requests);
         (window, picker)
+    }
+
+    fn action_pick_options() -> [PickerOptions; 4] {
+        let config = Config::defaults();
+        let project = Project::from_path(std::path::Path::new("/tmp/picker-project"), Vec::new());
+        [
+            select::command_options(&config, &project, "Commands", None).header("Command actions"),
+            select::project_options(&config, None, false).header("Project actions"),
+            select::history_options(&config, None).header("History actions"),
+            PickerOptions::default()
+                .header("Placeholder actions")
+                .options(vec![PickerOption::new("--force", false)]),
+        ]
     }
 
     #[test]
@@ -858,6 +873,119 @@ mod tests {
         let answer = wait_for_reply(&ctx, &mut window, &replies);
         assert_eq!(answer.items()[0].value, "delta");
         wait_for_text(&ctx, &mut window, "Nixon");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn picker_buttons_follow_action_options_and_mouse_clicks() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            for options in action_pick_options() {
+                let selection = picker
+                    .pick(&options, candidates(&["alpha", "beta"]))
+                    .unwrap();
+                done.send(selection).unwrap();
+            }
+        });
+        let ctx = egui::Context::default();
+        let cases: [(&str, &[&str], &str, SelectionType); 4] = [
+            (
+                "Command actions",
+                &["Run", "Edit", "Show", "Visit"],
+                "Visit",
+                SelectionType::Visit,
+            ),
+            (
+                "Project actions",
+                &["Select", "Inspect"],
+                "Inspect",
+                SelectionType::Show,
+            ),
+            (
+                "History actions",
+                &["Replay", "Show"],
+                "Replay",
+                SelectionType::Default,
+            ),
+            (
+                "Placeholder actions",
+                &["Select"],
+                "Select",
+                SelectionType::Default,
+            ),
+        ];
+        for (title, expected, clicked, kind) in cases {
+            let output = wait_for_text(&ctx, &mut window, title);
+            let shown = texts(&output);
+            for label in [
+                "Run", "Edit", "Show", "Visit", "Select", "Inspect", "Replay",
+            ] {
+                assert_eq!(
+                    shown.iter().any(|text| text == label),
+                    expected.contains(&label),
+                    "{title}: {shown:?}"
+                );
+            }
+            if title == "Placeholder actions" {
+                assert!(shown.iter().any(|text| text == "[ ] --force"));
+            }
+            click_button(&ctx, &mut window, &output, clicked);
+            let answer = wait_for_reply(&ctx, &mut window, &replies);
+            assert!(matches!(answer, Selection::Selected { kind: actual, .. } if actual == kind));
+        }
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn picker_actions_keep_contextual_keyboard_results() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            for options in action_pick_options() {
+                let selection = picker
+                    .pick(&options, candidates(&["alpha", "beta"]))
+                    .unwrap();
+                done.send(selection).unwrap();
+            }
+        });
+        let ctx = egui::Context::default();
+        let alt = egui::Modifiers {
+            alt: true,
+            ..egui::Modifiers::default()
+        };
+        for (title, pressed, modifiers, kind) in [
+            (
+                "Command actions",
+                egui::Key::Enter,
+                alt,
+                SelectionType::Edit,
+            ),
+            (
+                "Project actions",
+                egui::Key::F1,
+                egui::Modifiers::default(),
+                SelectionType::Show,
+            ),
+            (
+                "History actions",
+                egui::Key::F1,
+                egui::Modifiers::default(),
+                SelectionType::Show,
+            ),
+            (
+                "Placeholder actions",
+                egui::Key::Enter,
+                egui::Modifiers::default(),
+                SelectionType::Default,
+            ),
+        ] {
+            wait_for_text(&ctx, &mut window, title);
+            frame(&ctx, &mut window, vec![release(pressed, modifiers)]);
+            frame(&ctx, &mut window, vec![key(pressed, modifiers)]);
+            let answer = wait_for_reply(&ctx, &mut window, &replies);
+            assert!(matches!(answer, Selection::Selected { kind: actual, .. } if actual == kind));
+        }
         worker.join().unwrap();
     }
 

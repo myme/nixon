@@ -399,17 +399,12 @@ fn render_pick(
         }
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            for (label, code, modifiers) in [
-                ("Run", KeyCode::Enter, KeyModifiers::NONE),
-                ("Edit", KeyCode::Enter, KeyModifiers::ALT),
-                ("Show", KeyCode::F(1), KeyModifiers::NONE),
-                ("Visit", KeyCode::F(2), KeyModifiers::NONE),
-            ] {
-                let response = ui.button(label);
+            for action in app.actions() {
+                let response = ui.button(&action.label);
                 if response.clicked_by(egui::PointerButton::Primary)
                     && ui.input(|input| input.pointer.any_click())
                 {
-                    action_clicked = Some(KeyEvent::new(code, modifiers));
+                    action_clicked = Some(action.key);
                 }
             }
         });

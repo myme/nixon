@@ -60,6 +60,10 @@ The picker shows when production is pending or complete; query, marks, and
 options remain usable as rows arrive. Choosing a row, canceling, or closing the
 window stops an active producer. A producer failure stays visible in the GUI
 and is reported on stderr.
+Picker buttons match the current choice: commands show Run, Edit, Show, and
+Visit; projects show Select and Inspect; history shows Replay and Show; and
+placeholders show Select alongside any option toggles. The same keys still
+work for each action.
 Browser (default **W**, then **O**) opens a focused input. Enter opens a full
 `http://` or `https://` URL unchanged, adds `https://` to a dotted address
 without spaces, or searches through `launcher.search_url`. Empty input does
