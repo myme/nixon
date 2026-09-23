@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/nixon", "crates/nixon-cli", "crates/nixon-picker"]
+members = ["crates/nixon", "crates/nixon-cli", "crates/nixon-gui", "crates/nixon-picker"]
 resolver = "3"
 
 # crane reads the package name from here; without it every build warns

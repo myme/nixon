@@ -1254,6 +1254,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "nixon-gui"
+version = "0.2.0"
+dependencies = [
+ "nixon",
+]
+
+[[package]]
 name = "nixon-picker"
 version = "0.2.0"
 dependencies = [
