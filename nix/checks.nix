@@ -184,9 +184,12 @@ in
 
   # Shellcheck has no zsh or fish support; check the bash widget and GUI
   # smoke scripts without misreading the other widgets as bash.
-  shellcheck = runCheck "shellcheck" [
-    pkgs.shellcheck
-  ] "shellcheck --shell=bash extra/*.bash nix/gui-smoke.sh nix/wayland-smoke.sh";
+  shellcheck =
+    runCheck "shellcheck"
+      [
+        pkgs.shellcheck
+      ]
+      "shellcheck --shell=bash extra/*.bash nix/gui-smoke.sh nix/wayland-smoke.sh nix/wayland-keyboard-smoke.sh";
 
   typos = runCheck "typos" [ pkgs.typos ] "typos";
   statix = runCheck "statix" [ pkgs.statix ] "statix check .";
@@ -244,6 +247,30 @@ in
         export LIBGL_DRIVERS_PATH=${pkgs.mesa}/lib/dri
         export LD_LIBRARY_PATH=${pkgs.mesa}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
         timeout --kill-after=5s 45s bash ${./wayland-smoke.sh} ${nixon}/bin/nixon ${pkgs.weston}/bin/weston
+        touch $out
+      '';
+
+  # Forward X11 keys through nested Weston to exercise the Wayland GUI.
+  gui-wayland-keyboard-smoke =
+    pkgs.runCommand "nixon-check-gui-wayland-keyboard-smoke"
+      {
+        nativeBuildInputs = [
+          pkgs.xorg-server
+          pkgs.xdotool
+          pkgs.scrot
+          pkgs.tesseract
+          pkgs.ffmpeg
+          pkgs.weston
+          pkgs.ripgrep
+          pkgs.mesa
+        ];
+      }
+      ''
+        export TESSDATA_PREFIX=${englishTessdata}
+        export __EGL_VENDOR_LIBRARY_FILENAMES=${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json
+        export LIBGL_DRIVERS_PATH=${pkgs.mesa}/lib/dri
+        export LD_LIBRARY_PATH=${pkgs.mesa}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        timeout --kill-after=5s 90s bash ${./wayland-keyboard-smoke.sh} ${nixon}/bin/nixon ${pkgs.weston}/bin/weston
         touch $out
       '';
 }

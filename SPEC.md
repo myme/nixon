@@ -26,9 +26,10 @@ Legend:
   decision.
 
 Unchecked requirements may be partially implemented; their notes identify the
-remaining gap. The packaged GUI passed its Xvfb interaction smoke and headless
-Weston Wayland startup check; the full Linux `nix flake check` passed on
-2026-09-23. Wayland keyboard interaction remains unverified.
+remaining gap. The packaged GUI passed its Xvfb interaction smoke, headless
+Weston Wayland startup check, and nested Weston Wayland keyboard check; the
+full Linux `nix flake check` passed on 2026-09-23. A real Wayland desktop
+session remains unverified.
 
 ---
 
@@ -349,15 +350,16 @@ launcher:
 
 ## 8. Platform, window, and lifecycle
 
-- [ ] **MUST:** Support Linux X11 and Wayland sessions. Window creation must
+- [x] **MUST:** Support Linux X11 and Wayland sessions. Window creation must
   not require `XDG_SESSION_TYPE` to be set; let the window toolkit choose its
   available backend. A missing display produces a clean diagnostic. Linux
   display absence is diagnosed before window creation. The development and
   packaged binaries passed the Xvfb interaction smoke. A packaged Wayland
   check under pinned headless Weston verifies toplevel creation, configure,
-  rendered-buffer commit, and a live process with `DISPLAY` and
-  `XDG_SESSION_TYPE` unset. Wayland keyboard interaction and a user-driven
-  close remain unverified.
+  and rendered-buffer commit. A second check runs Weston nested in Xvfb and
+  verifies the packaged Wayland client opens Commands, returns with Escape,
+  and closes with Escape. `DISPLAY` and `XDG_SESSION_TYPE` are unset for the
+  client. A real Wayland desktop session remains unverified.
 - [x] **MUST:** Request a compact, keyboard-first, frontmost launcher window.
   Do not assume every window manager will honor positioning or always-on-top
   hints. Focus the first actionable control when the window opens.
@@ -411,13 +413,14 @@ placeholder producer was cancelled.
   pick. Run the established `nix flake check` gates for the CLI as well. A
   Linux Nix check exercises the wrapped binary and passed under Xvfb on
   2026-09-23, including the visible History error, stderr, and empty stdout.
-  The full Linux `nix flake check` passed on 2026-09-23, including a separate
-  packaged Wayland startup gate.
+  The full Linux `nix flake check` passed on 2026-09-23, including separate
+  packaged Wayland startup and keyboard gates.
 - [ ] **SHOULD:** Exercise X11 and Wayland in packaging/CI where runners
   support them; manual verification is recorded for any session type CI
   cannot provide. Development and packaged X11 passed under Xvfb. Packaged
-  Wayland startup passed under headless Weston; keyboard interaction and a
-  manual Wayland session record remain outstanding.
+  Wayland startup passed under headless Weston, and keyboard interaction
+  passed with Weston nested in Xvfb. A manual desktop Wayland session record
+  remains outstanding.
 
 ## 10. Implementation cuts
 
