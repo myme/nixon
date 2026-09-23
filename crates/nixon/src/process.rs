@@ -48,6 +48,12 @@ pub trait Running: Send {
     /// Waits for the child and returns its exit code.
     fn wait(&mut self) -> io::Result<ExitCode>;
 
+    /// Checks for an exit without waiting. Runners without this capability
+    /// treat a closed candidate channel as successful completion.
+    fn try_wait(&mut self) -> io::Result<Option<ExitCode>> {
+        Ok(Some(0))
+    }
+
     /// Kills the child, for when a selection is cancelled.
     fn kill(&mut self) -> io::Result<()>;
 }
@@ -197,6 +203,10 @@ impl Running for RunningChild {
             let _ = reader.join();
         }
         Ok(exit_code(status))
+    }
+
+    fn try_wait(&mut self) -> io::Result<Option<ExitCode>> {
+        self.child.try_wait().map(|status| status.map(exit_code))
     }
 
     /// Kills the whole process group, not just the child.
@@ -445,6 +455,18 @@ impl Running for StreamingFake {
         Ok(self.code)
     }
 
+    fn try_wait(&mut self) -> io::Result<Option<ExitCode>> {
+        if self
+            .feeder
+            .as_ref()
+            .is_some_and(std::thread::JoinHandle::is_finished)
+        {
+            self.wait().map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
     fn kill(&mut self) -> io::Result<()> {
         self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
         self.killed.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -468,7 +490,24 @@ pub fn invocation(argv: Vec<String>, cwd: Option<&Path>) -> Invocation {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{Captured, FakeRunner, Invocation, ProcessRunner, RealRunner, RunKind};
+    use super::{Captured, FakeRunner, Invocation, ProcessRunner, RealRunner, RunKind, Running};
+
+    #[test]
+    fn running_without_exit_polling_completes_when_stream_closes() {
+        struct MinimalRunning;
+
+        impl Running for MinimalRunning {
+            fn wait(&mut self) -> std::io::Result<i32> {
+                Ok(0)
+            }
+
+            fn kill(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        assert_eq!(MinimalRunning.try_wait().unwrap(), Some(0));
+    }
 
     fn argv(items: &[&str]) -> Vec<String> {
         items.iter().map(|s| (*s).to_owned()).collect()

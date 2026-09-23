@@ -372,6 +372,8 @@ fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::thread;
     use std::time::{Duration, Instant};
@@ -380,7 +382,9 @@ mod tests {
     use nixon::config::Config;
     use nixon::config::launcher::{LauncherAction, MprisOperation};
     use nixon::config::parse_block;
-    use nixon_picker::{Candidate, Picker, PickerOption, PickerOptions, Selection, SelectionType};
+    use nixon_picker::{
+        Candidate, CandidateStream, Picker, PickerOption, PickerOptions, Selection, SelectionType,
+    };
 
     use super::{BrowserInputEvent, MenuWindow};
     use crate::picker::GuiPicker;
@@ -1063,5 +1067,247 @@ mod tests {
             Selection::Canceled
         );
         worker.join().unwrap();
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one streamed pick checks query, marks, options, and early selection together"
+    )]
+    fn streaming_picker_stays_interactive_as_candidates_arrive() {
+        let (mut window, mut picker) = window_with_picker();
+        let (producer, receiver) = mpsc::channel();
+        let stops = Arc::new(AtomicUsize::new(0));
+        let count = Arc::clone(&stops);
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let mut stream = CandidateStream::new(
+                receiver,
+                Box::new(move || {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }),
+            );
+            let options = PickerOptions::default()
+                .header("Streaming choices")
+                .multi(true)
+                .options(vec![PickerOption::new("--force", false)]);
+            done.send(picker.pick_stream_options(&options, &mut stream).unwrap())
+                .unwrap();
+        });
+        let ctx = egui::Context::default();
+        let output = wait_for_text(&ctx, &mut window, "Candidates arriving");
+        assert!(
+            texts(&output)
+                .iter()
+                .any(|text| text == "Streaming choices")
+        );
+        assert!(replies.try_recv().is_err());
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        assert!(
+            replies.try_recv().is_err(),
+            "Enter settled an empty active stream"
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![release(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        producer.send(Candidate::identity("alpha")).unwrap();
+        wait_for_text(&ctx, &mut window, "alpha");
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![release(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        frame(&ctx, &mut window, vec![egui::Event::Text("bet".to_owned())]);
+        wait_for_text(&ctx, &mut window, "> bet▏");
+        producer.send(Candidate::identity("beta")).unwrap();
+        let output = wait_for_text(&ctx, &mut window, "beta");
+        assert!(texts(&output).iter().any(|text| text.contains("(1)")));
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![release(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        producer.send(Candidate::identity("betamax")).unwrap();
+        let output = wait_for_text(&ctx, &mut window, "betamax");
+        assert!(texts(&output).iter().any(|text| text.contains("(2)")));
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(
+                egui::Key::Num1,
+                egui::Modifiers {
+                    alt: true,
+                    ..egui::Modifiers::default()
+                },
+            )],
+        );
+        wait_for_text(&ctx, &mut window, "[x] --force");
+        frame(
+            &ctx,
+            &mut window,
+            vec![release(egui::Key::Num1, egui::Modifiers::ALT)],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        let (selection, toggles) = wait_for_reply(&ctx, &mut window, &replies);
+        assert_eq!(
+            selection
+                .items()
+                .iter()
+                .map(|item| item.value.as_str())
+                .collect::<Vec<_>>(),
+            ["alpha", "beta"]
+        );
+        assert_eq!(toggles, [true]);
+        worker.join().unwrap();
+        assert_eq!(stops.load(Ordering::SeqCst), 1);
+        drop(producer);
+    }
+
+    #[test]
+    fn streaming_select_one_waits_for_finish_but_exact_value_can_settle_early() {
+        for exact in [false, true] {
+            let (mut window, mut picker) = window_with_picker();
+            let (producer, receiver) = mpsc::channel();
+            let mut producer = Some(producer);
+            let stops = Arc::new(AtomicUsize::new(0));
+            let count = Arc::clone(&stops);
+            let (done, replies) = mpsc::channel();
+            let worker = thread::spawn(move || {
+                let mut stream = CandidateStream::new(
+                    receiver,
+                    Box::new(move || {
+                        count.fetch_add(1, Ordering::SeqCst);
+                    }),
+                );
+                let options = PickerOptions::default()
+                    .header("Unique stream")
+                    .query("alpha")
+                    .select_one(true)
+                    .select_exact(exact);
+                done.send(picker.pick_stream_options(&options, &mut stream).unwrap().0)
+                    .unwrap();
+            });
+            let ctx = egui::Context::default();
+            wait_for_text(&ctx, &mut window, "Candidates arriving");
+            producer
+                .as_ref()
+                .unwrap()
+                .send(Candidate::identity("alpha"))
+                .unwrap();
+            wait_for_text(&ctx, &mut window, "alpha");
+            if !exact {
+                assert!(replies.try_recv().is_err(), "select_one settled before EOF");
+                drop(producer.take());
+            }
+            let selection = wait_for_reply(&ctx, &mut window, &replies);
+            assert_eq!(selection.items()[0].value, "alpha");
+            worker.join().unwrap();
+            if exact {
+                assert_eq!(stops.load(Ordering::SeqCst), 1);
+                drop(producer.take());
+            }
+        }
+    }
+
+    #[test]
+    fn streaming_escape_and_window_close_release_worker() {
+        for close in [false, true] {
+            let (mut window, mut picker) = window_with_picker();
+            let (_producer, receiver) = mpsc::channel();
+            let stops = Arc::new(AtomicUsize::new(0));
+            let count = Arc::clone(&stops);
+            let (done, replies) = mpsc::channel();
+            let worker = thread::spawn(move || {
+                let mut stream = CandidateStream::new(
+                    receiver,
+                    Box::new(move || {
+                        count.fetch_add(1, Ordering::SeqCst);
+                    }),
+                );
+                done.send(
+                    picker
+                        .pick_stream_options(&PickerOptions::default(), &mut stream)
+                        .unwrap()
+                        .0,
+                )
+                .unwrap();
+            });
+            let ctx = egui::Context::default();
+            wait_for_text(&ctx, &mut window, "Candidates arriving");
+            if close {
+                drop(window);
+                assert_eq!(
+                    replies.recv_timeout(Duration::from_secs(2)).unwrap(),
+                    Selection::Canceled
+                );
+            } else {
+                frame(
+                    &ctx,
+                    &mut window,
+                    vec![key(egui::Key::Escape, egui::Modifiers::default())],
+                );
+                assert_eq!(
+                    wait_for_reply(&ctx, &mut window, &replies),
+                    Selection::Canceled
+                );
+            }
+            worker.join().unwrap();
+            assert_eq!(stops.load(Ordering::SeqCst), 1);
+        }
+    }
+
+    #[test]
+    fn streaming_picker_shows_finished_state_and_reports_producer_error() {
+        for code in [0, 7] {
+            let (mut window, mut picker) = window_with_picker();
+            let (producer, receiver) = mpsc::channel();
+            let (done, replies) = mpsc::channel();
+            let worker = thread::spawn(move || {
+                let mut stream = CandidateStream::new(receiver, Box::new(|| {}))
+                    .with_completion(Box::new(move || Ok(Some(code))));
+                done.send(picker.pick_stream_options(&PickerOptions::default(), &mut stream))
+                    .unwrap();
+            });
+            let ctx = egui::Context::default();
+            wait_for_text(&ctx, &mut window, "Candidates arriving");
+            producer.send(Candidate::identity("alpha")).unwrap();
+            producer.send(Candidate::identity("beta")).unwrap();
+            wait_for_text(&ctx, &mut window, "beta");
+            drop(producer);
+            if code == 0 {
+                wait_for_text(&ctx, &mut window, "Candidates complete");
+                frame(
+                    &ctx,
+                    &mut window,
+                    vec![key(egui::Key::Enter, egui::Modifiers::default())],
+                );
+                let result = wait_for_reply(&ctx, &mut window, &replies).unwrap();
+                assert_eq!(result.0.items()[0].value, "alpha");
+            } else {
+                let error = wait_for_reply(&ctx, &mut window, &replies).unwrap_err();
+                assert!(error.to_string().contains("status 7"));
+            }
+            worker.join().unwrap();
+        }
     }
 }

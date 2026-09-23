@@ -7,11 +7,11 @@ use std::time::Duration;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use eframe::egui;
 use nixon_picker::ui::App;
-use nixon_picker::{Candidate, PickerOptions, Selection};
+use nixon_picker::{Candidate, PickerOptions, Selection, SelectionType, exact_selection};
 
 use crate::picker::{
     ConfirmRequest, GuiPickerRequests, PickOptionsReply, PickOptionsRequest, PickRequest,
-    PickerRequest,
+    PickerRequest, StreamOptionsRequest, StreamUpdate,
 };
 
 const POLL_INTERVAL: Duration = Duration::from_millis(30);
@@ -38,6 +38,7 @@ enum Screen {
         app: App,
         reply: PickReply,
         pending: VecDeque<KeyEvent>,
+        stream: Option<StreamUi>,
     },
     Confirm {
         app: App,
@@ -46,9 +47,17 @@ enum Screen {
     },
 }
 
+struct StreamUi {
+    updates: Receiver<StreamUpdate>,
+    options: PickerOptions,
+    finished: bool,
+    untouched: bool,
+}
+
 enum PickReply {
     Basic(Sender<Selection<Candidate>>),
     Options(Sender<PickOptionsReply>),
+    Stream(Sender<std::io::Result<PickOptionsReply>>),
 }
 
 impl PickReply {
@@ -60,6 +69,15 @@ impl PickReply {
             Self::Options(reply) => {
                 let _ = reply.send(PickOptionsReply { selection, toggles });
             }
+            Self::Stream(reply) => {
+                let _ = reply.send(Ok(PickOptionsReply { selection, toggles }));
+            }
+        }
+    }
+
+    fn error(self, message: String) {
+        if let Self::Stream(reply) = self {
+            let _ = reply.send(Err(std::io::Error::other(message)));
         }
     }
 }
@@ -103,6 +121,21 @@ fn start(request: PickerRequest) -> Screen {
             candidates,
             reply,
         }) => loading(options, candidates, PickReply::Options(reply)),
+        PickerRequest::StreamOptions(StreamOptionsRequest {
+            options,
+            updates,
+            reply,
+        }) => Screen::Pick {
+            app: App::empty(options.clone()),
+            reply: PickReply::Stream(reply),
+            pending: VecDeque::new(),
+            stream: Some(StreamUi {
+                updates,
+                options,
+                finished: false,
+                untouched: true,
+            }),
+        },
         PickerRequest::Confirm(ConfirmRequest { options, reply }) => {
             let mut app = App::empty(options);
             app.toggle_option_focus();
@@ -140,7 +173,7 @@ fn update_screen(ctx: &egui::Context, screen: Screen) -> Option<Screen> {
                 return None;
             }
             match ready.try_recv() {
-                Ok(app) => update_pick(ctx, app, reply, pending),
+                Ok(app) => update_pick(ctx, app, reply, pending, None),
                 Err(TryRecvError::Empty) => {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.heading("Loading candidates…");
@@ -158,9 +191,10 @@ fn update_screen(ctx: &egui::Context, screen: Screen) -> Option<Screen> {
             app,
             reply,
             mut pending,
+            stream,
         } => {
             pending.extend(picker_events(ctx));
-            update_pick(ctx, app, reply, pending)
+            update_pick(ctx, app, reply, pending, stream)
         }
         Screen::Confirm {
             app,
@@ -178,12 +212,32 @@ fn update_pick(
     mut app: App,
     reply: PickReply,
     mut pending: VecDeque<KeyEvent>,
+    mut stream: Option<StreamUi>,
 ) -> Option<Screen> {
+    if let Some(stream) = stream.as_mut() {
+        if !pending.is_empty() {
+            stream.untouched = false;
+        }
+        if let Some(result) = feed_stream(&mut app, stream) {
+            match result {
+                Ok(selection) => reply.respond(selection, app.option_state()),
+                Err(error) => reply.error(error),
+            }
+            return None;
+        }
+    }
     app.tick();
     for _ in 0..KEYS_PER_FRAME {
         let Some(key) = pending.pop_front() else {
             break;
         };
+        if stream.as_ref().is_some_and(|stream| !stream.finished)
+            && app.matched_count() == 0
+            && app.marked.is_empty()
+            && is_confirm(key)
+        {
+            continue;
+        }
         if app.is_matching() && is_confirm(key) {
             pending.push_front(key);
             break;
@@ -198,7 +252,22 @@ fn update_pick(
         return None;
     }
 
-    let (row_clicked, action_clicked) = render_pick(ctx, &mut app);
+    if let Some(stream) = stream.as_ref()
+        && stream.finished
+        && stream.untouched
+        && stream.options.select_one
+        && !app.is_matching()
+        && app.matched_count() <= 1
+    {
+        let selection = app.current().map_or(Selection::Empty, |candidate| {
+            Selection::selected(SelectionType::Default, vec![candidate])
+        });
+        reply.respond(selection, app.option_state());
+        return None;
+    }
+
+    let (row_clicked, action_clicked) =
+        render_pick(ctx, &mut app, stream.as_ref().map(|stream| stream.finished));
 
     if !app.is_matching() {
         if let Some(index) = row_clicked {
@@ -212,7 +281,12 @@ fn update_pick(
                 KeyModifiers::NONE,
             ));
         }
-        if let Some(key) = action_clicked {
+        if let Some(key) = action_clicked
+            && (stream.as_ref().is_none_or(|stream| stream.finished)
+                || app.matched_count() > 0
+                || !app.marked.is_empty()
+                || !is_confirm(key))
+        {
             app.handle(key);
         }
     }
@@ -228,10 +302,44 @@ fn update_pick(
         app,
         reply,
         pending,
+        stream,
     })
 }
 
-fn render_pick(ctx: &egui::Context, app: &mut App) -> (Option<usize>, Option<KeyEvent>) {
+fn feed_stream(
+    app: &mut App,
+    stream: &mut StreamUi,
+) -> Option<Result<Selection<Candidate>, String>> {
+    match stream.updates.try_recv() {
+        Ok(StreamUpdate::Candidates(candidates)) => {
+            for candidate in candidates {
+                if stream.untouched
+                    && let Some(selection) =
+                        exact_selection(&stream.options, std::slice::from_ref(&candidate))
+                {
+                    return Some(Ok(selection));
+                }
+                app.push(candidate);
+            }
+            None
+        }
+        Ok(StreamUpdate::Finished(Ok(()))) => {
+            stream.finished = true;
+            None
+        }
+        Ok(StreamUpdate::Finished(Err(error))) => Some(Err(error)),
+        Err(TryRecvError::Disconnected) if !stream.finished => Some(Err(
+            "Candidate producer disconnected unexpectedly.".to_owned(),
+        )),
+        Err(TryRecvError::Empty | TryRecvError::Disconnected) => None,
+    }
+}
+
+fn render_pick(
+    ctx: &egui::Context,
+    app: &mut App,
+    stream_finished: Option<bool>,
+) -> (Option<usize>, Option<KeyEvent>) {
     let mut row_clicked = None;
     let mut action_clicked = None;
     egui::CentralPanel::default().show(ctx, |ui| {
@@ -239,6 +347,13 @@ fn render_pick(ctx: &egui::Context, app: &mut App) -> (Option<usize>, Option<Key
             ui.heading(header);
         } else {
             ui.heading("Select");
+        }
+        if let Some(finished) = stream_finished {
+            ui.label(if finished {
+                "Candidates complete"
+            } else {
+                "Candidates arriving…"
+            });
         }
         option_row(ui, app);
         ui.horizontal(|ui| {

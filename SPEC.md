@@ -141,9 +141,9 @@ workflows.
 - [ ] **MUST:** Route every subprocess through `ProcessRunner` or a small
   extension of that seam, so component tests can use a fake runner. Keep the
   workspace's no-`unsafe` rule.
-- [ ] **SHOULD:** Implement streaming placeholder candidates through the
+- [x] **SHOULD:** Implement streaming placeholder candidates through the
   bridge, with cancellation stopping the producer's process group, as the TUI
-  does. The first cut may collect only if it states the delay in the UI.
+  does. The GUI shows candidates as they arrive and reports producer failure.
 
 Dependency direction:
 

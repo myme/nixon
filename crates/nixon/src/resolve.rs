@@ -294,15 +294,22 @@ impl<P: Picker, R: ProcessRunner> Resolver<'_, P, R> {
 
         // Cancelling the pick kills the command, rather than leaving it to
         // finish into a channel nobody is reading.
-        let running = std::sync::Mutex::new(running);
+        let running = std::sync::Arc::new(std::sync::Mutex::new(running));
+        let cancel_running = std::sync::Arc::clone(&running);
         Ok(CandidateStream::new(
             receiver,
             Box::new(move || {
-                if let Ok(mut running) = running.lock() {
+                if let Ok(mut running) = cancel_running.lock() {
                     let _ = running.kill();
                 }
             }),
-        ))
+        )
+        .with_completion(Box::new(move || {
+            running
+                .lock()
+                .map_err(|_| std::io::Error::other("producer lock was poisoned"))?
+                .try_wait()
+        })))
     }
 }
 

@@ -143,3 +143,8 @@ is what makes it safe in a script with no terminal.
 Candidates stream in where the format allows it, so the picker opens
 immediately and fills as they arrive. Cancelling kills the producing command's
 whole process group.
+
+The GUI picker uses the same candidate stream and matcher. It shows pending and
+complete states while rows arrive, and keeps the current query and marked rows
+when more candidates appear. Selecting a row or leaving the window stops an
+active producer.

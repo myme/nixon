@@ -3,6 +3,7 @@
 //! Lets the picker open and stay interactive while whatever produces its
 //! candidates is still running.
 
+use std::io;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use crate::candidate::Candidate;
@@ -16,6 +17,7 @@ pub struct CandidateStream {
     receiver: Receiver<Candidate>,
     /// Stops the producer; called once, when the pick is cancelled.
     cancel: Option<Box<dyn FnOnce() + Send>>,
+    completion: Option<Box<dyn FnMut() -> io::Result<Option<i32>> + Send>>,
     /// Set once the sender has been dropped.
     finished: bool,
 }
@@ -26,6 +28,7 @@ impl CandidateStream {
         Self {
             receiver,
             cancel: Some(cancel),
+            completion: None,
             finished: false,
         }
     }
@@ -43,8 +46,14 @@ impl CandidateStream {
 
     /// Takes whatever has arrived, without waiting.
     pub fn drain(&mut self) -> Vec<Candidate> {
+        self.drain_up_to(usize::MAX)
+    }
+
+    /// Takes at most `limit` arrivals, so a live producer cannot keep a
+    /// forwarding loop from checking for cancellation.
+    pub fn drain_up_to(&mut self, limit: usize) -> Vec<Candidate> {
         let mut out = Vec::new();
-        loop {
+        while out.len() < limit {
             match self.receiver.try_recv() {
                 Ok(candidate) => out.push(candidate),
                 Err(TryRecvError::Empty) => break,
@@ -55,6 +64,36 @@ impl CandidateStream {
             }
         }
         out
+    }
+
+    /// Adds a nonblocking check for the producer's exit status.
+    #[must_use]
+    pub fn with_completion(
+        mut self,
+        completion: Box<dyn FnMut() -> io::Result<Option<i32>> + Send>,
+    ) -> Self {
+        self.completion = Some(completion);
+        self
+    }
+
+    /// Returns the exit status once the candidate channel is closed and the
+    /// producer has exited. Streams without a completion check succeed at EOF.
+    pub fn completion(&mut self) -> Option<io::Result<i32>> {
+        if !self.finished {
+            return None;
+        }
+        self.completion
+            .as_mut()
+            .map_or(Some(Ok(0)), |check| match check() {
+                Ok(Some(code)) => Some(Ok(code)),
+                Ok(None) => None,
+                Err(error) => Some(Err(error)),
+            })
+    }
+
+    /// Releases a producer that has already exited without sending it a kill.
+    pub fn disarm(&mut self) {
+        self.cancel = None;
     }
 
     /// Blocks until the producer is done, returning everything it sent.
@@ -94,7 +133,7 @@ impl Drop for CandidateStream {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use super::CandidateStream;
     use crate::candidate::Candidate;
@@ -123,6 +162,39 @@ mod tests {
         drop(sender);
         assert!(stream.drain().is_empty());
         assert!(stream.is_finished());
+    }
+
+    #[test]
+    fn bounded_draining_and_completion_preserve_pending_candidates() {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let mut stream = CandidateStream::new(receiver, Box::new(|| {}))
+            .with_completion(Box::new(|| Ok(Some(7))));
+        for value in ["one", "two", "three"] {
+            sender.send(Candidate::identity(value)).unwrap();
+        }
+        drop(sender);
+        assert_eq!(stream.drain_up_to(2).len(), 2);
+        assert!(!stream.is_finished());
+        assert!(stream.completion().is_none());
+        assert_eq!(stream.drain_up_to(2).len(), 1);
+        assert!(stream.is_finished());
+        assert!(stream.drain_up_to(2).is_empty());
+        assert_eq!(stream.completion().unwrap().unwrap(), 7);
+    }
+
+    #[test]
+    fn disarming_completed_stream_skips_cancel_callback() {
+        let stops = std::sync::Arc::new(AtomicUsize::new(0));
+        let count = std::sync::Arc::clone(&stops);
+        let mut stream = CandidateStream::new(
+            std::sync::mpsc::channel().1,
+            Box::new(move || {
+                count.fetch_add(1, Ordering::SeqCst);
+            }),
+        );
+        stream.disarm();
+        drop(stream);
+        assert_eq!(stops.load(Ordering::SeqCst), 0);
     }
 
     #[test]

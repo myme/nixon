@@ -3,7 +3,10 @@
 use std::io;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvError, SendError, Sender, TryRecvError};
+use std::sync::mpsc::{
+    self, Receiver, RecvError, SendError, Sender, SyncSender, TryRecvError, TrySendError,
+};
+use std::thread;
 use std::time::Duration;
 
 use nixon_picker::{
@@ -11,11 +14,11 @@ use nixon_picker::{
 };
 
 const CLOSED_CHECK_INTERVAL: Duration = Duration::from_millis(20);
+const STREAM_BATCH: usize = 256;
 
 /// Worker-side picker that waits for the GUI to answer each request.
 ///
-/// Streaming picks currently collect the full stream before asking the GUI,
-/// so the GUI receives no candidates until the producer finishes.
+/// Streaming picks forward bounded batches while the GUI remains interactive.
 #[derive(Debug)]
 pub struct GuiPicker {
     requests: Sender<PickerRequest>,
@@ -36,8 +39,29 @@ pub enum PickerRequest {
     Pick(PickRequest),
     /// Choose candidates and return the final toggle state.
     PickOptions(PickOptionsRequest),
+    /// Pick from candidates that are still arriving.
+    StreamOptions(StreamOptionsRequest),
     /// Ask about toggles without a candidate list.
     Confirm(ConfirmRequest),
+}
+
+/// One update from a live candidate source.
+#[derive(Debug)]
+pub enum StreamUpdate {
+    /// Candidates in producer order.
+    Candidates(Vec<Candidate>),
+    /// The source closed, with its final status.
+    Finished(std::result::Result<(), String>),
+}
+
+/// A streaming selection request.
+#[derive(Debug)]
+pub struct StreamOptionsRequest {
+    /// Picker matching and controls.
+    pub options: PickerOptions,
+    /// Live candidate batches.
+    pub updates: Receiver<StreamUpdate>,
+    pub(crate) reply: Sender<io::Result<PickOptionsReply>>,
 }
 
 /// A candidate selection request.
@@ -162,6 +186,15 @@ impl Drop for GuiPickerRequests {
 }
 
 impl Picker for GuiPicker {
+    fn pick_stream(
+        &mut self,
+        options: &PickerOptions,
+        stream: &mut CandidateStream,
+    ) -> io::Result<Selection<Candidate>> {
+        self.pick_stream_options(options, stream)
+            .map(|(selection, _)| selection)
+    }
+
     fn pick(
         &mut self,
         options: &PickerOptions,
@@ -207,7 +240,26 @@ impl Picker for GuiPicker {
         options: &PickerOptions,
         stream: &mut CandidateStream,
     ) -> io::Result<(Selection<Candidate>, Vec<bool>)> {
-        self.pick_options(options, stream.collect())
+        let (updates_sender, updates) = mpsc::sync_channel(4);
+        let (stop_sender, stop) = mpsc::channel();
+        let answer = thread::scope(|scope| {
+            let forwarder = scope.spawn(|| forward_stream(stream, updates_sender, stop));
+            let answer = self.exchange(|reply| {
+                PickerRequest::StreamOptions(StreamOptionsRequest {
+                    options: options.clone(),
+                    updates,
+                    reply,
+                })
+            });
+            let _ = stop_sender.send(());
+            let _ = forwarder.join();
+            answer
+        });
+        match answer {
+            Some(Ok(reply)) => Ok((reply.selection, reply.toggles)),
+            Some(Err(error)) => Err(error),
+            None => Ok((Selection::Canceled, option_state(options))),
+        }
     }
 
     fn confirm(&mut self, options: &PickerOptions) -> io::Result<Option<Vec<bool>>> {
@@ -225,6 +277,62 @@ impl Picker for GuiPicker {
     }
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the forwarding thread must own both channels so disconnect wakes the GUI"
+)]
+fn forward_stream(
+    stream: &mut CandidateStream,
+    updates: SyncSender<StreamUpdate>,
+    stop: Receiver<()>,
+) {
+    loop {
+        if stop.try_recv().is_ok() {
+            stream.cancel();
+            return;
+        }
+        let candidates = stream.drain_up_to(STREAM_BATCH);
+        if !candidates.is_empty()
+            && !send_update(&updates, &stop, StreamUpdate::Candidates(candidates))
+        {
+            stream.cancel();
+            return;
+        }
+        if let Some(result) = stream.completion() {
+            let exited = result.is_ok();
+            let status = match result {
+                Ok(0) => Ok(()),
+                Ok(code) => Err(format!("Candidate producer exited with status {code}")),
+                Err(error) => Err(format!("Candidate producer failed: {error}")),
+            };
+            if exited {
+                stream.disarm();
+            }
+            let _ = send_update(&updates, &stop, StreamUpdate::Finished(status));
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn send_update(
+    updates: &SyncSender<StreamUpdate>,
+    stop: &Receiver<()>,
+    mut update: StreamUpdate,
+) -> bool {
+    loop {
+        match updates.try_send(update) {
+            Ok(()) => return true,
+            Err(TrySendError::Full(pending)) => update = pending,
+            Err(TrySendError::Disconnected(_)) => return false,
+        }
+        if stop.try_recv().is_ok() {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
 fn settled(options: &PickerOptions, candidates: &[Candidate]) -> Option<Selection<Candidate>> {
     exact_selection(options, candidates).or_else(|| unique_selection(options, candidates))
 }
@@ -235,6 +343,8 @@ fn option_state(options: &PickerOptions) -> Vec<bool> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::thread;
     use std::time::Duration;
@@ -243,7 +353,7 @@ mod tests {
         Candidate, CandidateStream, Picker, PickerOption, PickerOptions, Selection, SelectionType,
     };
 
-    use super::{GuiPicker, PickOptionsReply, PickerRequest};
+    use super::{GuiPicker, PickOptionsReply, PickerRequest, StreamUpdate};
 
     fn candidates(values: &[&str]) -> Vec<Candidate> {
         values
@@ -387,15 +497,27 @@ mod tests {
     }
 
     #[test]
-    fn the_default_stream_path_collects_before_requesting_ui() {
+    fn ready_stream_uses_live_request_and_keeps_selection() {
         let (mut picker, requests) = GuiPicker::channel();
         let ui = thread::spawn(move || {
-            let PickerRequest::Pick(request) = requests.recv().unwrap() else {
-                panic!("expected pick request");
+            let PickerRequest::StreamOptions(request) = requests.recv().unwrap() else {
+                panic!("expected stream request");
             };
-            assert_eq!(request.candidates.len(), 2);
-            let choice = request.candidates[1].clone();
-            request.respond(selected(choice)).unwrap();
+            let StreamUpdate::Candidates(candidates) = request
+                .updates
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap()
+            else {
+                panic!("expected candidates");
+            };
+            assert_eq!(candidates.len(), 2);
+            request
+                .reply
+                .send(Ok(PickOptionsReply {
+                    selection: selected(candidates[1].clone()),
+                    toggles: Vec::new(),
+                }))
+                .unwrap();
         });
         let mut stream = CandidateStream::of(candidates(&["one", "two"]));
         let answer = picker
@@ -406,19 +528,26 @@ mod tests {
     }
 
     #[test]
-    fn stream_with_options_collects_then_returns_changed_toggles() {
+    fn stream_with_options_returns_changed_toggles() {
         let (mut picker, requests) = GuiPicker::channel();
         let ui = thread::spawn(move || {
-            let PickerRequest::PickOptions(request) = requests.recv().unwrap() else {
-                panic!("expected pick with options");
+            let PickerRequest::StreamOptions(request) = requests.recv().unwrap() else {
+                panic!("expected stream with options");
             };
-            assert_eq!(request.candidates.len(), 2);
-            let choice = request.candidates[1].clone();
+            let StreamUpdate::Candidates(candidates) = request
+                .updates
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap()
+            else {
+                panic!("expected candidates");
+            };
+            assert_eq!(candidates.len(), 2);
             request
-                .respond(PickOptionsReply {
-                    selection: selected(choice),
+                .reply
+                .send(Ok(PickOptionsReply {
+                    selection: selected(candidates[1].clone()),
                     toggles: vec![true],
-                })
+                }))
                 .unwrap();
         });
         let options = PickerOptions::default().options(vec![PickerOption::new("--force", false)]);
@@ -427,6 +556,80 @@ mod tests {
         assert_eq!(selection.items()[0].value, "two");
         assert_eq!(toggles, [true]);
         ui.join().unwrap();
+    }
+
+    #[test]
+    fn early_stream_selection_and_cancel_stop_producer_once() {
+        for canceled in [false, true] {
+            let (mut picker, requests) = GuiPicker::channel();
+            let (sender, receiver) = mpsc::channel();
+            let stops = Arc::new(AtomicUsize::new(0));
+            let count = Arc::clone(&stops);
+            let mut stream = CandidateStream::new(
+                receiver,
+                Box::new(move || {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }),
+            );
+            sender.send(Candidate::identity("first")).unwrap();
+            let ui = thread::spawn(move || {
+                let PickerRequest::StreamOptions(request) = requests.recv().unwrap() else {
+                    panic!("expected stream request");
+                };
+                let StreamUpdate::Candidates(candidates) = request
+                    .updates
+                    .recv_timeout(Duration::from_secs(1))
+                    .unwrap()
+                else {
+                    panic!("expected first candidate");
+                };
+                assert_eq!(candidates[0].value, "first");
+                request
+                    .reply
+                    .send(Ok(PickOptionsReply {
+                        selection: if canceled {
+                            Selection::Canceled
+                        } else {
+                            selected(candidates[0].clone())
+                        },
+                        toggles: Vec::new(),
+                    }))
+                    .unwrap();
+            });
+            let (selection, _) = picker
+                .pick_stream_options(&PickerOptions::default(), &mut stream)
+                .unwrap();
+            assert_eq!(matches!(selection, Selection::Canceled), canceled);
+            drop(stream);
+            assert_eq!(stops.load(Ordering::SeqCst), 1);
+            ui.join().unwrap();
+            drop(sender);
+        }
+    }
+
+    #[test]
+    fn closing_stream_ui_releases_worker_and_stops_producer_once() {
+        let (mut picker, requests) = GuiPicker::channel();
+        let (_sender, receiver) = mpsc::channel();
+        let stops = Arc::new(AtomicUsize::new(0));
+        let count = Arc::clone(&stops);
+        let worker = thread::spawn(move || {
+            let mut stream = CandidateStream::new(
+                receiver,
+                Box::new(move || {
+                    count.fetch_add(1, Ordering::SeqCst);
+                }),
+            );
+            picker
+                .pick_stream_options(&PickerOptions::default(), &mut stream)
+                .unwrap()
+                .0
+        });
+        let held = requests.recv().unwrap();
+        drop(requests);
+        assert_eq!(worker.join().unwrap(), Selection::Canceled);
+        assert_eq!(stops.load(Ordering::SeqCst), 1);
+        drop(held);
     }
 
     #[test]

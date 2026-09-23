@@ -55,6 +55,11 @@ in the same window. Submit (or Ctrl-Enter) runs the edited source with the
 original command's language, options, placeholders, project config, and
 history. Back or Esc cancels without running; empty source stays editable and
 shows an error.
+Streaming placeholder candidates appear while their producer is still running.
+The picker shows when production is pending or complete; query, marks, and
+options remain usable as rows arrive. Choosing a row, canceling, or closing the
+window stops an active producer. A producer failure stays visible in the GUI
+and is reported on stderr.
 Browser (default **W**, then **O**) opens a focused input. Enter opens a full
 `http://` or `https://` URL unchanged, adds `https://` to a dotted address
 without spaces, or searches through `launcher.search_url`. Empty input does
