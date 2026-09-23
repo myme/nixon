@@ -17,6 +17,7 @@ use nixon_gui::window::{BrowserInputEvent, MenuWindow, native_options};
 use nixon_picker::{Selection, SelectionType};
 
 use crate::cli::Commands;
+use crate::gui_process::GuiProcessRunner;
 
 /// The preview only opens the root menu. No command is silently ignored.
 pub fn reject_subcommand(command: Option<&Commands>) -> Result<()> {
@@ -62,6 +63,7 @@ type MediaWorker = (Sender<MediaRequest>, Receiver<MediaResult>, JoinHandle<()>)
 const PREVIEW_STATUS: &str = "GUI preview: choose an action.";
 
 enum CommandOutcome {
+    Launched,
     Selected { name: String, kind: SelectionType },
     Empty,
     Canceled,
@@ -90,6 +92,26 @@ impl PreviewApp {
         browser_runner: R,
         media_transport: M,
     ) -> Result<Self> {
+        let runner = GuiProcessRunner::from_environment(
+            RealRunner,
+            config.launcher.terminal.clone(),
+            env.exe.clone().unwrap_or_default(),
+        );
+        Self::with_command_runner(config, dirs, env, browser_runner, media_transport, runner)
+    }
+
+    fn with_command_runner<
+        R: ProcessRunner + Send + 'static,
+        M: MediaTransport,
+        C: ProcessRunner + Send + 'static,
+    >(
+        config: Config,
+        dirs: Dirs,
+        env: Environment,
+        browser_runner: R,
+        media_transport: M,
+        command_runner: GuiProcessRunner<C>,
+    ) -> Result<Self> {
         let (sender, actions) = mpsc::channel();
         let mut menu = MenuWindow::new(&config.launcher, sender).ok_or_else(|| {
             NixonError::Io(std::io::Error::new(
@@ -108,7 +130,7 @@ impl PreviewApp {
         let (command_requests, worker_requests) = mpsc::channel();
         let (worker_results, command_results) = mpsc::channel();
         let worker = thread::spawn(move || {
-            let mut app = App::new(config, dirs, env, picker, RealRunner);
+            let mut app = App::new(config, dirs, env, picker, command_runner);
             while worker_requests.recv().is_ok() {
                 let outcome = pick_current_command(&mut app);
                 if worker_results.send(outcome).is_err() {
@@ -195,14 +217,19 @@ impl PreviewApp {
         }
         for outcome in self.command_results.try_iter() {
             self.busy = false;
-            self.status = match outcome {
+            match outcome {
+                CommandOutcome::Launched => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
                 CommandOutcome::Selected { name, kind } => {
-                    format!("Selected command: {name} ({kind:?}). Execution is not wired yet.")
+                    self.status =
+                        format!("Selected command: {name} ({kind:?}). Execution is not wired yet.");
                 }
-                CommandOutcome::Empty => "No commands available.".to_owned(),
-                CommandOutcome::Canceled => PREVIEW_STATUS.to_owned(),
-                CommandOutcome::Error(error) => format!("Could not load commands: {error}"),
-            };
+                CommandOutcome::Empty => "No commands available.".clone_into(&mut self.status),
+                CommandOutcome::Canceled => PREVIEW_STATUS.clone_into(&mut self.status),
+                CommandOutcome::Error(error) => {
+                    tracing::error!("{error}");
+                    self.status = error;
+                }
+            }
             ctx.request_repaint();
         }
         for result in self.browser_results.try_iter() {
@@ -354,7 +381,9 @@ const fn browser_opener() -> &'static str {
     }
 }
 
-fn pick_current_command(app: &mut App<GuiPicker, RealRunner>) -> CommandOutcome {
+fn pick_current_command<R: ProcessRunner>(
+    app: &mut App<GuiPicker, GuiProcessRunner<R>>,
+) -> CommandOutcome {
     let project = app.current_project();
     let result = app.commands_for(&project).and_then(|commands| {
         let visible: Vec<Command> = commands
@@ -364,6 +393,31 @@ fn pick_current_command(app: &mut App<GuiPicker, RealRunner>) -> CommandOutcome 
         app.pick_command(&project, &visible, "Select command", None)
     });
     match result {
+        Ok(Selection::Selected {
+            kind: SelectionType::Default,
+            mut items,
+        }) => {
+            if items.len() != 1 {
+                return CommandOutcome::Error("Expected one command selection.".to_owned());
+            }
+            let command = items.remove(0);
+            let config = match app.config_for(&project) {
+                Ok(config) => config,
+                Err(error) => {
+                    return CommandOutcome::Error(format!(
+                        "Could not load command config: {error}"
+                    ));
+                }
+            };
+            app.runner.set_configured_terminal(config.launcher.terminal);
+            match app.run_cmd(&project, &command, &[]) {
+                Ok(_) => CommandOutcome::Launched,
+                Err(NixonError::Canceled) => CommandOutcome::Canceled,
+                Err(error) => {
+                    CommandOutcome::Error(format!("Could not run {}: {error}", command.name))
+                }
+            }
+        }
         Ok(Selection::Selected { kind, items }) => {
             let name = items
                 .into_iter()
@@ -374,7 +428,7 @@ fn pick_current_command(app: &mut App<GuiPicker, RealRunner>) -> CommandOutcome 
         }
         Ok(Selection::Empty) => CommandOutcome::Empty,
         Ok(Selection::Canceled) => CommandOutcome::Canceled,
-        Err(error) => CommandOutcome::Error(error.to_string()),
+        Err(error) => CommandOutcome::Error(format!("Could not load commands: {error}")),
     }
 }
 
@@ -397,7 +451,10 @@ const fn action_name(action: &LauncherAction) -> &str {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
+    use std::fs;
     use std::io;
+    use std::path::PathBuf;
     use std::sync::mpsc::TryRecvError;
     use std::sync::{Arc, Mutex};
     use std::thread;
@@ -416,12 +473,16 @@ mod tests {
     use nixon_picker::Selection;
     use nixon_picker::matcher::Case;
 
+    use crate::gui_exec::read_payload;
+    use crate::gui_process::GuiProcessRunner;
+
     use super::{
         CommandOutcome, MediaTransport, PreviewApp, browser_opener, launch_browser,
         pick_current_command,
     };
 
     type MediaCall = (String, String, String, String);
+    type InvocationCalls = Arc<Mutex<Vec<Invocation>>>;
 
     struct FakeMediaTransport {
         calls: Arc<Mutex<Vec<MediaCall>>>,
@@ -462,6 +523,84 @@ mod tests {
     struct BrowserRunner {
         calls: Arc<Mutex<Vec<Invocation>>>,
         result: std::result::Result<i32, io::ErrorKind>,
+    }
+
+    struct CommandRunner {
+        calls: Arc<Mutex<Vec<Invocation>>>,
+        captures: Arc<Mutex<Vec<Invocation>>>,
+        capture_output: Option<Vec<u8>>,
+        spawn_error: bool,
+    }
+
+    impl ProcessRunner for CommandRunner {
+        fn run(&mut self, _invocation: &Invocation) -> io::Result<i32> {
+            Err(io::ErrorKind::Unsupported.into())
+        }
+
+        fn run_capture(&mut self, invocation: &Invocation) -> io::Result<Captured> {
+            self.captures.lock().unwrap().push(invocation.clone());
+            self.capture_output.as_ref().map_or_else(
+                || Err(io::ErrorKind::Unsupported.into()),
+                |stdout| {
+                    Ok(Captured {
+                        code: 0,
+                        stdout: stdout.clone(),
+                    })
+                },
+            )
+        }
+
+        fn spawn_detached(&mut self, invocation: &Invocation) -> io::Result<()> {
+            self.calls.lock().unwrap().push(invocation.clone());
+            if self.spawn_error {
+                Err(io::Error::new(io::ErrorKind::NotFound, "terminal failed"))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn run_streaming(
+            &mut self,
+            _invocation: &Invocation,
+            _sink: Box<dyn FnMut(String) + Send>,
+        ) -> io::Result<Box<dyn Running>> {
+            Err(io::ErrorKind::Unsupported.into())
+        }
+    }
+
+    fn command_runner(
+        terminal: Option<Vec<String>>,
+        exe: PathBuf,
+        spawn_error: bool,
+    ) -> (GuiProcessRunner<CommandRunner>, Arc<Mutex<Vec<Invocation>>>) {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        (
+            GuiProcessRunner::new(
+                CommandRunner {
+                    calls: Arc::clone(&calls),
+                    captures: Arc::new(Mutex::new(Vec::new())),
+                    capture_output: None,
+                    spawn_error,
+                },
+                terminal,
+                None,
+                Some(OsString::from("/nonexistent")),
+                exe,
+            ),
+            calls,
+        )
+    }
+
+    fn executable(temp: &TempDir, name: &str) -> PathBuf {
+        let path = temp.child(name);
+        path.write_str("").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            fs::set_permissions(path.path(), fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        path.path().to_path_buf()
     }
 
     impl ProcessRunner for BrowserRunner {
@@ -533,6 +672,20 @@ echo hidden
 ```
 ";
 
+    const PLACEHOLDER_COMMANDS: &str = "\
+# `_choices`
+
+```bash
+printf 'unused producer source\\n'
+```
+
+# `alpha ${_choices | json}`
+
+```bash
+printf '%s\\n' \"$1\"
+```
+";
+
     fn fixture(local: &str) -> (TempDir, Config, Dirs, Environment) {
         let temp = TempDir::new().unwrap();
         let project = temp.child("project");
@@ -556,11 +709,68 @@ echo hidden
         (temp, config, dirs, env)
     }
 
+    fn placeholder_fixture() -> (TempDir, PreviewApp, InvocationCalls, InvocationCalls) {
+        let (temp, mut config, dirs, mut env) = fixture(PLACEHOLDER_COMMANDS);
+        let terminal = executable(&temp, "terminal");
+        config.launcher.terminal = Some(vec![
+            terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        let exe = temp.child("nixon").path().to_path_buf();
+        env.exe = Some(exe.clone());
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let captures = Arc::new(Mutex::new(Vec::new()));
+        let runner = GuiProcessRunner::new(
+            CommandRunner {
+                calls: Arc::clone(&calls),
+                captures: Arc::clone(&captures),
+                capture_output: Some(br#"["choice with spaces","quoted 'choice'"]"#.to_vec()),
+                spawn_error: false,
+            },
+            config.launcher.terminal.clone(),
+            None,
+            Some(OsString::from("/nonexistent")),
+            exe,
+        );
+        let app = PreviewApp::with_command_runner(
+            config,
+            dirs,
+            env,
+            RealRunner,
+            super::SessionMediaTransport,
+            runner,
+        )
+        .unwrap();
+        (temp, app, calls, captures)
+    }
+
+    fn open_placeholder_pick(app: &mut PreviewApp, ctx: &egui::Context) {
+        let _ = frame(app, ctx, vec![key(egui::Key::C)]);
+        wait_for_text(app, ctx, "Select command");
+        let _ = frame(app, ctx, vec![key(egui::Key::Enter)]);
+        let _ = frame(app, ctx, vec![key_release(egui::Key::Enter)]);
+        wait_for_text(app, ctx, "choice with spaces");
+    }
+
     fn key(key: egui::Key) -> egui::Event {
+        key_with_modifiers(key, egui::Modifiers::default())
+    }
+
+    fn key_with_modifiers(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
         egui::Event::Key {
             key,
             physical_key: None,
             pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    fn key_release(key: egui::Key) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: false,
             repeat: false,
             modifiers: egui::Modifiers::default(),
         }
@@ -625,12 +835,14 @@ echo hidden
     fn wait_for_close(app: &mut PreviewApp, ctx: &egui::Context) {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            if closes(&frame(app, ctx, Vec::new())) {
+            let output = frame(app, ctx, Vec::new());
+            if closes(&output) {
                 return;
             }
             assert!(
                 Instant::now() < deadline,
-                "media action did not close the window"
+                "action did not close the window; visible text: {:?}",
+                texts(&output)
             );
             thread::sleep(Duration::from_millis(1));
         }
@@ -797,9 +1009,10 @@ echo hidden
 
     #[test]
     fn worker_uses_real_discovery_local_matching_and_visible_order() {
-        let (_temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
+        let (temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
         let (picker, requests) = GuiPicker::channel();
-        let mut app = App::new(config, dirs, env, picker, RealRunner);
+        let runner = GuiProcessRunner::new(RealRunner, None, None, None, temp.path().join("nixon"));
+        let mut app = App::new(config, dirs, env, picker, runner);
         let worker = thread::spawn(move || pick_current_command(&mut app));
         let deadline = Instant::now() + Duration::from_secs(5);
         let request = loop {
@@ -850,21 +1063,292 @@ echo hidden
     }
 
     #[test]
-    fn default_command_selection_does_not_execute() {
-        let (temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
-        let mut app = PreviewApp::new(config, dirs, env).unwrap();
+    fn edit_show_and_visit_selections_remain_explicit_previews() {
+        for (event, kind) in [
+            (
+                key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT),
+                "Edit",
+            ),
+            (key(egui::Key::F1), "Show"),
+            (key(egui::Key::F2), "Visit"),
+        ] {
+            let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            let exe = temp.child("nixon").path().to_path_buf();
+            env.exe = Some(exe.clone());
+            let (runner, calls) = command_runner(None, exe, false);
+            let mut app = PreviewApp::with_command_runner(
+                config,
+                dirs,
+                env,
+                RealRunner,
+                super::SessionMediaTransport,
+                runner,
+            )
+            .unwrap();
+            let ctx = egui::Context::default();
+            let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+            wait_for_text(&mut app, &ctx, "Select command");
+            let _ = frame(&mut app, &ctx, vec![event]);
+            let output =
+                wait_for_text(&mut app, &ctx, &format!("Selected command: alpha ({kind})"));
+            assert!(!closes(&output));
+            assert!(calls.lock().unwrap().is_empty());
+            assert!(!temp.child("project/selected-marker").path().exists());
+        }
+    }
+
+    #[test]
+    fn default_command_uses_local_terminal_and_prepared_payload() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let global_terminal = executable(&temp, "global-terminal");
+        let local_terminal = executable(&temp, "local terminal with 'quotes'");
+        config.launcher.terminal = Some(vec![
+            global_terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        let local_config = LOCAL_COMMANDS.replacen(
+            "ignore_case: false",
+            &format!(
+                "ignore_case: false\nlauncher:\n  terminal: [{}, '-e']",
+                serde_json::to_string(&local_terminal.to_string_lossy()).unwrap()
+            ),
+            1,
+        );
+        temp.child("project/nixon.md")
+            .write_str(&local_config)
+            .unwrap();
+        let exe = temp
+            .child("nixon binary with 'quotes'")
+            .path()
+            .to_path_buf();
+        env.exe = Some(exe.clone());
+        let (command_runner, calls) =
+            command_runner(config.launcher.terminal.clone(), exe.clone(), false);
+        let mut app = PreviewApp::with_command_runner(
+            config,
+            dirs,
+            env,
+            RealRunner,
+            super::SessionMediaTransport,
+            command_runner,
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].argv.len(), 6);
+        assert_eq!(calls[0].argv[0], local_terminal.to_string_lossy());
+        assert_eq!(calls[0].argv[1], "-e");
+        assert_eq!(calls[0].argv[2], exe.to_string_lossy());
+        assert_eq!(calls[0].argv[3], "internal");
+        assert_eq!(calls[0].argv[4], "gui-exec");
+        let payload = read_payload(std::path::Path::new(&calls[0].argv[5])).unwrap();
+        assert_eq!(
+            payload.cwd,
+            Some(temp.child("project").path().to_path_buf())
+        );
+        assert!(payload.argv.iter().any(|arg| arg == "bash"));
+        assert!(payload.env.iter().any(|(name, value)| {
+            name == "nixon_project_path"
+                && value == &temp.child("project").path().display().to_string()
+        }));
+        assert!(payload.stdin.is_none());
+        assert!(!temp.child("project/selected-marker").path().exists());
+    }
+
+    #[test]
+    fn command_option_confirm_continues_into_terminal_handoff() {
+        let local = "# `alpha --fast`\n\n- `--fast`: off\n\n```bash\necho option\n```\n";
+        let (temp, mut config, dirs, mut env) = fixture(local);
+        let terminal = executable(&temp, "terminal");
+        config.launcher.terminal = Some(vec![
+            terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        let exe = temp.child("nixon").path().to_path_buf();
+        env.exe = Some(exe.clone());
+        let (runner, calls) = command_runner(config.launcher.terminal.clone(), exe, false);
+        let mut app = PreviewApp::with_command_runner(
+            config,
+            dirs,
+            env,
+            RealRunner,
+            super::SessionMediaTransport,
+            runner,
+        )
+        .unwrap();
         let ctx = egui::Context::default();
         let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
         wait_for_text(&mut app, &ctx, "Select command");
         let _ = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
-        wait_for_text(&mut app, &ctx, "Selected command: alpha (Default)");
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+        wait_for_text(&mut app, &ctx, "Cancel");
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![key_with_modifiers(egui::Key::Num1, egui::Modifiers::ALT)],
+        );
+        wait_for_text(&mut app, &ctx, "[x] --fast");
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        assert!(
+            !texts(&output).iter().any(|text| text == "Cancel"),
+            "confirm screen stayed open after Enter: {:?}",
+            texts(&output)
+        );
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert!(payload.argv.iter().any(|arg| arg == "--fast"));
+        assert!(
+            payload
+                .env
+                .iter()
+                .any(|(name, value)| name == "nixon_opt_fast" && value == "1")
+        );
+    }
+
+    #[test]
+    fn nested_placeholder_pick_reaches_prepared_terminal_payload() {
+        let (temp, mut app, calls, captures) = placeholder_fixture();
+        let ctx = egui::Context::default();
+        open_placeholder_pick(&mut app, &ctx);
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let producer_calls = captures.lock().unwrap().clone();
+        assert_eq!(producer_calls.len(), 1);
+        assert_eq!(
+            producer_calls[0].cwd,
+            Some(temp.child("project").path().to_path_buf())
+        );
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].argv[3], "internal");
+        assert_eq!(calls[0].argv[4], "gui-exec");
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(
+            payload.cwd,
+            Some(temp.child("project").path().to_path_buf())
+        );
+        assert!(payload.argv.iter().any(|arg| arg == "choice with spaces"));
+        assert!(!payload.argv.iter().any(|arg| arg == "quoted 'choice'"));
+    }
+
+    #[test]
+    fn canceling_nested_placeholder_pick_does_not_spawn_terminal() {
+        let (_temp, mut app, calls, captures) = placeholder_fixture();
+        let ctx = egui::Context::default();
+        open_placeholder_pick(&mut app, &ctx);
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
+        assert!(!closes(&output));
+        let output = wait_for_text(&mut app, &ctx, super::PREVIEW_STATUS);
+        assert!(!closes(&output));
+        assert!(texts(&output).iter().any(|text| text == "Commands"));
+        assert_eq!(captures.lock().unwrap().len(), 1);
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn missing_terminal_and_failed_spawn_stay_visible_without_closing() {
+        for spawn_error in [false, true] {
+            let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+            let terminal = executable(&temp, "terminal");
+            if spawn_error {
+                config.launcher.terminal = Some(vec![
+                    terminal.to_string_lossy().into_owned(),
+                    "-e".to_owned(),
+                ]);
+            }
+            let exe = temp.child("nixon").path().to_path_buf();
+            env.exe = Some(exe.clone());
+            let (runner, calls) =
+                command_runner(config.launcher.terminal.clone(), exe, spawn_error);
+            let mut app = PreviewApp::with_command_runner(
+                config,
+                dirs,
+                env,
+                RealRunner,
+                super::SessionMediaTransport,
+                runner,
+            )
+            .unwrap();
+            let ctx = egui::Context::default();
+            let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+            wait_for_text(&mut app, &ctx, "Select command");
+            let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+            assert!(!closes(&output));
+            let expected = if spawn_error {
+                "Could not launch terminal"
+            } else {
+                "No terminal launcher is available"
+            };
+            let output = wait_for_text(&mut app, &ctx, expected);
+            assert!(!closes(&output));
+            if spawn_error {
+                let calls = calls.lock().unwrap().clone();
+                assert_eq!(calls.len(), 1);
+                assert!(!std::path::Path::new(calls[0].argv.last().unwrap()).exists());
+            } else {
+                assert!(calls.lock().unwrap().is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn background_command_keeps_detached_semantics_without_terminal() {
+        let local = "# `alpha &`\n\n```bash\ntouch selected-marker\n```\n";
+        let (temp, config, dirs, mut env) = fixture(local);
+        let exe = temp.child("nixon").path().to_path_buf();
+        env.exe = Some(exe.clone());
+        let (runner, calls) = command_runner(None, exe, false);
+        let mut app = PreviewApp::with_command_runner(
+            config,
+            dirs,
+            env,
+            RealRunner,
+            super::SessionMediaTransport,
+            runner,
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert!(calls[0].argv.iter().any(|part| part == "bash"));
+        assert!(!calls[0].argv.iter().any(|part| part == "gui-exec"));
         assert!(!temp.child("project/selected-marker").path().exists());
     }
 
     #[test]
     fn canceling_command_pick_returns_to_the_menu_quietly() {
-        let (_temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
-        let mut app = PreviewApp::new(config, dirs, env).unwrap();
+        let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let exe = temp.child("nixon").path().to_path_buf();
+        env.exe = Some(exe.clone());
+        let (runner, calls) = command_runner(None, exe, false);
+        let mut app = PreviewApp::with_command_runner(
+            config,
+            dirs,
+            env,
+            RealRunner,
+            super::SessionMediaTransport,
+            runner,
+        )
+        .unwrap();
         let ctx = egui::Context::default();
         let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
         wait_for_text(&mut app, &ctx, "alpha");
@@ -873,6 +1357,7 @@ echo hidden
         let shown = texts(&output);
         assert!(shown.iter().any(|text| text == "Commands"));
         assert!(!shown.iter().any(|text| text.contains("Selection canceled")));
+        assert!(calls.lock().unwrap().is_empty());
     }
 
     #[test]

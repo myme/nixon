@@ -38,9 +38,12 @@ be overridden either way.
 
 `nixon --mode gui` (or `nixon -m gui`) opens the configured graphical root
 menu. Commands opens a picker for commands in the current project, with local
-config and hidden-command rules applied. Selecting one shows its name and
-selection type in the window; it does not execute, edit, show, or visit the
-command yet. Canceling returns to the menu, and discovery errors appear there.
+config and hidden-command rules applied. Enter resolves the selected command,
+including options and placeholders, then hands foreground execution to an
+external terminal. A command marked `&` keeps its detached behavior. A
+successful handoff closes the window; a missing terminal or other error stays
+visible and is reported on stderr. Canceling returns to the menu. Edit, Show,
+and Visit selections show explicit preview statuses without running the command.
 Browser (default **W**, then **O**) opens a focused input. Enter opens a full
 `http://` or `https://` URL unchanged, adds `https://` to a dotted address
 without spaces, or searches through `launcher.search_url`. Empty input does

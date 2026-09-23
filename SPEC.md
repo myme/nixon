@@ -369,6 +369,9 @@ placeholder producer was cancelled.
 - [ ] **MUST:** Test GUI terminal-launch argv with paths and arguments
   containing spaces or quotes, plus resolved stdin and environment values.
   Verify no command source is rewritten.
+- [x] **MUST:** Component-test the Commands default action with a fake
+  process runner: current-project config, terminal handoff, option and nested
+  placeholder continuation, cancellation, detached `&`, and visible launch errors.
 - [ ] **MUST:** Smoke-test the packaged GUI under an available virtual
   display, including open, keyboard navigation, cancel, and a second nested
   pick. Run the established `nix flake check` gates for the CLI as well.

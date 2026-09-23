@@ -106,10 +106,10 @@ v2 is a rewrite in Rust. Configuration files carry over unchanged; the
 command line has a few deliberate differences.
 
 - **The picker is built in.** `fzf` and `rofi` are no longer needed or used.
-  `nixon --mode gui` now opens a graphical menu preview. Commands opens a
-  graphical picker and reports the selected name and action type; command
-  execution is not wired yet. Browser opens a URL or searches from a focused
-  input. Spotify (default **S**) controls playback through the player's
+  `nixon --mode gui` opens a graphical menu. Commands opens a graphical picker;
+  Enter resolves the selected command and hands foreground runs to an external
+  terminal. Browser opens a URL or searches from a focused input. Spotify
+  (default **S**) controls playback through the player's
   MPRIS session bus service on Linux; a missing service is shown in the
   window. Projects, History, and custom command actions remain previews.
 - **Removed flags.** `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went

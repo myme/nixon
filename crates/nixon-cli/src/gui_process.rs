@@ -54,6 +54,11 @@ impl<R: ProcessRunner> GuiProcessRunner<R> {
         )
     }
 
+    /// Uses the effective launcher config for the selected project.
+    pub fn set_configured_terminal(&mut self, terminal: Option<Vec<String>>) {
+        self.configured_terminal = terminal;
+    }
+
     fn terminal_prefix(&self) -> io::Result<Vec<String>> {
         if let Some(prefix) = &self.configured_terminal {
             return validate_prefix(

@@ -11,7 +11,6 @@ mod cli;
 mod complete;
 mod gui;
 mod gui_exec;
-#[expect(dead_code, reason = "the GUI action path will use this runner")]
 mod gui_process;
 mod mangen;
 
