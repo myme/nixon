@@ -217,11 +217,58 @@ fn cancelling_command_selection_is_a_cancel() {
 #[test]
 fn selecting_nothing_reports_no_command_selected() {
     let fixture = Fixture::new(VIM_FILE_MD);
+    let mut app = fixture.app(
+        ScriptedPicker::new(vec![Selection::Empty]),
+        FakeRunner::new(),
+    );
+    let project = app.current_project();
+    assert!(matches!(
+        app.prepare_run_command(&project, &RunOpts::default())
+            .unwrap(),
+        RunDecision::Empty
+    ));
+
     let picker = ScriptedPicker::new(vec![Selection::Empty]);
     let mut app = fixture.app(picker, FakeRunner::new());
-
     let err = app.run(&RunOpts::default()).unwrap_err();
     assert_eq!(err.to_string(), "No command selected.");
+}
+
+#[test]
+fn invalid_command_selection_is_typed_and_keeps_cli_error() {
+    let fixture = Fixture::new(VIM_FILE_MD);
+    for (selection, count, message) in [
+        (
+            Selection::Selected {
+                kind: SelectionType::Default,
+                items: Vec::new(),
+            },
+            0,
+            "No command selected.",
+        ),
+        (
+            selected(&["git-files", "vim-file"]),
+            2,
+            "Multiple commands selected.",
+        ),
+    ] {
+        let mut app = fixture.app(
+            ScriptedPicker::new(vec![selection.clone()]),
+            FakeRunner::new(),
+        );
+        let project = app.current_project();
+        let decision = app
+            .prepare_run_command(&project, &RunOpts::default())
+            .unwrap();
+        assert!(matches!(decision, RunDecision::InvalidSelection(n) if n == count));
+        assert_eq!(decision.selection_error().unwrap().to_string(), message);
+
+        let mut app = fixture.app(ScriptedPicker::new(vec![selection]), FakeRunner::new());
+        assert_eq!(
+            app.run(&RunOpts::default()).unwrap_err().to_string(),
+            message
+        );
+    }
 }
 
 #[test]

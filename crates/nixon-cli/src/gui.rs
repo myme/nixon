@@ -6,7 +6,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 
 use eframe::egui;
-use nixon::app::{App, Environment};
+use nixon::app::run::{NO_COMMANDS, RunDecision};
+use nixon::app::{App, Environment, RunOpts};
 use nixon::command::Command;
 use nixon::config::launcher::{DEFAULT_SEARCH_URL, LauncherAction, LauncherConfig, MprisOperation};
 use nixon::config::{Config, ConfigError, load};
@@ -596,57 +597,52 @@ fn pick_command_for_project<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
     project: &Project,
 ) -> CommandOutcome {
-    let result = app.choose_command(project, None);
-    match result {
-        Ok(Selection::Selected {
-            kind: SelectionType::Default,
-            mut items,
-        }) => {
-            if items.len() != 1 {
-                return CommandOutcome::Error("Expected one command selection.".to_owned());
-            }
-            let command = items.remove(0);
-            run_selected_command(app, project, &command)
-        }
-        Ok(Selection::Selected {
-            kind: SelectionType::Show,
-            mut items,
-        }) => {
-            if items.len() != 1 {
-                return CommandOutcome::Error("Expected one command selection.".to_owned());
-            }
-            let command = items.remove(0);
-            CommandOutcome::Detail {
-                title: format!("Command: {}", command.name),
-                body: command.source,
-            }
-        }
-        Ok(Selection::Selected {
-            kind: SelectionType::Visit,
-            mut items,
-        }) => {
-            if items.len() != 1 {
-                return CommandOutcome::Error("Expected one command selection.".to_owned());
-            }
-            let command = items.remove(0);
-            visit_selected_command(app, project, &command)
-        }
-        Ok(Selection::Selected {
-            kind: SelectionType::Edit,
-            mut items,
-        }) => {
-            if items.len() != 1 {
-                return CommandOutcome::Error("Expected one command selection.".to_owned());
-            }
-            CommandOutcome::Edit {
-                project: project.clone(),
-                command: Box::new(items.remove(0)),
-                args: Vec::new(),
-            }
-        }
-        Ok(Selection::Empty) => CommandOutcome::Empty,
-        Ok(Selection::Canceled) => CommandOutcome::Canceled,
+    match app.prepare_run_command(project, &RunOpts::default()) {
+        Ok(decision) => present_run_decision(app, project, decision),
+        Err(NixonError::Canceled) => CommandOutcome::Canceled,
         Err(error) => CommandOutcome::Error(format!("Could not load commands: {error}")),
+    }
+}
+
+fn present_run_decision<R: ProcessRunner>(
+    app: &mut App<GuiPicker, GuiProcessRunner<R>>,
+    project: &Project,
+    decision: RunDecision,
+) -> CommandOutcome {
+    match decision {
+        RunDecision::Empty => CommandOutcome::Empty,
+        RunDecision::InvalidSelection(_) => {
+            CommandOutcome::Error("Expected one command selection.".to_owned())
+        }
+        RunDecision::List(lines) => CommandOutcome::Detail {
+            title: "Command list".to_owned(),
+            body: if lines.is_empty() {
+                NO_COMMANDS.to_owned()
+            } else {
+                lines.join("\n")
+            },
+        },
+        RunDecision::InsertSource(command) => CommandOutcome::Detail {
+            title: format!("Command source: {}", command.name),
+            body: command.source,
+        },
+        RunDecision::SelectedValues(command, values) => CommandOutcome::Detail {
+            title: format!("Selected values: {}", command.name),
+            body: values.join("\n"),
+        },
+        RunDecision::Run(command, args) => {
+            run_selected_command_with_args(app, project, &command, &args)
+        }
+        RunDecision::ShowSource(command) => CommandOutcome::Detail {
+            title: format!("Command: {}", command.name),
+            body: command.source,
+        },
+        RunDecision::Edit(command, args) => CommandOutcome::Edit {
+            project: project.clone(),
+            command: Box::new(command),
+            args,
+        },
+        RunDecision::Visit(command) => visit_selected_command(app, project, &command),
     }
 }
 

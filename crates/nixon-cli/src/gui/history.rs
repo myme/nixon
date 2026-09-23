@@ -2,7 +2,7 @@
 
 use nixon::app::history::{DEFAULT_LIMIT, HistoryReadMode};
 use nixon::app::project::{NO_PROJECTS, ProjectDecision};
-use nixon::app::run::{NO_COMMANDS, RunDecision};
+use nixon::app::run::RunDecision;
 use nixon::app::{App, RunOpts};
 use nixon::error::{NixonError, Result};
 use nixon::process::ProcessRunner;
@@ -14,9 +14,7 @@ use nixon_picker::{Selection, SelectionType};
 use crate::cli::Commands;
 use crate::gui_process::GuiProcessRunner;
 
-use super::{
-    CommandOutcome, project_detail, run_selected_command_with_args, visit_selected_command,
-};
+use super::{CommandOutcome, present_run_decision, project_detail};
 
 pub(super) fn pick_history<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
@@ -125,45 +123,18 @@ fn replay_named_command<R: ProcessRunner>(
         Err(NixonError::Canceled) => return CommandOutcome::Canceled,
         Err(error) => return replay_error(error),
     };
-    present_run_decision(app, project, decision)
+    present_replayed_run_decision(app, project, decision)
 }
 
-fn present_run_decision<R: ProcessRunner>(
+fn present_replayed_run_decision<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
     project: &Project,
     decision: RunDecision,
 ) -> CommandOutcome {
-    match decision {
-        RunDecision::List(lines) => CommandOutcome::Detail {
-            title: "Command list".to_owned(),
-            body: if lines.is_empty() {
-                NO_COMMANDS.to_owned()
-            } else {
-                lines.join("\n")
-            },
-        },
-        RunDecision::InsertSource(command) => CommandOutcome::Detail {
-            title: format!("Command source: {}", command.name),
-            body: command.source,
-        },
-        RunDecision::SelectedValues(command, values) => CommandOutcome::Detail {
-            title: format!("Selected values: {}", command.name),
-            body: values.join("\n"),
-        },
-        RunDecision::Run(command, args) => {
-            run_selected_command_with_args(app, project, &command, &args)
-        }
-        RunDecision::ShowSource(command) => CommandOutcome::Detail {
-            title: format!("Command: {}", command.name),
-            body: command.source,
-        },
-        RunDecision::Edit(command, args) => CommandOutcome::Edit {
-            project: project.clone(),
-            command: Box::new(command),
-            args,
-        },
-        RunDecision::Visit(command) => visit_selected_command(app, project, &command),
+    if let Some(error) = decision.selection_error() {
+        return replay_error(error);
     }
+    present_run_decision(app, project, decision)
 }
 
 fn replay_project<R: ProcessRunner>(
@@ -197,7 +168,7 @@ fn replay_project<R: ProcessRunner>(
             body: inspect(&projects),
         },
         ProjectDecision::Command { project, decision } => {
-            present_run_decision(app, &project, *decision)
+            present_replayed_run_decision(app, &project, *decision)
         }
     }
 }

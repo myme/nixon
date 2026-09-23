@@ -823,6 +823,38 @@ fn worker_uses_real_discovery_local_matching_and_visible_order() {
 }
 
 #[test]
+fn ordinary_command_picker_keeps_invalid_selection_error_wording() {
+    let (temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
+    let (picker, requests) = GuiPicker::channel();
+    let runner = GuiProcessRunner::new(RealRunner, None, None, None, temp.path().join("nixon"));
+    let mut app = App::new(config, dirs, env, picker, runner);
+    let worker = thread::spawn(move || pick_current_command(&mut app));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let request = loop {
+        match requests.try_recv() {
+            Ok(PickerRequest::Pick(request)) => break request,
+            Ok(other) => panic!("expected a command pick, got {other:?}"),
+            Err(TryRecvError::Empty) => {
+                assert!(Instant::now() < deadline, "command pick did not arrive");
+                thread::sleep(Duration::from_millis(1));
+            }
+            Err(TryRecvError::Disconnected) => panic!("worker closed the picker bridge"),
+        }
+    };
+    let items = request.candidates.iter().take(2).cloned().collect();
+    request
+        .respond(Selection::Selected {
+            kind: nixon_picker::SelectionType::Default,
+            items,
+        })
+        .unwrap();
+    assert!(matches!(
+        worker.join().unwrap(),
+        CommandOutcome::Error(error) if error == "Expected one command selection."
+    ));
+}
+
+#[test]
 fn command_show_displays_exact_source_and_returns_to_menu() {
     let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
     env.exe = Some(temp.child("nixon").path().to_path_buf());
@@ -1403,6 +1435,20 @@ fn canceling_command_pick_returns_to_the_menu_quietly() {
     assert!(shown.iter().any(|text| text == "Commands"));
     assert!(!shown.iter().any(|text| text.contains("Selection canceled")));
     assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn no_current_commands_shows_empty_status_without_running() {
+    let (temp, mut config, dirs, mut env) = fixture("");
+    config.commands.clear();
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+    let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+    let output = wait_for_text(&mut app, &ctx, "No commands available.");
+    assert!(!closes(&output));
+    assert!(calls.lock().unwrap().is_empty());
+    assert!(!temp.child("state/nixon/history").path().exists());
 }
 
 #[test]

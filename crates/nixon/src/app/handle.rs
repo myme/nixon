@@ -35,25 +35,12 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         opts: &RunOpts,
     ) -> Result<RunDecision> {
         let (kind, command) = match selection {
-            Selection::Empty => {
-                return Err(NixonError::NothingSelected(
-                    "No command selected.".to_owned(),
-                ));
-            }
+            Selection::Empty => return Ok(RunDecision::Empty),
             Selection::Canceled => return Err(NixonError::Canceled),
-            Selection::Selected { items, .. } if items.len() > 1 => {
-                return Err(NixonError::NothingSelected(
-                    "Multiple commands selected.".to_owned(),
-                ));
+            Selection::Selected { items, .. } if items.len() != 1 => {
+                return Ok(RunDecision::InvalidSelection(items.len()));
             }
-            Selection::Selected { kind, items } => {
-                let Some(command) = items.into_iter().next() else {
-                    return Err(NixonError::NothingSelected(
-                        "No command selected.".to_owned(),
-                    ));
-                };
-                (kind, command)
-            }
+            Selection::Selected { kind, mut items } => (kind, items.remove(0)),
         };
 
         if opts.insert {
@@ -78,7 +65,11 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         project: &Project,
         decision: RunDecision,
     ) -> Result<ExitCode> {
+        if let Some(error) = decision.selection_error() {
+            return Err(error);
+        }
         match decision {
+            RunDecision::Empty | RunDecision::InvalidSelection(_) => unreachable!(),
             RunDecision::List(lines) => {
                 if lines.is_empty() {
                     tracing::error!("{NO_COMMANDS}");

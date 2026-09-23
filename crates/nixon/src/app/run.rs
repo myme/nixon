@@ -15,6 +15,10 @@ pub const NO_COMMANDS: &str = "No commands.";
 /// A command choice ready for its caller to present or execute.
 #[derive(Debug)]
 pub enum RunDecision {
+    /// No command was available or chosen.
+    Empty,
+    /// A picker reported a selection with this many commands instead of one.
+    InvalidSelection(usize),
     /// Matching command names, including hidden commands.
     List(Vec<String>),
     /// Source requested by `--insert`.
@@ -29,6 +33,21 @@ pub enum RunDecision {
     Edit(Command, Vec<String>),
     /// Visit the selected command's definition.
     Visit(Command),
+}
+
+impl RunDecision {
+    /// The CLI-compatible error for an empty or invalid command selection.
+    pub fn selection_error(&self) -> Option<NixonError> {
+        match self {
+            Self::Empty | Self::InvalidSelection(0) => Some(NixonError::NothingSelected(
+                "No command selected.".to_owned(),
+            )),
+            Self::InvalidSelection(_) => Some(NixonError::NothingSelected(
+                "Multiple commands selected.".to_owned(),
+            )),
+            _ => None,
+        }
+    }
 }
 
 impl<P: Picker, R: ProcessRunner> App<P, R> {
