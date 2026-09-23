@@ -180,11 +180,17 @@ pub enum Commands {
     External(Vec<String>),
 }
 
-/// Hidden helpers, for packaging rather than for use.
+/// Hidden helpers for packaging and GUI process handoff.
 #[derive(Debug, Subcommand)]
 pub enum Internal {
     /// Write the `nixon(1)` man page to stdout.
     Mangen,
+    /// Execute a serialized invocation prepared by the GUI.
+    #[command(hide = true)]
+    GuiExec {
+        /// Path to a one-use invocation payload.
+        payload_file: PathBuf,
+    },
 }
 
 /// `nixon run`.

@@ -2634,6 +2634,8 @@ dependencies = [
  "nixon-gui",
  "nixon-picker",
  "predicates",
+ "serde_json",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
  "zbus",

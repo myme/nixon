@@ -81,8 +81,17 @@ A bare argument that is not a subcommand is `run`'s, so `nixon hello` and
 `nixon run hello` are the same. A word that *is* a subcommand is always the
 subcommand: a command called `edit` has to be run as `nixon run edit`. The
 reserved words are `edit`, `eval`, `gc`, `history`, `new`, `project`, `run`,
-`help` and `internal` — the last of these is packaging machinery and is hidden
-from `--help`, but it shadows a command of that name like any other.
+`help` and `internal` — the last contains hidden packaging and GUI handoff
+helpers. It does not appear in `--help`, but it shadows a command of that name
+like any other.
+
+`nixon internal gui-exec <payload-file>` is a hidden GUI handoff helper. Its
+payload is a private, one-use temporary JSON file containing an `Invocation`:
+`argv` (an argument array), optional `cwd`, added `env` pairs, and optional
+`stdin` lines. The helper removes the file after reading it, runs the
+invocation with inherited stdout and stderr, and returns the child's exit
+status. It does not read Nixon configuration. The GUI owns cleanup if it
+creates a payload but cannot hand it to a terminal.
 
 ## `run`
 

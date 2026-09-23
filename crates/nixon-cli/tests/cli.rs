@@ -750,7 +750,7 @@ fn the_documented_help_block_matches_the_binary() {
     );
 }
 
-/// `internal` is packaging machinery; `--help` must not offer it.
+/// `internal` is for implementation helpers; `--help` must not offer it.
 #[test]
 fn the_internal_subcommand_is_hidden() {
     Fixture::new()
@@ -779,6 +779,88 @@ fn internal_mangen_writes_a_man_page() {
         page.contains(".SH \"SEE ALSO\""),
         "man page should point at the docs/ pages"
     );
+}
+
+#[test]
+fn internal_gui_exec_runs_one_use_invocation_without_loading_config() {
+    use nixon::process::Invocation;
+
+    let fixture = Fixture::new();
+    fixture
+        .temp
+        .child("config/nixon.md")
+        .write_str("```json config\n{invalid json}\n```\n")
+        .unwrap();
+    let cwd = fixture.temp.child("working dir with 'quotes'");
+    cwd.create_dir_all().unwrap();
+    let result = fixture.temp.child("result with 'quotes'.txt");
+    let payload = tempfile::NamedTempFile::new().unwrap();
+    let invocation = Invocation {
+        argv: vec![
+            "bash".to_owned(),
+            "-c".to_owned(),
+            "IFS= read -r first; IFS= read -r second; printf '%s\\n' \"$PWD\" \"$VALUE\" \"$1\" \"$2\" \"$first\" \"$second\" > \"$RESULT_FILE\"; printf 'child output\\n'; exit 37".to_owned(),
+            "gui-exec-test".to_owned(),
+            "two words".to_owned(),
+            "a 'quote' and \"double\"".to_owned(),
+        ],
+        cwd: Some(cwd.path().to_path_buf()),
+        env: vec![
+            ("VALUE".to_owned(), "value with 'quotes' and spaces".to_owned()),
+            (
+                "RESULT_FILE".to_owned(),
+                result.path().to_string_lossy().into_owned(),
+            ),
+        ],
+        stdin: Some(vec!["first line".to_owned(), "second 'line'".to_owned()]),
+    };
+    serde_json::to_writer(payload.as_file(), &invocation).unwrap();
+
+    fixture
+        .nixon()
+        .args(["internal", "gui-exec"])
+        .arg(payload.path())
+        .assert()
+        .failure()
+        .code(37)
+        .stdout("child output\n")
+        .stderr("");
+    assert_eq!(
+        std::fs::read_to_string(result.path()).unwrap(),
+        format!(
+            "{}\nvalue with 'quotes' and spaces\ntwo words\na 'quote' and \"double\"\nfirst line\nsecond 'line'\n",
+            cwd.path().display()
+        )
+    );
+    assert!(!payload.path().exists());
+}
+
+#[test]
+fn internal_gui_exec_rejects_missing_and_malformed_payloads_quietly() {
+    let fixture = Fixture::new();
+    let missing = fixture.temp.child("missing-payload.json");
+    fixture
+        .nixon()
+        .args(["internal", "gui-exec"])
+        .arg(missing.path())
+        .assert()
+        .failure()
+        .code(1)
+        .stdout("")
+        .stderr(contains("Could not read GUI execution payload"));
+
+    let malformed = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(malformed.path(), b"{invalid json}").unwrap();
+    fixture
+        .nixon()
+        .args(["internal", "gui-exec"])
+        .arg(malformed.path())
+        .assert()
+        .failure()
+        .code(1)
+        .stdout("")
+        .stderr(contains("Could not read GUI execution payload"));
+    assert!(!malformed.path().exists());
 }
 
 /// With no controlling terminal, a pick that needs one must say so rather

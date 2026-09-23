@@ -10,6 +10,7 @@
 mod cli;
 mod complete;
 mod gui;
+mod gui_exec;
 mod mangen;
 
 use std::process::ExitCode;
@@ -61,6 +62,9 @@ fn run() -> Result<i32> {
     let parsed = Cli::parse();
     let cli_config = parsed.global.to_config();
     init_tracing(cli_config.loglevel);
+    if let Some(Commands::Internal(Internal::GuiExec { payload_file })) = parsed.command.as_ref() {
+        return gui_exec::run_payload(payload_file);
+    }
     if parsed.global.mode == Mode::Gui {
         gui::reject_subcommand(parsed.command.as_ref())?;
     }
@@ -110,6 +114,9 @@ fn dispatch(app: &mut App<TuiPicker, RealRunner>, command: Option<Commands>) -> 
             Outcome::Rerun(words) => rerun(app, words),
         },
         Some(Commands::Internal(Internal::Mangen)) => mangen::write_man_page(),
+        Some(Commands::Internal(Internal::GuiExec { payload_file })) => {
+            gui_exec::run_payload(&payload_file)
+        }
         Some(Commands::New(args)) => app.new_command(&NewOpts {
             name: args.name,
             desc: args.desc,

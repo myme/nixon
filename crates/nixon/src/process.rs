@@ -4,11 +4,13 @@ use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use serde::{Deserialize, Serialize};
+
 /// A child's exit code, with the shell's `128 + signal` convention.
 pub type ExitCode = i32;
 
 /// What to run, where, and with what.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Invocation {
     /// Interpreter, script path and arguments.
     pub argv: Vec<String>,
