@@ -121,7 +121,7 @@ command line has a few deliberate differences.
   a project and then a command to run there. F1 shows command source or project
   details in a read-only panel with Copy and Back. Alt-Enter edits command
   source in the window before running it; F2 opens its definition in the
-  configured editor. History remains a preview.
+  configured editor. History replays recorded commands; F1 shows a saved line.
 - **Removed flags.** `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went
   with the backend concept. Passing one is now an ordinary argument error.
   Commands run in the terminal you started them from; a command marked `&`

@@ -190,9 +190,11 @@ Fixture rules, each learned from a failure:
 
 ## History
 
-The planning documents — `SPEC.md` (a checklist of v1 behaviour),
+The v1 planning documents — `SPEC.md` (a checklist of v1 behaviour),
 `ENGINEERING.md` (how v2 was built) and `PARITY.md` (the two reconciled) —
 were removed in `a1c1978`; read them with `git show a1c1978^:SPEC.md`.
+A later GUI launcher checklist also used `SPEC.md`; its final version is
+`git show e3f7b2c:SPEC.md`.
 
 The v1 Haskell implementation was removed in `2a84de2`; read it with
 `git show 2a84de2^:src/Nixon/<Module>.hs`.
