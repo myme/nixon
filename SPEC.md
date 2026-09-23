@@ -359,9 +359,11 @@ placeholder producer was cancelled.
 - [ ] **MUST:** Unit-test menu parsing and navigation: defaults, duplicate
   sibling keys, nested keys, text-field focus, Backspace/Escape, and invalid
   action shape.
-- [ ] **MUST:** Test GUI picker mapping with duplicate titles, ANSI in titles,
+- [x] **MUST:** Test GUI picker mapping with duplicate titles, ANSI in titles,
   initial query, exact/unique selection, multi marks across query changes,
-  selection types, command option toggles, and cancellation.
+  selection types, command option toggles, and cancellation. `nixon-gui` window
+  tests exercise visible rows and input; bridge tests cover exact/unique
+  selection before a window request.
 - [x] **MUST:** Component-test a project -> command -> placeholder -> run
   flow with `ScriptedPicker`/`FakeRunner` or the GUI bridge's equivalents.
   Verify the final invocation, cwd, environment, option arguments, and

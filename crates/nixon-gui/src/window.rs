@@ -877,6 +877,141 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_visible_titles_keep_distinct_values_and_marks() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let options = PickerOptions::default()
+                .header("Duplicate titles")
+                .multi(true)
+                .no_sort();
+            let choices = vec![
+                Candidate::with_title("same", "first value"),
+                Candidate::with_title("same", "second value"),
+            ];
+            done.send(picker.pick(&options, choices).unwrap()).unwrap();
+        });
+        let ctx = egui::Context::default();
+        let output = wait_for_text(&ctx, &mut window, "Duplicate titles");
+        assert_eq!(
+            texts(&output)
+                .iter()
+                .filter(|text| *text == "[ ] same")
+                .count(),
+            2
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![release(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Tab, egui::Modifiers::default())],
+        );
+        let output = wait_for_text(&ctx, &mut window, "(2)");
+        assert_eq!(
+            texts(&output)
+                .iter()
+                .filter(|text| *text == "[x] same")
+                .count(),
+            2
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        let selection = wait_for_reply(&ctx, &mut window, &replies);
+        let items = selection.items();
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.value.as_str())
+                .collect::<Vec<_>>(),
+            ["first value", "second value"]
+        );
+        assert_eq!(items.iter().map(|item| item.id).collect::<Vec<_>>(), [0, 1]);
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn ansi_titles_match_and_render_as_visible_text_with_initial_query() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let mut options = PickerOptions::default()
+                .header("ANSI choices")
+                .query("Alpha");
+            options.matching.exact = true;
+            let choices = vec![
+                Candidate::with_title("A\u{1b}[31ml\u{1b}[0mpha", "colored value"),
+                Candidate::with_title("Beta", "other value"),
+            ];
+            done.send(picker.pick(&options, choices).unwrap()).unwrap();
+        });
+        let ctx = egui::Context::default();
+        let output = wait_for_text(&ctx, &mut window, "1/2");
+        let shown = texts(&output);
+        assert!(shown.iter().any(|text| text == "> Alpha▏"), "{shown:?}");
+        assert!(shown.iter().any(|text| text == "Alpha"), "{shown:?}");
+        assert!(
+            !shown.iter().any(|text| text.contains('\u{1b}')),
+            "{shown:?}"
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        let selection = wait_for_reply(&ctx, &mut window, &replies);
+        assert_eq!(selection.items()[0].value, "colored value");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn ctrl_c_cancels_the_picker_without_closing_the_window() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            done.send(
+                picker
+                    .pick(
+                        &PickerOptions::default().header("Cancel pick"),
+                        candidates(&["alpha", "beta"]),
+                    )
+                    .unwrap(),
+            )
+            .unwrap();
+        });
+        let ctx = egui::Context::default();
+        wait_for_text(&ctx, &mut window, "Cancel pick");
+        let control = egui::Modifiers {
+            ctrl: true,
+            ..egui::Modifiers::default()
+        };
+        let output = frame(&ctx, &mut window, vec![key(egui::Key::C, control)]);
+        assert!(!output.viewport_output.values().any(|viewport| {
+            viewport
+                .commands
+                .iter()
+                .any(|command| matches!(command, egui::ViewportCommand::Close))
+        }));
+        assert_eq!(
+            wait_for_reply(&ctx, &mut window, &replies),
+            Selection::Canceled
+        );
+        wait_for_text(&ctx, &mut window, "Nixon");
+        worker.join().unwrap();
+    }
+
+    #[test]
     fn picker_buttons_follow_action_options_and_mouse_clicks() {
         let (mut window, mut picker) = window_with_picker();
         let (done, replies) = mpsc::channel();
