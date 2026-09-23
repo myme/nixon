@@ -26,8 +26,9 @@ Legend:
   decision.
 
 Unchecked requirements may be partially implemented; their notes identify the
-remaining gap. The Linux packaged GUI smoke check passed under Xvfb, and the
-full Linux `nix flake check` passed on 2026-09-23. Wayland remains unverified.
+remaining gap. The packaged GUI passed its Xvfb interaction smoke and headless
+Weston Wayland startup check; the full Linux `nix flake check` passed on
+2026-09-23. Wayland keyboard interaction remains unverified.
 
 ---
 
@@ -351,9 +352,12 @@ launcher:
 - [ ] **MUST:** Support Linux X11 and Wayland sessions. Window creation must
   not require `XDG_SESSION_TYPE` to be set; let the window toolkit choose its
   available backend. A missing display produces a clean diagnostic. Linux
-  display absence is diagnosed before window creation, and the development
-  binary and the packaged Linux binary passed the Xvfb smoke script. Wayland
-  startup remains unverified.
+  display absence is diagnosed before window creation. The development and
+  packaged binaries passed the Xvfb interaction smoke. A packaged Wayland
+  check under pinned headless Weston verifies toplevel creation, configure,
+  rendered-buffer commit, and a live process with `DISPLAY` and
+  `XDG_SESSION_TYPE` unset. Wayland keyboard interaction and a user-driven
+  close remain unverified.
 - [x] **MUST:** Request a compact, keyboard-first, frontmost launcher window.
   Do not assume every window manager will honor positioning or always-on-top
   hints. Focus the first actionable control when the window opens.
@@ -407,11 +411,13 @@ placeholder producer was cancelled.
   pick. Run the established `nix flake check` gates for the CLI as well. A
   Linux Nix check exercises the wrapped binary and passed under Xvfb on
   2026-09-23, including the visible History error, stderr, and empty stdout.
-  The full Linux `nix flake check` passed all 15 checks on 2026-09-23.
+  The full Linux `nix flake check` passed on 2026-09-23, including a separate
+  packaged Wayland startup gate.
 - [ ] **SHOULD:** Exercise X11 and Wayland in packaging/CI where runners
   support them; manual verification is recorded for any session type CI
-  cannot provide. Development and packaged X11 passed under Xvfb; a Wayland
-  run and manual record remain outstanding.
+  cannot provide. Development and packaged X11 passed under Xvfb. Packaged
+  Wayland startup passed under headless Weston; keyboard interaction and a
+  manual Wayland session record remain outstanding.
 
 ## 10. Implementation cuts
 

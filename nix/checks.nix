@@ -183,10 +183,10 @@ in
       '';
 
   # Shellcheck has no zsh or fish support; check the bash widget and GUI
-  # smoke script without misreading the other widgets as bash.
+  # smoke scripts without misreading the other widgets as bash.
   shellcheck = runCheck "shellcheck" [
     pkgs.shellcheck
-  ] "shellcheck --shell=bash extra/*.bash nix/gui-smoke.sh";
+  ] "shellcheck --shell=bash extra/*.bash nix/gui-smoke.sh nix/wayland-smoke.sh";
 
   typos = runCheck "typos" [ pkgs.typos ] "typos";
   statix = runCheck "statix" [ pkgs.statix ] "statix check .";
@@ -225,6 +225,25 @@ in
         export __GLX_VENDOR_LIBRARY_NAME=mesa
         export LD_LIBRARY_PATH=${pkgs.mesa}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
         bash ${./gui-smoke.sh} ${nixon}/bin/nixon
+        touch $out
+      '';
+
+  # The wrapped binary must create a rendered toplevel on Wayland without
+  # relying on an X11 display or session-type hint.
+  gui-wayland-smoke =
+    pkgs.runCommand "nixon-check-gui-wayland-smoke"
+      {
+        nativeBuildInputs = [
+          pkgs.weston
+          pkgs.mesa
+          pkgs.ripgrep
+        ];
+      }
+      ''
+        export __EGL_VENDOR_LIBRARY_FILENAMES=${pkgs.mesa}/share/glvnd/egl_vendor.d/50_mesa.json
+        export LIBGL_DRIVERS_PATH=${pkgs.mesa}/lib/dri
+        export LD_LIBRARY_PATH=${pkgs.mesa}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        timeout --kill-after=5s 45s bash ${./wayland-smoke.sh} ${nixon}/bin/nixon ${pkgs.weston}/bin/weston
         touch $out
       '';
 }
