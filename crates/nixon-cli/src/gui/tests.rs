@@ -1637,6 +1637,25 @@ fn history_insert_replays_show_source_with_copy_for_run_and_project_aliases() {
 }
 
 #[test]
+fn history_insert_precedes_select_without_running_a_producer() {
+    let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    write_history(&temp, &[history_entry(&cwd, &["run", "-i", "-s", "alpha"])]);
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+
+    choose_first_history_entry(&mut app, &ctx);
+    let output = wait_for_text(&mut app, &ctx, "Command source: alpha");
+    assert_eq!(
+        copied_text(&copy_detail(&mut app, &ctx)),
+        Some("touch selected-marker\n")
+    );
+    assert!(!closes(&output));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
 fn history_run_list_replays_to_copyable_detail_without_launching() {
     for (flag, query, expected) in [
         ("--list", None, "_hidden\nalpha\nbeta\nzeta"),
@@ -2153,6 +2172,38 @@ fn history_fuzzy_picker_show_opens_detail_without_running() {
             .any(|text| text == "touch selected-marker\n")
     );
     assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn history_fuzzy_picker_visit_uses_editor_without_running_command() {
+    let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let terminal = executable(&temp, "terminal");
+    let editor = executable(&temp, "editor");
+    config.launcher.terminal = Some(vec![terminal.to_string_lossy().into_owned(), "-e".into()]);
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    write_history(&temp, &[history_entry(&cwd, &["run", "a"])]);
+    env.editor = Some(editor.to_string_lossy().into_owned());
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+
+    choose_first_history_entry(&mut app, &ctx);
+    let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+    wait_for_text(&mut app, &ctx, "Select command");
+    let output = frame(&mut app, &ctx, vec![key(egui::Key::F2)]);
+    if !closes(&output) {
+        wait_for_close(&mut app, &ctx);
+    }
+    let calls = calls.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].argv[0], terminal.to_string_lossy());
+    let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+    assert_eq!(payload.argv[0], editor.to_string_lossy());
+    assert_eq!(
+        payload.argv[2],
+        temp.child("project/nixon.md").path().to_string_lossy()
+    );
+    assert!(!temp.child("project/selected-marker").path().exists());
 }
 
 #[test]

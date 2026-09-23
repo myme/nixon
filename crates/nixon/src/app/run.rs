@@ -5,7 +5,6 @@ use nixon_picker::{Candidate, FilterPicker, Picker, PickerOptions, Selection, Se
 use super::{App, RunOpts};
 use crate::command::Command;
 use crate::error::{NixonError, Result};
-use crate::output;
 use crate::process::{ExitCode, ProcessRunner};
 use crate::project::Project;
 use crate::select;
@@ -13,14 +12,46 @@ use crate::select;
 /// Message shown when `run --list` has no matches.
 pub const NO_COMMANDS: &str = "No commands.";
 
+/// A command choice ready for its caller to present or execute.
+#[derive(Debug)]
+pub enum RunDecision {
+    /// Matching command names, including hidden commands.
+    List(Vec<String>),
+    /// Source requested by `--insert`.
+    InsertSource(Command),
+    /// Values chosen from a command's output by `--select`.
+    SelectedValues(Command, Vec<String>),
+    /// Run the command with its supplied arguments.
+    Run(Command, Vec<String>),
+    /// Show the selected command's source.
+    ShowSource(Command),
+    /// Edit the selected command, retaining its arguments.
+    Edit(Command, Vec<String>),
+    /// Visit the selected command's definition.
+    Visit(Command),
+}
+
 impl<P: Picker, R: ProcessRunner> App<P, R> {
     /// Selects a command in the current project and acts on it.
     pub fn run(&mut self, opts: &RunOpts) -> Result<ExitCode> {
         let project = self.current_project();
+        let decision = self.prepare_run_command(&project, opts)?;
+        self.finish_run_decision(&project, decision)
+    }
+
+    /// Chooses a command or list result without writing to stdout.
+    pub fn prepare_run_command(
+        &mut self,
+        project: &Project,
+        opts: &RunOpts,
+    ) -> Result<RunDecision> {
         if opts.list {
-            return self.list_commands(&project, opts.command.as_deref());
+            return self
+                .matching_command_names(project, opts.command.as_deref())
+                .map(RunDecision::List);
         }
-        self.find_and_handle_cmd(&project, opts)
+        let selection = self.choose_command(project, opts.command.as_deref())?;
+        self.prepare_selected_command(project, selection, opts)
     }
 
     /// Prints matching command names.
@@ -30,13 +61,7 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
     /// widgets rely on that.
     pub fn list_commands(&mut self, project: &Project, query: Option<&str>) -> Result<ExitCode> {
         let matched = self.matching_command_names(project, query)?;
-
-        if matched.is_empty() {
-            tracing::error!("{NO_COMMANDS}");
-            return Ok(0);
-        }
-        output::lines(&matched)?;
-        Ok(0)
+        self.finish_run_decision(project, RunDecision::List(matched))
     }
 
     /// Returns the same plain command lines that `run --list` prints.

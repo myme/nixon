@@ -224,6 +224,25 @@ fn run_list_with_no_matches_says_so_on_stderr_and_still_exits_zero() {
 }
 
 #[test]
+fn run_list_takes_precedence_over_insert_and_select() {
+    let fixture = Fixture::new();
+    fixture
+        .nixon()
+        .args(["run", "-l", "-i", "-s", "hello"])
+        .assert()
+        .success()
+        .stdout("hello - Say hello.\n");
+    fixture
+        .nixon()
+        .args(["run", "-l", "-i", "-s", "zzzz"])
+        .assert()
+        .success()
+        .stdout("")
+        .stderr(contains("No commands."));
+    assert!(!fixture.temp.child("state/nixon/history").path().exists());
+}
+
+#[test]
 fn a_unique_query_runs_without_a_terminal() {
     Fixture::new()
         .nixon()

@@ -2,6 +2,7 @@
 
 use nixon_picker::{Picker, PickerOption, PickerOptions, Selection, SelectionType};
 
+use super::run::{NO_COMMANDS, RunDecision};
 use super::{App, RunOpts, context};
 use crate::command::{Command, Description};
 use crate::config::Config;
@@ -23,6 +24,16 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         selection: Selection<Command>,
         opts: &RunOpts,
     ) -> Result<ExitCode> {
+        let decision = self.prepare_selected_command(project, selection, opts)?;
+        self.finish_run_decision(project, decision)
+    }
+
+    pub(super) fn prepare_selected_command(
+        &mut self,
+        project: &Project,
+        selection: Selection<Command>,
+        opts: &RunOpts,
+    ) -> Result<RunDecision> {
         let (kind, command) = match selection {
             Selection::Empty => {
                 return Err(NixonError::NothingSelected(
@@ -46,24 +57,47 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         };
 
         if opts.insert {
-            output::raw(&command.source)?;
-            return Ok(0);
+            return Ok(RunDecision::InsertSource(command));
         }
 
         if opts.select {
             let values = self.select_from(project, &command)?;
-            output::lines(&values)?;
-            return Ok(0);
+            return Ok(RunDecision::SelectedValues(command, values));
         }
 
-        match kind {
-            SelectionType::Default => self.run_cmd(project, &command, &opts.args),
-            SelectionType::Edit => self.edit_then_run(project, command, &opts.args),
-            SelectionType::Show => {
+        Ok(match kind {
+            SelectionType::Default => RunDecision::Run(command, opts.args.clone()),
+            SelectionType::Edit => RunDecision::Edit(command, opts.args.clone()),
+            SelectionType::Show => RunDecision::ShowSource(command),
+            SelectionType::Visit => RunDecision::Visit(command),
+        })
+    }
+
+    pub(super) fn finish_run_decision(
+        &mut self,
+        project: &Project,
+        decision: RunDecision,
+    ) -> Result<ExitCode> {
+        match decision {
+            RunDecision::List(lines) => {
+                if lines.is_empty() {
+                    tracing::error!("{NO_COMMANDS}");
+                } else {
+                    output::lines(&lines)?;
+                }
+                Ok(0)
+            }
+            RunDecision::InsertSource(command) | RunDecision::ShowSource(command) => {
                 output::raw(&command.source)?;
                 Ok(0)
             }
-            SelectionType::Visit => {
+            RunDecision::SelectedValues(_, values) => {
+                output::lines(&values)?;
+                Ok(0)
+            }
+            RunDecision::Run(command, args) => self.run_cmd(project, &command, &args),
+            RunDecision::Edit(command, args) => self.edit_then_run(project, command, &args),
+            RunDecision::Visit(command) => {
                 self.visit_cmd(&command)?;
                 Ok(0)
             }

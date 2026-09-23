@@ -9,6 +9,7 @@ use assert_fs::prelude::*;
 use nixon::app::history::{HistoryOpts, HistoryReadMode};
 use nixon::app::new::NewOpts;
 use nixon::app::project::ProjectOpts;
+use nixon::app::run::RunDecision;
 use nixon::app::{App, Environment, RunOpts};
 use nixon::config::Config;
 use nixon::error::NixonError;
@@ -220,6 +221,164 @@ fn selecting_nothing_reports_no_command_selected() {
 
     let err = app.run(&RunOpts::default()).unwrap_err();
     assert_eq!(err.to_string(), "No command selected.");
+}
+
+#[test]
+fn run_decision_lists_before_picking_or_insert_and_includes_hidden_names() {
+    let fixture = Fixture::new(
+        "# `_hidden`\n\n```bash\necho hidden\n```\n\n# `alpha`\n\n```bash\necho alpha\n```\n",
+    );
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    let project = app.current_project();
+
+    let decision = app
+        .prepare_run_command(
+            &project,
+            &RunOpts {
+                list: true,
+                insert: true,
+                select: true,
+                ..RunOpts::default()
+            },
+        )
+        .unwrap();
+
+    assert!(matches!(decision, RunDecision::List(lines) if lines == ["_hidden", "alpha"]));
+    assert!(app.picker.calls.is_empty());
+    assert!(app.runner.calls.is_empty());
+
+    let decision = app
+        .prepare_run_command(
+            &project,
+            &RunOpts {
+                command: Some("missing".to_owned()),
+                list: true,
+                ..RunOpts::default()
+            },
+        )
+        .unwrap();
+    assert!(matches!(decision, RunDecision::List(lines) if lines.is_empty()));
+
+    let decision = app
+        .prepare_run_command(
+            &project,
+            &RunOpts {
+                command: Some("_hidden".to_owned()),
+                ..RunOpts::default()
+            },
+        )
+        .unwrap();
+    assert!(matches!(decision, RunDecision::Run(command, _) if command.name == "_hidden"));
+    assert!(app.picker.calls.is_empty());
+}
+
+#[test]
+fn run_decision_insert_precedes_select_and_picker_show() {
+    let fixture = Fixture::new(
+        "# `alpha`\n\n```bash\necho alpha\n```\n\n# `beta`\n\n```bash\necho beta\n```\n",
+    );
+    let picker = ScriptedPicker::new(vec![Selection::selected(
+        SelectionType::Show,
+        vec![Candidate::identity("alpha")],
+    )]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+    let project = app.current_project();
+
+    let decision = app
+        .prepare_run_command(
+            &project,
+            &RunOpts {
+                insert: true,
+                select: true,
+                ..RunOpts::default()
+            },
+        )
+        .unwrap();
+
+    assert!(matches!(decision, RunDecision::InsertSource(command) if command.name == "alpha"));
+    assert_eq!(app.picker.calls.len(), 1);
+    assert!(app.runner.calls.is_empty());
+}
+
+#[test]
+fn run_decision_select_precedes_picker_show_and_returns_values() {
+    let fixture = Fixture::new(
+        "# `alpha`\n\n```bash\necho alpha\n```\n\n# `beta`\n\n```bash\necho beta\n```\n",
+    );
+    let picker = ScriptedPicker::new(vec![
+        Selection::selected(SelectionType::Show, vec![Candidate::identity("alpha")]),
+        selected(&["first"]),
+    ]);
+    let mut app = fixture.app(picker, FakeRunner::new().with_output(&["first", "second"]));
+    let project = app.current_project();
+
+    let decision = app
+        .prepare_run_command(
+            &project,
+            &RunOpts {
+                select: true,
+                ..RunOpts::default()
+            },
+        )
+        .unwrap();
+
+    assert!(
+        matches!(decision, RunDecision::SelectedValues(command, values) if command.name == "alpha" && values == ["first"])
+    );
+    assert_eq!(app.picker.calls.len(), 2);
+    assert!(fixture.history().is_empty());
+}
+
+#[test]
+fn run_decision_preserves_picker_actions_arguments_and_cancel() {
+    let fixture = Fixture::new(
+        "# `alpha`\n\n```bash\necho alpha\n```\n\n# `beta`\n\n```bash\necho beta\n```\n",
+    );
+    for kind in [
+        SelectionType::Default,
+        SelectionType::Show,
+        SelectionType::Edit,
+        SelectionType::Visit,
+    ] {
+        let picker = ScriptedPicker::new(vec![Selection::selected(
+            kind,
+            vec![Candidate::identity("alpha")],
+        )]);
+        let mut app = fixture.app(picker, FakeRunner::new());
+        let project = app.current_project();
+        let decision = app
+            .prepare_run_command(
+                &project,
+                &RunOpts {
+                    args: vec!["two words".to_owned()],
+                    ..RunOpts::default()
+                },
+            )
+            .unwrap();
+        match (kind, decision) {
+            (SelectionType::Default, RunDecision::Run(command, args))
+            | (SelectionType::Edit, RunDecision::Edit(command, args)) => {
+                assert_eq!(command.name, "alpha");
+                assert_eq!(args, ["two words"]);
+            }
+            (SelectionType::Show, RunDecision::ShowSource(command))
+            | (SelectionType::Visit, RunDecision::Visit(command)) => {
+                assert_eq!(command.name, "alpha");
+            }
+            (_, decision) => panic!("unexpected decision: {decision:?}"),
+        }
+        assert!(app.runner.calls.is_empty());
+    }
+
+    let mut app = fixture.app(
+        ScriptedPicker::new(vec![Selection::Canceled]),
+        FakeRunner::new(),
+    );
+    let project = app.current_project();
+    assert!(matches!(
+        app.prepare_run_command(&project, &RunOpts::default()),
+        Err(NixonError::Canceled)
+    ));
 }
 
 #[test]

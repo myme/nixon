@@ -2,7 +2,7 @@
 
 use nixon::app::history::{DEFAULT_LIMIT, HistoryReadMode};
 use nixon::app::project::NO_PROJECTS;
-use nixon::app::run::NO_COMMANDS;
+use nixon::app::run::{NO_COMMANDS, RunDecision};
 use nixon::app::{App, RunOpts};
 use nixon::error::{NixonError, Result};
 use nixon::process::ProcessRunner;
@@ -125,60 +125,41 @@ fn replay_named_command<R: ProcessRunner>(
     project: &Project,
     opts: &RunOpts,
 ) -> CommandOutcome {
-    if opts.list {
-        return match app.matching_command_names(project, opts.command.as_deref()) {
-            Ok(lines) => CommandOutcome::Detail {
-                title: "Command list".to_owned(),
-                body: if lines.is_empty() {
-                    NO_COMMANDS.to_owned()
-                } else {
-                    lines.join("\n")
-                },
-            },
-            Err(error) => replay_error(error),
-        };
-    }
-    let selection = match app.choose_command(project, opts.command.as_deref()) {
-        Ok(selection) => selection,
+    let decision = match app.prepare_run_command(project, opts) {
+        Ok(decision) => decision,
         Err(NixonError::Canceled) => return CommandOutcome::Canceled,
         Err(error) => return replay_error(error),
     };
-    let (kind, command) = match selection {
-        Selection::Selected { kind, mut items } if items.len() == 1 => (kind, items.remove(0)),
-        Selection::Canceled => return CommandOutcome::Canceled,
-        Selection::Empty => return replay_error("No command selected."),
-        Selection::Selected { .. } => return replay_error("Multiple commands selected."),
-    };
-    if opts.insert {
-        return CommandOutcome::Detail {
+    match decision {
+        RunDecision::List(lines) => CommandOutcome::Detail {
+            title: "Command list".to_owned(),
+            body: if lines.is_empty() {
+                NO_COMMANDS.to_owned()
+            } else {
+                lines.join("\n")
+            },
+        },
+        RunDecision::InsertSource(command) => CommandOutcome::Detail {
             title: format!("Command source: {}", command.name),
             body: command.source,
-        };
-    }
-    if opts.select {
-        return match app.select_from(project, &command) {
-            Ok(values) => CommandOutcome::Detail {
-                title: format!("Selected values: {}", command.name),
-                body: values.join("\n"),
-            },
-            Err(NixonError::Canceled) => CommandOutcome::Canceled,
-            Err(error) => replay_error(error),
-        };
-    }
-    match kind {
-        SelectionType::Default => {
-            run_selected_command_with_args(app, project, &command, &opts.args)
+        },
+        RunDecision::SelectedValues(command, values) => CommandOutcome::Detail {
+            title: format!("Selected values: {}", command.name),
+            body: values.join("\n"),
+        },
+        RunDecision::Run(command, args) => {
+            run_selected_command_with_args(app, project, &command, &args)
         }
-        SelectionType::Show => CommandOutcome::Detail {
+        RunDecision::ShowSource(command) => CommandOutcome::Detail {
             title: format!("Command: {}", command.name),
             body: command.source,
         },
-        SelectionType::Edit => CommandOutcome::Edit {
+        RunDecision::Edit(command, args) => CommandOutcome::Edit {
             project: project.clone(),
             command: Box::new(command),
-            args: opts.args.clone(),
+            args,
         },
-        SelectionType::Visit => visit_selected_command(app, project, &command),
+        RunDecision::Visit(command) => visit_selected_command(app, project, &command),
     }
 }
 
