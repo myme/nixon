@@ -215,16 +215,15 @@ fn replay_eval<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
     opts: &nixon::app::eval::EvalOpts,
 ) -> CommandOutcome {
-    let project = match (&opts.project, opts.select_project) {
-        (Some(path), _) => app.project_for_query_with_kind(Some(path)),
-        (None, true) => app.project_for_query_with_kind(None),
-        (None, false) => Ok((SelectionType::Default, app.current_project())),
+    let choice = match app.prepare_eval(opts) {
+        Ok(choice) => choice,
+        Err(NixonError::Canceled) => return CommandOutcome::Canceled,
+        Err(error) => return replay_error(error),
     };
-    let project = match project {
-        Ok((SelectionType::Default, project)) => project,
-        Ok((SelectionType::Show, project)) => return project_detail(&project),
-        Ok(_) | Err(NixonError::Canceled) => return CommandOutcome::Canceled,
-        Err(error) => return CommandOutcome::Error(format!("Could not replay history: {error}")),
+    let project = match choice.kind {
+        SelectionType::Default => choice.project,
+        SelectionType::Show => return project_detail(&choice.project),
+        SelectionType::Edit | SelectionType::Visit => return CommandOutcome::Canceled,
     };
     let config = match app.config_for(&project) {
         Ok(config) => config,

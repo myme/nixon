@@ -292,6 +292,30 @@ fn eval_runs_an_inline_expression() {
 }
 
 #[test]
+fn eval_uses_current_or_explicit_project_working_directory() {
+    let fixture = Fixture::new();
+    let current = fixture.temp.child("project");
+    let explicit = fixture.temp.child("another project");
+    explicit.create_dir_all().unwrap();
+    fixture
+        .nixon()
+        .args(["eval", "pwd"])
+        .assert()
+        .success()
+        .stdout(format!("{}\n", current.path().display()));
+    fixture
+        .nixon()
+        .args([
+            "eval",
+            &format!("--project={}", explicit.path().display()),
+            "pwd",
+        ])
+        .assert()
+        .success()
+        .stdout(format!("{}\n", explicit.path().display()));
+}
+
+#[test]
 fn eval_works_outside_any_recognised_project() {
     let fixture = Fixture::new();
     // No marker here, so this directory is not a project.

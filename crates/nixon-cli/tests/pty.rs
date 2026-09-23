@@ -287,6 +287,34 @@ fn f1_prints_the_source_instead_of_running_it() {
 }
 
 #[test]
+fn eval_project_prompt_keeps_cli_show_and_cancel_behavior() {
+    let pty = Pty::new();
+    let projects = pty.temp.child("projects");
+    for name in ["one", "two"] {
+        projects.child(name).child(".git").create_dir_all().unwrap();
+    }
+    pty.temp
+        .child("config/nixon.md")
+        .write_str(&format!(
+            "```json config\n{{\"project_dirs\": [\"{}\"], \"project_types\": [{{\"name\": \"git\", \"test\": [\".git\"], \"desc\": \"Git\"}}]}}\n```\n",
+            projects.path().display()
+        ))
+        .unwrap();
+
+    let mut shown = pty.spawn_capturing(&["eval", "-p", "echo from-show"]);
+    settle();
+    shown.send("\u{1b}OP").unwrap();
+    assert_eq!(wait_code(&mut shown), 0);
+    assert_eq!(pty.captured_stdout(), "from-show\n");
+
+    let mut canceled = pty.spawn_capturing(&["eval", "-p", "echo unused"]);
+    settle();
+    canceled.send("\u{1b}").unwrap();
+    assert_eq!(wait_code(&mut canceled), 130);
+    assert_eq!(pty.captured_stdout(), "");
+}
+
+#[test]
 fn f2_opens_the_command_in_the_editor_at_its_line() {
     let pty = Pty::new();
     let mut session = pty.spawn(&["run"]);

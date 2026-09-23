@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
+use nixon::app::eval::EvalOpts;
 use nixon::app::history::{HistoryOpts, HistoryReadMode};
 use nixon::app::new::NewOpts;
 use nixon::app::project::{ProjectDecision, ProjectOpts};
@@ -1519,6 +1520,93 @@ fn eval_records_its_expression() {
 
     // The language too, or a replay runs it as bash whatever it was.
     assert_eq!(fixture.history(), ["nixon eval -l bash 'echo hello'"]);
+}
+
+#[test]
+fn prepare_eval_uses_current_project_and_explicit_path_without_a_picker() {
+    let mut fixture = Fixture::new(HISTORY_MD);
+    fixture.sibling_project("elsewhere");
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+    let current = app.prepare_eval(&EvalOpts::default()).unwrap();
+    assert_eq!(current.kind, SelectionType::Default);
+    assert_eq!(current.project.path(), fixture.project_path());
+    let explicit = app
+        .prepare_eval(&EvalOpts {
+            project: Some(
+                fixture
+                    .temp
+                    .child("elsewhere")
+                    .path()
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            select_project: true,
+            ..EvalOpts::default()
+        })
+        .unwrap();
+    assert_eq!(explicit.kind, SelectionType::Default);
+    assert_eq!(
+        explicit.project.path(),
+        fixture.temp.child("elsewhere").path()
+    );
+    assert!(app.picker.calls.is_empty());
+    assert!(app.runner.calls.is_empty());
+}
+
+#[test]
+fn prepare_eval_preserves_prompt_show_and_cancel() {
+    let mut fixture = Fixture::new(HISTORY_MD);
+    fixture.sibling_project("elsewhere");
+    let chosen = fixture.temp.child("elsewhere").to_path_buf();
+    let picker = ScriptedPicker::new(vec![Selection::selected(
+        SelectionType::Show,
+        vec![Candidate::identity(chosen.to_string_lossy().into_owned())],
+    )]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+    let choice = app
+        .prepare_eval(&EvalOpts {
+            select_project: true,
+            ..EvalOpts::default()
+        })
+        .unwrap();
+    assert_eq!(choice.kind, SelectionType::Show);
+    assert_eq!(choice.project.path(), chosen);
+    assert_eq!(app.picker.calls.len(), 1);
+    assert!(app.runner.calls.is_empty());
+
+    let mut app = fixture.app(
+        ScriptedPicker::new(vec![Selection::Canceled]),
+        FakeRunner::new(),
+    );
+    assert!(matches!(
+        app.prepare_eval(&EvalOpts {
+            select_project: true,
+            ..EvalOpts::default()
+        }),
+        Err(NixonError::Canceled)
+    ));
+    assert!(app.runner.calls.is_empty());
+}
+
+#[test]
+fn cli_eval_still_runs_after_project_show_and_records_it() {
+    let mut fixture = Fixture::new(HISTORY_MD);
+    fixture.sibling_project("elsewhere");
+    let chosen = fixture.temp.child("elsewhere").to_path_buf();
+    let picker = ScriptedPicker::new(vec![Selection::selected(
+        SelectionType::Show,
+        vec![Candidate::identity(chosen.to_string_lossy().into_owned())],
+    )]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+    app.eval(&EvalOpts {
+        source: Some("echo chosen".to_owned()),
+        select_project: true,
+        ..EvalOpts::default()
+    })
+    .unwrap();
+    assert_eq!(app.runner.calls.len(), 1);
+    assert_eq!(app.runner.calls[0].1.cwd.as_deref(), Some(chosen.as_path()));
+    assert!(fixture.history()[0].contains("echo chosen"));
 }
 
 /// Nothing that did not run is recorded.

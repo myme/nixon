@@ -29,18 +29,33 @@ pub struct EvalOpts {
     pub project: Option<String>,
 }
 
+/// The project chosen for an eval, including the picker's action.
+#[derive(Debug)]
+pub struct EvalProject {
+    /// How the project was chosen.
+    pub kind: SelectionType,
+    /// Project whose config and working directory apply to the eval.
+    pub project: Project,
+}
+
 impl<P: Picker, R: ProcessRunner> App<P, R> {
     /// Evaluates a one-off command.
     pub fn eval(&mut self, opts: &EvalOpts) -> Result<ExitCode> {
+        let choice = self.prepare_eval(opts)?;
+        // CLI eval has always run in the picked project, even for Show.
+        self.eval_in_project(&choice.project, opts)
+    }
+
+    /// Resolves eval's project without presenting or running the expression.
+    pub fn prepare_eval(&mut self, opts: &EvalOpts) -> Result<EvalProject> {
         // Without --project, fall back to the current
         // directory as `run` does, rather than v1's interactive picker.
-        let project = match (&opts.project, opts.select_project) {
-            (Some(path), _) => self.project_for_query(Some(path))?,
-            (None, true) => self.pick_one_project(None)?,
-            (None, false) => self.current_project(),
+        let (kind, project) = match (&opts.project, opts.select_project) {
+            (Some(path), _) => self.project_for_query_with_kind(Some(path))?,
+            (None, true) => self.project_for_query_with_kind(None)?,
+            (None, false) => (SelectionType::Default, self.current_project()),
         };
-
-        self.eval_in_project(&project, opts)
+        Ok(EvalProject { kind, project })
     }
 
     /// Evaluates in an already resolved project, for callers that must set

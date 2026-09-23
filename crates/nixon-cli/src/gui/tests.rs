@@ -2051,6 +2051,108 @@ fn history_eval_replay_uses_explicit_project_and_quoted_source() {
 }
 
 #[test]
+fn history_eval_replay_without_project_uses_current_project_and_records_it() {
+    let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let terminal = executable(&temp, "terminal");
+    config.launcher.terminal = Some(vec![terminal.to_string_lossy().into_owned(), "-e".into()]);
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    write_history(&temp, &[history_entry(&cwd, &["eval", "echo current"])]);
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+    replay_first_history_entry(&mut app, &ctx);
+    let calls = calls.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].argv[0], terminal.to_string_lossy());
+    let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+    assert_eq!(
+        payload.cwd,
+        Some(temp.child("project").path().to_path_buf())
+    );
+    let recorded =
+        nixon::history::read_checked(temp.child("state/nixon/history").path(), None).unwrap();
+    assert_eq!(recorded.len(), 2);
+    assert_eq!(recorded[1].invocation[0], "eval");
+}
+
+#[test]
+fn history_eval_prompt_uses_selected_projects_local_terminal() {
+    let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let global_terminal = executable(&temp, "global-terminal");
+    let project_terminal = executable(&temp, "project-terminal");
+    config.launcher.terminal = Some(vec![
+        global_terminal.to_string_lossy().into_owned(),
+        "-e".into(),
+    ]);
+    let (first, _) = discovered_projects(&temp, &mut config);
+    let local = format!(
+        "```yaml config\nlauncher:\n  terminal: [{}, '-e']\n```\n",
+        serde_json::to_string(&project_terminal.to_string_lossy()).unwrap()
+    );
+    fs::write(first.join("nixon.md"), local).unwrap();
+    let cwd = temp.child("project").path().to_string_lossy().into_owned();
+    write_history(
+        &temp,
+        &[history_entry(&cwd, &["eval", "-p", "echo selected"])],
+    );
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+    choose_first_history_entry(&mut app, &ctx);
+    wait_for_text(&mut app, &ctx, "Select project");
+    frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+    frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+    wait_for_close(&mut app, &ctx);
+    let calls = calls.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].argv[0], project_terminal.to_string_lossy());
+    let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+    assert_eq!(payload.cwd, Some(first));
+    let recorded =
+        nixon::history::read_checked(temp.child("state/nixon/history").path(), None).unwrap();
+    assert_eq!(recorded.len(), 2);
+    assert_eq!(recorded[1].invocation[0], "eval");
+}
+
+#[test]
+fn history_eval_project_show_and_cancel_do_not_run() {
+    for show in [true, false] {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        discovered_projects(&temp, &mut config);
+        let cwd = temp.child("project").path().to_string_lossy().into_owned();
+        write_history(
+            &temp,
+            &[history_entry(&cwd, &["eval", "-p", "echo unused"])],
+        );
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        choose_first_history_entry(&mut app, &ctx);
+        wait_for_text(&mut app, &ctx, "Select project");
+        frame(
+            &mut app,
+            &ctx,
+            vec![key(if show {
+                egui::Key::F1
+            } else {
+                egui::Key::Escape
+            })],
+        );
+        if show {
+            let output = wait_for_text(&mut app, &ctx, "Project: work-one");
+            assert!(!closes(&output));
+        } else {
+            let output = wait_for_text(&mut app, &ctx, "Commands");
+            assert!(!closes(&output));
+        }
+        assert!(calls.lock().unwrap().is_empty());
+        let recorded =
+            nixon::history::read_checked(temp.child("state/nixon/history").path(), None).unwrap();
+        assert_eq!(recorded.len(), 1);
+    }
+}
+
+#[test]
 fn history_bare_command_accepts_saved_globals_without_reapplying_them() {
     let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
     let terminal = executable(&temp, "terminal");

@@ -142,8 +142,9 @@ workflows.
   from `App::config_for`. GUI project and command picks now use `App` selection
   methods. History loading, candidate construction, and picker orchestration
   share `nixon::app::history`; CLI and GUI replay share output-neutral
-  `RunDecision` and `ProjectDecision` choices. History argument parsing and
-  eval replay dispatch still live in `nixon-cli/src/gui/history.rs`.
+  `RunDecision` and `ProjectDecision` choices. CLI eval and GUI replay share
+  `App::prepare_eval` for project selection. History argument parsing and
+  eval replay presentation still live in `nixon-cli/src/gui/history.rs`.
 - [x] **MUST:** Reuse `Candidate`, `PickerOptions`, and `Selection` semantics.
   Add a domain-neutral UI field to those types only when necessary for both
   pickers. Keep GUI styling out of the domain crate.
