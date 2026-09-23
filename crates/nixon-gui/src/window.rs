@@ -1435,17 +1435,17 @@ mod tests {
                     .pick(
                         &PickerOptions::default()
                             .header("Paste at cursor")
-                            .query("bld")
+                            .query("ct")
                             .multi(true)
                             .no_sort(),
-                        candidates(&["build", "bald", "other"]),
+                        candidates(&["caret", "coat", "other"]),
                     )
                     .unwrap(),
             )
             .unwrap();
         });
         let ctx = egui::Context::default();
-        wait_for_text(&ctx, &mut window, "> bld▏");
+        wait_for_text(&ctx, &mut window, "> ct▏");
         frame(
             &ctx,
             &mut window,
@@ -1459,8 +1459,12 @@ mod tests {
                 key(egui::Key::ArrowRight, egui::Modifiers::default()),
             ],
         );
-        frame(&ctx, &mut window, vec![egui::Event::Paste("ui".to_owned())]);
-        let output = wait_for_text(&ctx, &mut window, "> bui▏ld");
+        frame(
+            &ctx,
+            &mut window,
+            vec![egui::Event::Paste("are".to_owned())],
+        );
+        let output = wait_for_text(&ctx, &mut window, "> care▏t");
         assert!(texts(&output).iter().any(|text| text == "1/3 (1)"));
         frame(
             &ctx,

@@ -535,7 +535,7 @@ mod tests {
     #[test]
     fn unknown_launcher_keys_actions_and_arguments_fail() {
         for source in [
-            r#"{"launcher":{"serch_url":"typo"}}"#,
+            r#"{"launcher":{"search_urls":"typo"}}"#,
             r#"{"launcher":{"items":[{"key":"A","label":"A","actoin":"history"}]}}"#,
             r#"{"launcher":{"items":[{"key":"A","label":"A","action":"unknown"}]}}"#,
             r#"{"launcher":{"items":[{"key":"A","label":"A","action":{"mpris":"Stop","player":"spotify"}}]}}"#,

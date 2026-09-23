@@ -26,9 +26,8 @@ Legend:
   decision.
 
 Unchecked requirements may be partially implemented; their notes identify the
-remaining gap. The Linux packaged GUI smoke check passed under Xvfb on
-2026-09-23. The full `nix flake check` remains blocked by two existing test
-literals rejected by its typos check; Wayland remains unverified.
+remaining gap. The Linux packaged GUI smoke check passed under Xvfb, and the
+full Linux `nix flake check` passed on 2026-09-23. Wayland remains unverified.
 
 ---
 
@@ -403,13 +402,12 @@ placeholder producer was cancelled.
 - [x] **MUST:** Component-test the Commands default action with a fake
   process runner: current-project config, terminal handoff, option and nested
   placeholder continuation, cancellation, detached `&`, and visible launch errors.
-- [ ] **MUST:** Smoke-test the packaged GUI under an available virtual
+- [x] **MUST:** Smoke-test the packaged GUI under an available virtual
   display, including open, keyboard navigation, cancel, and a second nested
   pick. Run the established `nix flake check` gates for the CLI as well. A
   Linux Nix check exercises the wrapped binary and passed under Xvfb on
   2026-09-23, including the visible History error, stderr, and empty stdout.
-  The full `nix flake check` reached `checks.x86_64-linux.typos` and failed on
-  the existing test literals `bui` and `serch`; the combined gate remains open.
+  The full Linux `nix flake check` passed all 15 checks on 2026-09-23.
 - [ ] **SHOULD:** Exercise X11 and Wayland in packaging/CI where runners
   support them; manual verification is recorded for any session type CI
   cannot provide. Development and packaged X11 passed under Xvfb; a Wayland
