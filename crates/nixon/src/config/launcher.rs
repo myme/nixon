@@ -4,6 +4,9 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Deserializer};
 
+/// Default browser search template.
+pub const DEFAULT_SEARCH_URL: &str = "https://www.google.com/search?q={query}";
+
 /// Launcher fields supplied by one config source.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct LauncherConfig {
@@ -19,7 +22,7 @@ impl LauncherConfig {
     /// The menu and search URL available without a config file.
     pub fn defaults() -> Self {
         Self {
-            search_url: Some("https://www.google.com/search?q={query}".to_owned()),
+            search_url: Some(DEFAULT_SEARCH_URL.to_owned()),
             items: Some(vec![
                 MenuItem::action(
                     MenuKey::Character('C'),
@@ -281,6 +284,13 @@ impl TryFrom<LauncherConfigSpec> for LauncherConfig {
         {
             return Err("launcher.search_url: expected a nonempty URL".to_owned());
         }
+        if spec
+            .search_url
+            .as_ref()
+            .is_some_and(|url| !url.contains("{query}"))
+        {
+            return Err("launcher.search_url: expected a {query} placeholder".to_owned());
+        }
         let items = spec
             .items
             .map(|items| parse_items(items, "launcher.items"))
@@ -481,6 +491,18 @@ mod tests {
             global.clone().merge(local).launcher.items,
             global.launcher.items
         );
+    }
+
+    #[test]
+    fn search_url_requires_a_query_placeholder() {
+        let error = parse_block(
+            "json",
+            r#"{"launcher":{"search_url":"https://search.example/find"}}"#,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("launcher.search_url"), "{error}");
+        assert!(error.contains("{query}"), "{error}");
     }
 
     #[test]

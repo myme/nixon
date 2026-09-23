@@ -7,12 +7,13 @@ use eframe::egui;
 use nixon::app::{App, Environment};
 use nixon::command::Command;
 use nixon::config::Config;
-use nixon::config::launcher::LauncherAction;
+use nixon::config::launcher::{DEFAULT_SEARCH_URL, LauncherAction};
 use nixon::error::{NixonError, Result};
 use nixon::fs::Dirs;
-use nixon::process::RealRunner;
+use nixon::process::{Invocation, ProcessRunner, RealRunner};
+use nixon_gui::browser::target_url;
 use nixon_gui::picker::GuiPicker;
-use nixon_gui::window::{MenuWindow, native_options};
+use nixon_gui::window::{BrowserInputEvent, MenuWindow, native_options};
 use nixon_picker::{Selection, SelectionType};
 
 use crate::cli::Commands;
@@ -42,9 +43,16 @@ struct PreviewApp {
     command_requests: Sender<()>,
     command_results: Receiver<CommandOutcome>,
     _worker: JoinHandle<()>,
+    browser_requests: Sender<String>,
+    browser_results: Receiver<BrowserResult>,
+    _browser_worker: JoinHandle<()>,
     busy: bool,
+    browser_busy: bool,
     status: String,
 }
+
+type BrowserResult = std::result::Result<bool, String>;
+const PREVIEW_STATUS: &str = "GUI preview: choose an action.";
 
 enum CommandOutcome {
     Selected { name: String, kind: SelectionType },
@@ -55,6 +63,15 @@ enum CommandOutcome {
 
 impl PreviewApp {
     fn new(config: Config, dirs: Dirs, env: Environment) -> Result<Self> {
+        Self::with_browser_runner(config, dirs, env, RealRunner)
+    }
+
+    fn with_browser_runner<R: ProcessRunner + Send + 'static>(
+        config: Config,
+        dirs: Dirs,
+        env: Environment,
+        browser_runner: R,
+    ) -> Result<Self> {
         let (sender, actions) = mpsc::channel();
         let mut menu = MenuWindow::new(&config.launcher, sender).ok_or_else(|| {
             NixonError::Io(std::io::Error::new(
@@ -64,6 +81,12 @@ impl PreviewApp {
         })?;
         let (picker, requests) = GuiPicker::channel();
         menu.attach_picker(requests);
+        let search_url = config
+            .launcher
+            .search_url
+            .as_deref()
+            .unwrap_or(DEFAULT_SEARCH_URL)
+            .to_owned();
         let (command_requests, worker_requests) = mpsc::channel();
         let (worker_results, command_results) = mpsc::channel();
         let worker = thread::spawn(move || {
@@ -75,14 +98,20 @@ impl PreviewApp {
                 }
             }
         });
+        let (browser_requests, browser_results, browser_worker) =
+            start_browser_worker(browser_runner, search_url);
         Ok(Self {
             menu,
             actions,
             command_requests,
             command_results,
             _worker: worker,
+            browser_requests,
+            browser_results,
+            _browser_worker: browser_worker,
             busy: false,
-            status: "GUI preview: actions are not wired yet.".to_owned(),
+            browser_busy: false,
+            status: PREVIEW_STATUS.to_owned(),
         })
     }
 
@@ -93,15 +122,37 @@ impl PreviewApp {
         self.menu.show(ctx);
         for action in self.actions.try_iter() {
             if action == LauncherAction::Commands {
-                if !self.busy && self.command_requests.send(()).is_ok() {
+                if !self.busy && !self.browser_busy && self.command_requests.send(()).is_ok() {
                     self.busy = true;
                     "Loading commands…".clone_into(&mut self.status);
+                }
+            } else if action == LauncherAction::BrowserInput {
+                if !self.busy && !self.browser_busy {
+                    self.menu.open_browser_input();
+                    "Enter a URL or search terms.".clone_into(&mut self.status);
                 }
             } else {
                 self.status = format!(
                     "{} selected. Execution is not wired yet.",
                     action_name(&action)
                 );
+            }
+            ctx.request_repaint();
+        }
+        if let Some(event) = self.menu.take_browser_event() {
+            match event {
+                BrowserInputEvent::Canceled => {
+                    PREVIEW_STATUS.clone_into(&mut self.status);
+                }
+                BrowserInputEvent::Submitted(input) => {
+                    if self.browser_requests.send(input).is_ok() {
+                        self.browser_busy = true;
+                        "Opening browser…".clone_into(&mut self.status);
+                    } else {
+                        "Browser opener is unavailable.".clone_into(&mut self.status);
+                        tracing::error!("{}", self.status);
+                    }
+                }
             }
             ctx.request_repaint();
         }
@@ -112,14 +163,76 @@ impl PreviewApp {
                     format!("Selected command: {name} ({kind:?}). Execution is not wired yet.")
                 }
                 CommandOutcome::Empty => "No commands available.".to_owned(),
-                CommandOutcome::Canceled => "GUI preview: actions are not wired yet.".to_owned(),
+                CommandOutcome::Canceled => PREVIEW_STATUS.to_owned(),
                 CommandOutcome::Error(error) => format!("Could not load commands: {error}"),
             };
             ctx.request_repaint();
         }
-        if self.busy {
+        for result in self.browser_results.try_iter() {
+            self.browser_busy = false;
+            match result {
+                Ok(true) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                Ok(false) => {
+                    PREVIEW_STATUS.clone_into(&mut self.status);
+                }
+                Err(message) => {
+                    tracing::error!("{message}");
+                    self.status = message;
+                }
+            }
+            ctx.request_repaint();
+        }
+        if self.busy || self.browser_busy {
             ctx.request_repaint_after(std::time::Duration::from_millis(30));
         }
+    }
+}
+
+fn start_browser_worker<R: ProcessRunner + Send + 'static>(
+    mut runner: R,
+    search_url: String,
+) -> (Sender<String>, Receiver<BrowserResult>, JoinHandle<()>) {
+    let (requests, input) = mpsc::channel::<String>();
+    let (output, results) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        while let Ok(text) = input.recv() {
+            let result = launch_browser(&mut runner, &text, &search_url);
+            if output.send(result).is_err() {
+                break;
+            }
+        }
+    });
+    (requests, results, worker)
+}
+
+fn launch_browser<R: ProcessRunner>(
+    runner: &mut R,
+    input: &str,
+    search_url: &str,
+) -> BrowserResult {
+    let Some(url) = target_url(input, search_url) else {
+        return Ok(false);
+    };
+    let invocation = Invocation {
+        argv: vec![browser_opener().to_owned(), url],
+        stdin: Some(Vec::new()),
+        ..Invocation::default()
+    };
+    let result = runner
+        .run_capture(&invocation)
+        .map_err(|err| format!("Failed to launch browser: {err}"))?;
+    if result.code == 0 {
+        Ok(true)
+    } else {
+        Err(format!("Browser opener exited with status {}", result.code))
+    }
+}
+
+const fn browser_opener() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
     }
 }
 
@@ -166,7 +279,9 @@ const fn action_name(action: &LauncherAction) -> &str {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::sync::mpsc::TryRecvError;
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -177,12 +292,61 @@ mod tests {
     use nixon::command::Command;
     use nixon::config::Config;
     use nixon::fs::Dirs;
-    use nixon::process::RealRunner;
+    use nixon::process::{Captured, Invocation, ProcessRunner, RealRunner, Running};
     use nixon_gui::picker::{GuiPicker, PickerRequest};
     use nixon_picker::Selection;
     use nixon_picker::matcher::Case;
 
-    use super::{CommandOutcome, PreviewApp, pick_current_command};
+    use super::{CommandOutcome, PreviewApp, browser_opener, launch_browser, pick_current_command};
+
+    struct BrowserRunner {
+        calls: Arc<Mutex<Vec<Invocation>>>,
+        result: std::result::Result<i32, io::ErrorKind>,
+    }
+
+    impl ProcessRunner for BrowserRunner {
+        fn run(&mut self, _invocation: &Invocation) -> io::Result<i32> {
+            Err(io::ErrorKind::Unsupported.into())
+        }
+
+        fn run_capture(&mut self, invocation: &Invocation) -> io::Result<Captured> {
+            self.calls.lock().unwrap().push(invocation.clone());
+            self.result.map_or_else(
+                |kind| Err(io::Error::new(kind, "opener unavailable")),
+                |code| {
+                    Ok(Captured {
+                        code,
+                        stdout: Vec::new(),
+                    })
+                },
+            )
+        }
+
+        fn spawn_detached(&mut self, _invocation: &Invocation) -> io::Result<()> {
+            Err(io::ErrorKind::Unsupported.into())
+        }
+
+        fn run_streaming(
+            &mut self,
+            _invocation: &Invocation,
+            _sink: Box<dyn FnMut(String) + Send>,
+        ) -> io::Result<Box<dyn Running>> {
+            Err(io::ErrorKind::Unsupported.into())
+        }
+    }
+
+    fn browser_runner(
+        result: std::result::Result<i32, io::ErrorKind>,
+    ) -> (BrowserRunner, Arc<Mutex<Vec<Invocation>>>) {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        (
+            BrowserRunner {
+                calls: Arc::clone(&calls),
+                result,
+            },
+            calls,
+        )
+    }
 
     const LOCAL_COMMANDS: &str = "\
 ```yaml config
@@ -283,6 +447,104 @@ echo hidden
         }
     }
 
+    fn open_browser_input(app: &mut PreviewApp, ctx: &egui::Context) {
+        let _ = frame(app, ctx, vec![key(egui::Key::W)]);
+        let _ = frame(app, ctx, vec![key(egui::Key::O)]);
+        wait_for_text(app, ctx, "Open URL or search");
+    }
+
+    fn closes(output: &egui::FullOutput) -> bool {
+        output.viewport_output.values().any(|viewport| {
+            viewport
+                .commands
+                .iter()
+                .any(|command| matches!(command, egui::ViewportCommand::Close))
+        })
+    }
+
+    #[test]
+    fn browser_runner_receives_one_argv_and_empty_input_spawns_nothing() {
+        let (mut runner, calls) = browser_runner(Ok(0));
+        assert_eq!(
+            launch_browser(
+                &mut runner,
+                "café + tea",
+                "https://search.example/?q={query}"
+            ),
+            Ok(true)
+        );
+        assert_eq!(
+            launch_browser(&mut runner, "  ", "https://search.example/?q={query}"),
+            Ok(false)
+        );
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(
+            calls[0].argv,
+            [
+                browser_opener().to_owned(),
+                "https://search.example/?q=caf%C3%A9%20%2B%20tea".to_owned()
+            ]
+        );
+        assert_eq!(calls[0].stdin, Some(Vec::new()));
+    }
+
+    #[test]
+    fn browser_spawn_error_is_reported() {
+        let (mut runner, calls) = browser_runner(Err(io::ErrorKind::NotFound));
+        let error = launch_browser(&mut runner, "example.com", "unused {query}").unwrap_err();
+        assert!(error.contains("Failed to launch browser"), "{error}");
+        assert_eq!(calls.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn browser_success_closes_the_window_with_configured_search_url() {
+        let (_temp, mut config, dirs, env) = fixture(LOCAL_COMMANDS);
+        config.launcher.search_url = Some("https://search.example/?q={query}".to_owned());
+        let (runner, calls) = browser_runner(Ok(0));
+        let mut app = PreviewApp::with_browser_runner(config, dirs, env, runner).unwrap();
+        let ctx = egui::Context::default();
+        open_browser_input(&mut app, &ctx);
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![egui::Event::Text("cat + tea".to_owned())],
+        );
+        let mut output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !closes(&output) {
+            assert!(
+                Instant::now() < deadline,
+                "browser did not close the window"
+            );
+            thread::sleep(Duration::from_millis(1));
+            output = frame(&mut app, &ctx, Vec::new());
+        }
+        assert_eq!(
+            calls.lock().unwrap()[0].argv[1],
+            "https://search.example/?q=cat%20%2B%20tea"
+        );
+    }
+
+    #[test]
+    fn browser_failure_stays_open_and_shows_error() {
+        let (_temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
+        let (runner, calls) = browser_runner(Ok(3));
+        let mut app = PreviewApp::with_browser_runner(config, dirs, env, runner).unwrap();
+        let ctx = egui::Context::default();
+        open_browser_input(&mut app, &ctx);
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![egui::Event::Text("example.com".to_owned())],
+        );
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        assert!(!closes(&output));
+        let output = wait_for_text(&mut app, &ctx, "Browser opener exited with status 3");
+        assert!(!closes(&output));
+        assert_eq!(calls.lock().unwrap().len(), 1);
+    }
+
     #[test]
     fn worker_uses_real_discovery_local_matching_and_visible_order() {
         let (_temp, config, dirs, env) = fixture(LOCAL_COMMANDS);
@@ -357,7 +619,7 @@ echo hidden
         let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
         wait_for_text(&mut app, &ctx, "alpha");
         let _ = frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
-        let output = wait_for_text(&mut app, &ctx, "GUI preview: actions are not wired yet.");
+        let output = wait_for_text(&mut app, &ctx, "GUI preview: choose an action.");
         let shown = texts(&output);
         assert!(shown.iter().any(|text| text == "Commands"));
         assert!(!shown.iter().any(|text| text.contains("Selection canceled")));

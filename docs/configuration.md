@@ -82,6 +82,23 @@ silently win.
 An undefined `$VAR` in `project_dirs` expands to the empty string, and a glob
 that matches nothing contributes nothing.
 
+## GUI browser search
+
+The graphical menu's Browser action uses `launcher.search_url` from the global
+config file. The value must contain `{query}`; the typed search text replaces
+that placeholder after UTF-8 URL encoding. The default is
+`https://www.google.com/search?q={query}`.
+
+```yaml
+launcher:
+  search_url: "https://search.example/find?q={query}"
+```
+
+A full `http://` or `https://` URL is opened unchanged. A dotted address with
+no whitespace gets `https://` prepended. Other input uses the search URL.
+On Linux, the opener is `xdg-open`; the Nix package and development shell
+include it.
+
 ## Project types
 
 A project type gives a name commands can be scoped to, and the markers that

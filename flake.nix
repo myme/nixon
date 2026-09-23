@@ -46,7 +46,7 @@
 
         devShells.default = import ./nix/shell.nix {
           inherit pkgs craneLib toolchain;
-          inherit (package) guiRuntimeLibraries;
+          inherit (package) guiRuntimeLibraries guiRuntimePrograms;
         };
 
         formatter = pkgs.nixfmt;

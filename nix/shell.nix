@@ -3,6 +3,7 @@
   craneLib,
   toolchain,
   guiRuntimeLibraries,
+  guiRuntimePrograms,
 }:
 
 craneLib.devShell {
@@ -11,6 +12,7 @@ craneLib.devShell {
   packages = [
     toolchain
   ]
+  ++ guiRuntimePrograms
   ++ (with pkgs; [
     # Dev loop and test tooling.
     bacon

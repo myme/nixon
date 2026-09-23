@@ -61,9 +61,10 @@ resolution, evaluation, and history as the terminal CLI.
   current-project commands on a worker and opens the GUI picker. A selection
   displays the command name and selection type without executing it;
   cancellation returns to the menu and discovery errors appear in the window.
-  Other actions show a visible status that execution is not wired yet. GUI
-  subcommands and bare command names are explicitly rejected until the
-  workflows are integrated.
+  Browser has a focused URL/search input and opens through the process runner
+  on a worker. Other actions show a visible status that execution is not wired
+  yet. GUI subcommands and bare command names are explicitly rejected until
+  the workflows are integrated.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
   old exit-code/argv protocol. The behavior to recover is GUI selection.
 
@@ -100,10 +101,10 @@ view, key, or action. The spec follows the executable code.
 - [ ] **MUST:** Preserve Spotify play/pause, previous, and next on a Linux
   desktop with the Spotify MPRIS service available. A missing service is a
   visible error and leaves the launcher usable.
-- [ ] **MUST:** Preserve browser open/search: an `http://` or `https://` input
+- [x] **MUST:** Preserve browser open/search: an `http://` or `https://` input
   opens as given; a no-space input containing `.` opens with `https://`; other
   input is URL-encoded into a configured search URL. Empty input does nothing.
-- [ ] **SHOULD:** Let the browser search URL be configured; default to the
+- [x] **SHOULD:** Let the browser search URL be configured; default to the
   PoC's Google search URL for initial parity.
 - [ ] **OUT OF SCOPE:** A Discord-specific integration. A Nixon command can
   launch Discord like any other application.
@@ -254,9 +255,11 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
 
 ## 7. Configuration and defaults
 
-The new settings live in an existing `nixon.md` config block. The global file
-supplies the usual menu; the current project's local file may override it.
-At window startup, launcher settings merge field by field: local `terminal`
+The new settings live in an existing `nixon.md` config block. The current
+preview uses defaults merged with the global file for the menu and browser
+search URL. The full launcher will also allow the current project's local
+file to override those settings. At window startup, launcher settings will
+merge field by field: local `terminal`
 and `search_url` replace global values when set, and local `items` replaces
 the whole global menu when set. Absent fields inherit. The menu stays fixed
 for that window; selecting another project applies its local config to that
@@ -359,9 +362,10 @@ placeholder producer was cancelled.
   flow with `ScriptedPicker`/`FakeRunner` or the GUI bridge's equivalents.
   Verify the final invocation, cwd, environment, option arguments, and
   history record.
-- [ ] **MUST:** Test Spotify success/failure behind a media-control seam,
-  browser URL/domain/search classification, and a failed URL opener without
-  reaching real D-Bus or a real browser.
+- [ ] **MUST:** Test Spotify success/failure behind a media-control seam
+  without reaching real D-Bus.
+- [x] **MUST:** Test browser URL/domain/search classification and a failed
+  URL opener without reaching a real browser.
 - [ ] **MUST:** Test GUI terminal-launch argv with paths and arguments
   containing spaces or quotes, plus resolved stdin and environment values.
   Verify no command source is rewritten.

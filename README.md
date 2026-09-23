@@ -108,7 +108,8 @@ command line has a few deliberate differences.
 - **The picker is built in.** `fzf` and `rofi` are no longer needed or used.
   `nixon --mode gui` now opens a graphical menu preview. Commands opens a
   graphical picker and reports the selected name and action type; command
-  execution is not wired yet.
+  execution is not wired yet. Browser opens a URL or searches from a focused
+  input; the other actions remain previews.
 - **Removed flags.** `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went
   with the backend concept. Passing one is now an ordinary argument error.
   Commands run in the terminal you started them from; a command marked `&`

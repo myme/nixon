@@ -41,7 +41,13 @@ menu. Commands opens a picker for commands in the current project, with local
 config and hidden-command rules applied. Selecting one shows its name and
 selection type in the window; it does not execute, edit, show, or visit the
 command yet. Canceling returns to the menu, and discovery errors appear there.
-Other menu actions still show a preview status.
+Browser (default **W**, then **O**) opens a focused input. Enter opens a full
+`http://` or `https://` URL unchanged, adds `https://` to a dotted address
+without spaces, or searches through `launcher.search_url`. Empty input does
+nothing; Esc returns to the menu. A successful opener closes the window, and
+an opener error remains visible in the window and is reported on stderr.
+Projects, History, media control, and custom command actions still show a
+preview status.
 GUI mode currently accepts no subcommands; `nixon --mode gui run` and bare
 command names report an error. `--mode tui` and the default retain the terminal
 behavior.

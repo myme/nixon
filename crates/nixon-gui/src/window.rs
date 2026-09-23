@@ -5,6 +5,7 @@ use std::sync::mpsc::Sender;
 use eframe::egui;
 use nixon::config::launcher::{LauncherAction, LauncherConfig, MenuItem, MenuKey};
 
+use crate::browser_view::{BrowserInputOutcome, BrowserInputView};
 use crate::menu::{InputFocus, MenuInput, MenuOutcome, MenuState};
 use crate::picker::GuiPickerRequests;
 use crate::picker_view::PickerView;
@@ -15,6 +16,17 @@ pub struct MenuWindow {
     actions: Sender<LauncherAction>,
     focus_first_row: bool,
     picker: Option<PickerView>,
+    browser: Option<BrowserInputView>,
+    browser_event: Option<BrowserInputEvent>,
+}
+
+/// The browser input screen's result.
+#[derive(Debug, Eq, PartialEq)]
+pub enum BrowserInputEvent {
+    /// User submitted nonblank text.
+    Submitted(String),
+    /// User returned to the menu.
+    Canceled,
 }
 
 impl MenuWindow {
@@ -26,12 +38,25 @@ impl MenuWindow {
             actions,
             focus_first_row: true,
             picker: None,
+            browser: None,
+            browser_event: None,
         })
     }
 
     /// Attaches the UI side of a worker's picker bridge.
     pub fn attach_picker(&mut self, requests: GuiPickerRequests) {
         self.picker = Some(PickerView::new(requests));
+    }
+
+    /// Opens the browser input screen after its menu action is selected.
+    pub fn open_browser_input(&mut self) {
+        self.browser = Some(BrowserInputView::new());
+        self.browser_event = None;
+    }
+
+    /// Takes a browser submission or cancellation from the input screen.
+    pub const fn take_browser_event(&mut self) -> Option<BrowserInputEvent> {
+        self.browser_event.take()
     }
 
     /// The menu currently shown by the window.
@@ -42,6 +67,24 @@ impl MenuWindow {
 
     /// Handles one egui frame without running the selected action.
     pub fn show(&mut self, ctx: &egui::Context) {
+        if let Some(browser) = self.browser.as_mut() {
+            match browser.show(ctx) {
+                BrowserInputOutcome::Pending => {}
+                BrowserInputOutcome::Cancel => {
+                    self.browser_event = Some(BrowserInputEvent::Canceled);
+                    self.browser = None;
+                    self.focus_first_row = true;
+                    ctx.request_repaint();
+                }
+                BrowserInputOutcome::Submit(input) => {
+                    self.browser_event = Some(BrowserInputEvent::Submitted(input));
+                    self.browser = None;
+                    self.focus_first_row = true;
+                    ctx.request_repaint();
+                }
+            }
+            return;
+        }
         if self.picker.as_mut().is_some_and(|picker| picker.show(ctx)) {
             self.focus_first_row = true;
             return;
@@ -271,7 +314,7 @@ mod tests {
     use nixon::config::parse_block;
     use nixon_picker::{Candidate, Picker, PickerOption, PickerOptions, Selection, SelectionType};
 
-    use super::MenuWindow;
+    use super::{BrowserInputEvent, MenuWindow};
     use crate::picker::GuiPicker;
 
     fn frame(
@@ -457,6 +500,110 @@ mod tests {
                 player: "spotify".to_owned(),
             }
         );
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn browser_input_focus_ignores_mnemonics_and_submits_text() {
+        let (actions, receiver) = mpsc::channel();
+        let mut window = MenuWindow::new(&Config::defaults().launcher, actions).unwrap();
+        let ctx = egui::Context::default();
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::W, egui::Modifiers::default())],
+        );
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::O, egui::Modifiers::default())],
+        );
+        assert_eq!(receiver.try_recv().unwrap(), LauncherAction::BrowserInput);
+        window.open_browser_input();
+        let output = frame(&ctx, &mut window, Vec::new());
+        assert!(
+            texts(&output)
+                .iter()
+                .any(|text| text == "Open URL or search")
+        );
+        assert!(ctx.memory(|memory| memory.focused().is_some()));
+        frame(
+            &ctx,
+            &mut window,
+            vec![
+                release(egui::Key::W, egui::Modifiers::default()),
+                release(egui::Key::O, egui::Modifiers::default()),
+            ],
+        );
+
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        assert!(window.take_browser_event().is_none());
+        frame(
+            &ctx,
+            &mut window,
+            vec![release(egui::Key::Enter, egui::Modifiers::default())],
+        );
+
+        let typed = frame(
+            &ctx,
+            &mut window,
+            vec![
+                key(egui::Key::W, egui::Modifiers::default()),
+                key(egui::Key::O, egui::Modifiers::default()),
+                egui::Event::Text("web search".to_owned()),
+            ],
+        );
+        assert!(
+            texts(&typed).iter().any(|text| text.contains("web search")),
+            "{:?}",
+            texts(&typed)
+        );
+        assert_eq!(window.menu().depth(), 1);
+        assert!(receiver.try_recv().is_err());
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        assert_eq!(
+            window.take_browser_event(),
+            Some(BrowserInputEvent::Submitted("web search".to_owned()))
+        );
+    }
+
+    #[test]
+    fn configured_browser_action_opens_input_and_escape_returns_to_menu() {
+        let config = parse_block(
+            "yaml",
+            "launcher:\n  items:\n    - key: b\n      label: Browse\n      action: browser_input\n",
+        )
+        .unwrap();
+        let (actions, receiver) = mpsc::channel();
+        let mut window = MenuWindow::new(&config.launcher, actions).unwrap();
+        let ctx = egui::Context::default();
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::B, egui::Modifiers::default())],
+        );
+        assert_eq!(receiver.try_recv().unwrap(), LauncherAction::BrowserInput);
+        window.open_browser_input();
+        frame(&ctx, &mut window, Vec::new());
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Escape, egui::Modifiers::default())],
+        );
+        assert!(matches!(
+            window.take_browser_event(),
+            Some(BrowserInputEvent::Canceled)
+        ));
+        let output = frame(&ctx, &mut window, Vec::new());
+        assert!(texts(&output).iter().any(|text| text == "Browse"));
         assert!(receiver.try_recv().is_err());
     }
 

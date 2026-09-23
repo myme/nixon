@@ -2,6 +2,8 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+pub mod browser;
+mod browser_view;
 pub mod menu;
 pub mod picker;
 mod picker_view;

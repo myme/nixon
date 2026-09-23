@@ -17,6 +17,7 @@ let
       libxrender
     ]
   );
+  guiRuntimePrograms = lib.optionals pkgs.stdenv.isLinux [ pkgs.xdg-utils ];
 
   # crane's cargo filter keeps only what cargo needs to build. Everything else
   # the build or the tests read has to be named here, or the checks see a
@@ -68,7 +69,8 @@ let
 
       postFixup = lib.optionalString pkgs.stdenv.isLinux ''
         wrapProgram $out/bin/nixon \
-          --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath guiRuntimeLibraries}
+          --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath guiRuntimeLibraries} \
+          --prefix PATH : ${lib.makeBinPath guiRuntimePrograms}
       '';
 
       # The widgets are v2's: no -b/-T, which no longer parse. Completion is
@@ -138,5 +140,6 @@ in
     commonArgs
     cargoArtifacts
     guiRuntimeLibraries
+    guiRuntimePrograms
     ;
 }
