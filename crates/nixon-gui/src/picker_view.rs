@@ -26,6 +26,13 @@ const ROW_HEIGHT: f32 = 26.0;
 pub(crate) struct PickerView {
     requests: GuiPickerRequests,
     screen: Option<Screen>,
+    ime: ImeState,
+}
+
+#[derive(Default)]
+struct ImeState {
+    preedit: String,
+    composing: bool,
 }
 
 enum Screen {
@@ -83,10 +90,11 @@ impl PickReply {
 }
 
 impl PickerView {
-    pub(super) const fn new(requests: GuiPickerRequests) -> Self {
+    pub(super) fn new(requests: GuiPickerRequests) -> Self {
         Self {
             requests,
             screen: None,
+            ime: ImeState::default(),
         }
     }
 
@@ -96,13 +104,15 @@ impl PickerView {
         if self.screen.is_none()
             && let Ok(request) = self.requests.try_recv()
         {
+            self.ime = ImeState::default();
             self.screen = Some(start(request));
         }
         let Some(screen) = self.screen.take() else {
             return false;
         };
-        self.screen = update_screen(ctx, screen);
+        self.screen = update_screen(ctx, screen, &mut self.ime);
         if self.screen.is_none() {
+            self.ime = ImeState::default();
             ctx.request_repaint();
         }
         true
@@ -160,20 +170,20 @@ fn loading(options: PickerOptions, candidates: Vec<Candidate>, reply: PickReply)
     }
 }
 
-fn update_screen(ctx: &egui::Context, screen: Screen) -> Option<Screen> {
+fn update_screen(ctx: &egui::Context, screen: Screen, ime: &mut ImeState) -> Option<Screen> {
     match screen {
         Screen::Loading {
             ready,
             reply,
             mut pending,
         } => {
-            pending.extend(picker_events(ctx));
+            pending.extend(picker_events(ctx, ime, true));
             if pending.iter().any(is_cancel) {
                 reply.respond(Selection::Canceled, Vec::new());
                 return None;
             }
             match ready.try_recv() {
-                Ok(app) => update_pick(ctx, app, reply, pending, None),
+                Ok(app) => update_pick(ctx, app, reply, pending, None, ime),
                 Err(TryRecvError::Empty) => {
                     egui::CentralPanel::default().show(ctx, |ui| {
                         ui.heading("Loading candidates…");
@@ -193,15 +203,15 @@ fn update_screen(ctx: &egui::Context, screen: Screen) -> Option<Screen> {
             mut pending,
             stream,
         } => {
-            pending.extend(picker_events(ctx));
-            update_pick(ctx, app, reply, pending, stream)
+            pending.extend(picker_events(ctx, ime, app.option_focus.is_none()));
+            update_pick(ctx, app, reply, pending, stream, ime)
         }
         Screen::Confirm {
             app,
             reply,
             mut pending,
         } => {
-            pending.extend(picker_events(ctx));
+            pending.extend(picker_events(ctx, ime, false));
             update_confirm(ctx, app, reply, pending)
         }
     }
@@ -213,6 +223,7 @@ fn update_pick(
     reply: PickReply,
     mut pending: VecDeque<KeyEvent>,
     mut stream: Option<StreamUi>,
+    ime: &mut ImeState,
 ) -> Option<Screen> {
     if let Some(stream) = stream.as_mut() {
         if !pending.is_empty() {
@@ -266,8 +277,12 @@ fn update_pick(
         return None;
     }
 
-    let (row_clicked, action_clicked) =
-        render_pick(ctx, &mut app, stream.as_ref().map(|stream| stream.finished));
+    let (row_clicked, action_clicked) = render_pick(
+        ctx,
+        &mut app,
+        stream.as_ref().map(|stream| stream.finished),
+        ime,
+    );
 
     if !app.is_matching() {
         if let Some(index) = row_clicked {
@@ -339,6 +354,7 @@ fn render_pick(
     ctx: &egui::Context,
     app: &mut App,
     stream_finished: Option<bool>,
+    ime: &mut ImeState,
 ) -> (Option<usize>, Option<KeyEvent>) {
     let mut row_clicked = None;
     let mut action_clicked = None;
@@ -357,7 +373,37 @@ fn render_pick(
         }
         option_row(ui, app);
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(query_display(app)).monospace());
+            if app.option_focus.is_none() {
+                let response =
+                    ui.label(egui::RichText::new(query_display(app, &ime.preedit)).monospace());
+                let query = app.query.text();
+                let (_, column) = app.query.cursor();
+                let at = query_cursor_byte_index(&query, column);
+                let prefix = format!("> {}{}", &query[..at], ime.preedit);
+                let width = ui
+                    .painter()
+                    .layout_no_wrap(
+                        prefix,
+                        egui::TextStyle::Monospace.resolve(ui.style()),
+                        ui.visuals().text_color(),
+                    )
+                    .size()
+                    .x;
+                let caret = egui::Rect::from_min_size(
+                    egui::pos2(response.rect.min.x + width, response.rect.min.y),
+                    egui::vec2(2.0, response.rect.height()),
+                );
+                ctx.output_mut(|output| {
+                    output.ime = Some(egui::output::IMEOutput {
+                        rect: response.rect,
+                        cursor_rect: caret,
+                    });
+                });
+            } else {
+                ime.preedit.clear();
+                ime.composing = false;
+                ui.label(egui::RichText::new(query_display(app, "")).monospace());
+            }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(count_label(app));
             });
@@ -483,14 +529,18 @@ fn option_row(ui: &mut egui::Ui, app: &mut App) {
     }
 }
 
-fn query_display(app: &App) -> String {
-    let query = app.query.text();
-    let (_, column) = app.query.cursor();
-    let at = query
+fn query_cursor_byte_index(query: &str, column: usize) -> usize {
+    query
         .char_indices()
         .nth(column)
-        .map_or(query.len(), |(at, _)| at);
-    format!("> {}▏{}", &query[..at], &query[at..])
+        .map_or(query.len(), |(at, _)| at)
+}
+
+fn query_display(app: &App, preedit: &str) -> String {
+    let query = app.query.text();
+    let (_, column) = app.query.cursor();
+    let at = query_cursor_byte_index(&query, column);
+    format!("> {}{preedit}▏{}", &query[..at], &query[at..])
 }
 
 fn count_label(app: &App) -> String {
@@ -512,41 +562,99 @@ fn is_cancel(key: &KeyEvent) -> bool {
             && key.modifiers.contains(KeyModifiers::CONTROL)
 }
 
-fn picker_events(ctx: &egui::Context) -> Vec<KeyEvent> {
-    ctx.input(|input| {
-        let text_has_space = input
-            .events
+fn picker_events(ctx: &egui::Context, ime: &mut ImeState, accepts_ime: bool) -> Vec<KeyEvent> {
+    let events = ctx.input(|input| input.events.clone());
+    if !accepts_ime {
+        ime.preedit.clear();
+        ime.composing = false;
+    }
+    let text_has_space = events
+        .iter()
+        .any(|event| matches!(event, egui::Event::Text(text) if text.contains(' ')));
+    let commits: Vec<_> = if accepts_ime {
+        events
             .iter()
-            .any(|event| matches!(event, egui::Event::Text(text) if text.contains(' ')));
-        input
-            .events
-            .iter()
-            .flat_map(|event| match event {
-                // egui-winit sends Paste instead of Text for a paste shortcut.
-                egui::Event::Text(text) | egui::Event::Paste(text) => text
-                    .chars()
-                    .filter(|c| !c.is_control() && !matches!(c, '\u{2028}' | '\u{2029}'))
-                    .map(|c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE))
-                    .collect::<Vec<_>>(),
-                egui::Event::Key {
-                    key,
-                    pressed: true,
-                    repeat: false,
-                    modifiers,
-                    ..
-                } => egui_key(*key, *modifiers, text_has_space)
-                    .into_iter()
-                    .collect(),
-                egui::Event::MouseWheel { delta, .. } if delta.y > 0.0 => {
-                    vec![KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)]
-                }
-                egui::Event::MouseWheel { delta, .. } if delta.y < 0.0 => {
-                    vec![KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)]
-                }
-                _ => Vec::new(),
+            .filter_map(|event| match event {
+                egui::Event::Ime(egui::ImeEvent::Commit(text)) => Some(text.clone()),
+                _ => None,
             })
             .collect()
-    })
+    } else {
+        Vec::new()
+    };
+    let ime_events = accepts_ime
+        && events
+            .iter()
+            .any(|event| matches!(event, egui::Event::Ime(_)));
+    let was_composing = ime.composing;
+    let mut keys = Vec::new();
+    for event in events {
+        match event {
+            egui::Event::Ime(egui::ImeEvent::Enabled) if accepts_ime => {
+                ime.composing = true;
+            }
+            egui::Event::Ime(egui::ImeEvent::Preedit(text)) if accepts_ime => {
+                ime.composing = true;
+                ime.preedit = filtered_text(&text);
+            }
+            egui::Event::Ime(egui::ImeEvent::Commit(text)) if accepts_ime => {
+                ime.composing = false;
+                ime.preedit.clear();
+                keys.extend(text_keys(&text));
+            }
+            egui::Event::Ime(egui::ImeEvent::Disabled) if accepts_ime => {
+                ime.composing = false;
+                ime.preedit.clear();
+            }
+            egui::Event::Text(text) => {
+                let duplicate =
+                    accepts_ime && (ime.composing || commits.iter().any(|commit| commit == &text));
+                if !duplicate {
+                    keys.extend(text_keys(&text));
+                }
+            }
+            // egui-winit sends Paste instead of Text for a paste shortcut.
+            egui::Event::Paste(text) => keys.extend(text_keys(&text)),
+            egui::Event::Key {
+                key,
+                pressed: true,
+                repeat: false,
+                ..
+            } if accepts_ime && (ime_events || was_composing || ime.composing) => {
+                if key == egui::Key::Escape {
+                    ime.preedit.clear();
+                    ime.composing = false;
+                }
+            }
+            egui::Event::Key {
+                key,
+                pressed: true,
+                repeat: false,
+                modifiers,
+                ..
+            } => keys.extend(egui_key(key, modifiers, text_has_space)),
+            egui::Event::MouseWheel { delta, .. } if delta.y > 0.0 => {
+                keys.push(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+            }
+            egui::Event::MouseWheel { delta, .. } if delta.y < 0.0 => {
+                keys.push(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+            }
+            _ => {}
+        }
+    }
+    keys
+}
+
+fn filtered_text(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_control() && !matches!(c, '\u{2028}' | '\u{2029}'))
+        .collect()
+}
+
+fn text_keys(text: &str) -> impl Iterator<Item = KeyEvent> + '_ {
+    text.chars()
+        .filter(|c| !c.is_control() && !matches!(c, '\u{2028}' | '\u{2029}'))
+        .map(|c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE))
 }
 
 fn egui_key(key: egui::Key, modifiers: egui::Modifiers, text_has_space: bool) -> Option<KeyEvent> {

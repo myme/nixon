@@ -1046,6 +1046,195 @@ mod tests {
     }
 
     #[test]
+    fn ime_preedit_stays_visual_and_commit_inserts_unicode_once_at_cursor() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            done.send(
+                picker
+                    .pick(
+                        &PickerOptions::default().header("IME choices").query("ab"),
+                        candidates(&["ab", "a東京b", "other"]),
+                    )
+                    .unwrap(),
+            )
+            .unwrap();
+        });
+        let ctx = egui::Context::default();
+        assert!(
+            frame(&ctx, &mut window, Vec::new())
+                .platform_output
+                .ime
+                .is_none()
+        );
+        let output = wait_for_text(&ctx, &mut window, "> ab▏");
+        let ime = output.platform_output.ime.unwrap();
+        let original_caret = ime.cursor_rect;
+        assert!(original_caret.width() > 0.0);
+        assert!(ime.rect.width() > original_caret.width());
+        assert!(ime.rect.contains(original_caret.center()));
+        let output = frame(
+            &ctx,
+            &mut window,
+            vec![
+                key(egui::Key::Home, egui::Modifiers::default()),
+                key(egui::Key::ArrowRight, egui::Modifiers::default()),
+            ],
+        );
+        assert!(texts(&output).iter().any(|text| text == "> a▏b"));
+        let ime = output.platform_output.ime.unwrap();
+        let moved_caret = ime.cursor_rect;
+        assert!(moved_caret.min.x < original_caret.min.x);
+        assert!(ime.rect.contains(moved_caret.center()));
+
+        let output = frame(
+            &ctx,
+            &mut window,
+            vec![
+                egui::Event::Ime(egui::ImeEvent::Enabled),
+                egui::Event::Ime(egui::ImeEvent::Preedit("東".to_owned())),
+                egui::Event::Ime(egui::ImeEvent::Preedit("東京".to_owned())),
+                key(egui::Key::Enter, egui::Modifiers::default()),
+            ],
+        );
+        let shown = texts(&output);
+        assert!(shown.iter().any(|text| text == "> a東京▏b"));
+        assert!(shown.iter().any(|text| text == "2/3"));
+        assert!(replies.try_recv().is_err());
+        let ime = output.platform_output.ime.unwrap();
+        assert!(ime.cursor_rect.min.x > moved_caret.min.x);
+        assert!(ime.rect.contains(ime.cursor_rect.center()));
+        frame(
+            &ctx,
+            &mut window,
+            vec![release(egui::Key::Enter, egui::Modifiers::default())],
+        );
+
+        frame(
+            &ctx,
+            &mut window,
+            vec![
+                egui::Event::Ime(egui::ImeEvent::Commit("東京".to_owned())),
+                egui::Event::Ime(egui::ImeEvent::Disabled),
+                egui::Event::Text("東京".to_owned()),
+            ],
+        );
+        let output = wait_for_text(&ctx, &mut window, "> a東京▏b");
+        assert!(texts(&output).iter().any(|text| text == "1/3"));
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        let answer = wait_for_reply(&ctx, &mut window, &replies);
+        assert_eq!(answer.items()[0].value, "a東京b");
+        assert!(
+            wait_for_text(&ctx, &mut window, "Nixon")
+                .platform_output
+                .ime
+                .is_none()
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn typing_the_same_text_after_an_ime_commit_is_not_dropped() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            done.send(
+                picker
+                    .pick(&PickerOptions::default(), candidates(&["a", "aa"]))
+                    .unwrap(),
+            )
+            .unwrap();
+        });
+        let ctx = egui::Context::default();
+        wait_for_text(&ctx, &mut window, "> ▏");
+        frame(
+            &ctx,
+            &mut window,
+            vec![
+                egui::Event::Ime(egui::ImeEvent::Commit("a".to_owned())),
+                egui::Event::Text("a".to_owned()),
+            ],
+        );
+        let output = frame(&ctx, &mut window, vec![egui::Event::Text("a".to_owned())]);
+        assert!(texts(&output).iter().any(|text| text == "> aa▏"));
+        assert!(texts(&output).iter().any(|text| text == "1/2"));
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Enter, egui::Modifiers::default())],
+        );
+        assert_eq!(
+            wait_for_reply(&ctx, &mut window, &replies).items()[0].value,
+            "aa"
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn ime_cancel_discards_preedit_without_canceling_picker() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            done.send(
+                picker
+                    .pick(&PickerOptions::default(), candidates(&["alpha"]))
+                    .unwrap(),
+            )
+            .unwrap();
+        });
+        let ctx = egui::Context::default();
+        wait_for_text(&ctx, &mut window, "alpha");
+        let output = frame(
+            &ctx,
+            &mut window,
+            vec![egui::Event::Ime(egui::ImeEvent::Preedit("p".to_owned()))],
+        );
+        assert!(texts(&output).iter().any(|text| text == "> p▏"));
+        let output = frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Escape, egui::Modifiers::default())],
+        );
+        assert!(texts(&output).iter().any(|text| text == "> ▏"));
+        assert!(texts(&output).iter().any(|text| text == "1/1"));
+        assert!(replies.try_recv().is_err());
+        frame(
+            &ctx,
+            &mut window,
+            vec![release(egui::Key::Escape, egui::Modifiers::default())],
+        );
+        let output = frame(
+            &ctx,
+            &mut window,
+            vec![
+                egui::Event::Ime(egui::ImeEvent::Preedit("東".to_owned())),
+                egui::Event::Ime(egui::ImeEvent::Disabled),
+            ],
+        );
+        assert!(texts(&output).iter().any(|text| text == "> ▏"));
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Escape, egui::Modifiers::default())],
+        );
+        assert_eq!(
+            wait_for_reply(&ctx, &mut window, &replies),
+            Selection::Canceled
+        );
+        assert!(
+            wait_for_text(&ctx, &mut window, "Nixon")
+                .platform_output
+                .ime
+                .is_none()
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
     fn paste_at_query_cursor_preserves_mark_and_escape_cancels() {
         let (mut window, mut picker) = window_with_picker();
         let (done, replies) = mpsc::channel();
