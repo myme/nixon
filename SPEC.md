@@ -63,10 +63,11 @@ resolution, evaluation, and history as the terminal CLI.
   Show open a read-only detail panel; Visit hands off to the configured editor
   through the terminal launcher. Edit opens an in-window source editor and
   runs submitted text through the existing command flow. History opens a
-  searchable picker of recent entries; Enter previews the selected command,
-  while F1 and Alt-Enter show its recorded line in the detail panel. Replay
-  remains a preview. GUI subcommands and bare command names are
-  explicitly rejected.
+  searchable picker of recent entries; Enter parses and replays the selected
+  Nixon invocation through the GUI worker, while F1 and Alt-Enter show its
+  recorded line in the detail panel. Unsupported or malformed replay entries
+  stay visible as errors. GUI subcommands and bare command names are explicitly
+  rejected.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
   old exit-code/argv protocol. The behavior to recover is GUI selection.
 

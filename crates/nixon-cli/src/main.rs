@@ -133,6 +133,13 @@ fn dispatch(app: &mut App<TuiPicker, RealRunner>, command: Option<Commands>) -> 
 /// they meant the first time. A recorded `history` is refused rather than
 /// looped: the picker is already open.
 fn rerun(app: &mut App<TuiPicker, RealRunner>, recorded: Vec<String>) -> Result<i32> {
+    let parsed = parse_history_cli(recorded)?;
+    dispatch(app, parsed.command)
+}
+
+/// Parses a recorded invocation through the same command-line parser as a
+/// fresh invocation, rejecting recursive history before either UI dispatches.
+fn parse_history_cli(recorded: Vec<String>) -> Result<Cli> {
     let line = std::iter::once("nixon".to_owned()).chain(recorded);
     let parsed = Cli::try_parse_from(line)
         .map_err(|err| NixonError::NothingSelected(err.to_string().trim_end().to_owned()))?;
@@ -142,7 +149,7 @@ fn rerun(app: &mut App<TuiPicker, RealRunner>, recorded: Vec<String>) -> Result<
             "Refusing to run history from history.".to_owned(),
         ));
     }
-    dispatch(app, parsed.command)
+    Ok(parsed)
 }
 
 fn history_opts(args: HistoryArgs) -> HistoryOpts {
@@ -199,26 +206,34 @@ fn project_opts(args: ProjectArgs) -> ProjectOpts {
 /// Splits `eval`'s positionals: with `--file` there is no expression among
 /// them, so the first word is a placeholder like the rest.
 fn eval_opts(args: EvalArgs) -> EvalOpts {
+    try_eval_opts(args).unwrap_or_else(|(first, err)| {
+        Cli::command()
+            .error(
+                clap::error::ErrorKind::InvalidValue,
+                format!("invalid value '{first}' for '[PLACEHOLDERS]...': {err}"),
+            )
+            .exit()
+    })
+}
+
+/// Eval option conversion that reports bad recorded values to the GUI.
+fn try_eval_opts(
+    args: EvalArgs,
+) -> std::result::Result<EvalOpts, (String, nixon::placeholder::ParseError)> {
     let mut placeholders = args.placeholders;
     let source = match (args.file.is_some(), args.command) {
         (true, Some(first)) => {
             // Through clap, so a bad first word reads and exits exactly
             // like a bad second one.
-            let parsed = nixon::placeholder::parse_one(&first).unwrap_or_else(|err| {
-                Cli::command()
-                    .error(
-                        clap::error::ErrorKind::InvalidValue,
-                        format!("invalid value '{first}' for '[PLACEHOLDERS]...': {err}"),
-                    )
-                    .exit()
-            });
+            let parsed =
+                nixon::placeholder::parse_one(&first).map_err(|error| (first.clone(), error))?;
             placeholders.insert(0, parsed);
             None
         }
         (true, None) => None,
         (false, command) => command,
     };
-    EvalOpts {
+    Ok(EvalOpts {
         source,
         file: args.file,
         placeholders,
@@ -227,7 +242,7 @@ fn eval_opts(args: EvalArgs) -> EvalOpts {
         // project outright, which is what a recorded eval replays.
         select_project: args.project.as_ref().is_some_and(String::is_empty),
         project: args.project.filter(|path| !path.is_empty()),
-    }
+    })
 }
 
 /// Plain messages on stderr, no prefix or timestamp.

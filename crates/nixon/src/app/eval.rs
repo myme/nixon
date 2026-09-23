@@ -10,6 +10,7 @@ use crate::error::Result;
 use crate::language::Language;
 use crate::placeholder::Placeholder;
 use crate::process::{ExitCode, ProcessRunner};
+use crate::project::Project;
 
 /// What to evaluate and how.
 #[derive(Clone, Debug, Default)]
@@ -39,6 +40,12 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             (None, false) => self.current_project(),
         };
 
+        self.eval_in_project(&project, opts)
+    }
+
+    /// Evaluates in an already resolved project, for callers that must set
+    /// the project's process runner before execution.
+    pub fn eval_in_project(&mut self, project: &Project, opts: &EvalOpts) -> Result<ExitCode> {
         let (source, detected) = match &opts.file {
             Some(path) => (
                 std::fs::read_to_string(path)?,
@@ -60,6 +67,6 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             kind: SelectionType::Default,
             items: vec![command],
         };
-        self.handle_cmd(&project, selection, &RunOpts::default())
+        self.handle_cmd(project, selection, &RunOpts::default())
     }
 }

@@ -78,10 +78,12 @@ with Nixon's name, path, and type information. The panel has the same Copy and
 Back controls and does not launch a command. F1 in a quick action's project
 picker opens this panel too. History (default **H**) opens a searchable picker
 of recent entries, newest first, with the recorded directory beside each
-command. F1 and Alt-Enter show the recorded command line in a read-only panel
-with Copy and Back. Enter opens a replay preview; it does not execute the
-entry. Esc and an empty log return to the menu. Disabled history and log read
-errors remain visible and are reported on stderr.
+command. Enter replays a saved `run`, project command, or `eval` invocation
+through the GUI worker, using the selected project's config and terminal.
+F1 and Alt-Enter show the recorded command line in a read-only panel with Copy
+and Back. Esc and an empty log return to the menu. Disabled history, log read
+errors, and malformed or unsupported entries remain visible and are reported
+on stderr.
 GUI mode currently accepts no subcommands; `nixon --mode gui run` and bare
 command names report an error. `--mode tui` and the default retain the terminal
 behavior.
