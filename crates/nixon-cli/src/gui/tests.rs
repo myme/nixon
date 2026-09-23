@@ -2744,6 +2744,52 @@ fn projects_pick_then_command_runs_in_chosen_project() {
 }
 
 #[test]
+fn single_project_still_opens_picker_for_cancel_and_inspect() {
+    let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    let (first, second) = discovered_projects(&temp, &mut config);
+    fs::remove_dir_all(second).unwrap();
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+
+    let output = open_projects(&mut app, &ctx);
+    assert!(!closes(&output));
+    assert!(
+        texts(&output)
+            .iter()
+            .any(|row| row == "~/projects/work-one")
+    );
+    let _ = frame(&mut app, &ctx, vec![key(egui::Key::Escape)]);
+    wait_for_text(&mut app, &ctx, super::PREVIEW_STATUS);
+    assert!(calls.lock().unwrap().is_empty());
+
+    let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Escape)]);
+    let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::P)]);
+    open_projects(&mut app, &ctx);
+    let _ = frame(&mut app, &ctx, vec![key(egui::Key::F1)]);
+    let output = wait_for_text(&mut app, &ctx, "Project: work-one");
+    assert_eq!(
+        copied_text(&copy_detail(&mut app, &ctx)),
+        Some(format!("Name: work-one\nPath: {}\nTypes: git\n", first.display()).as_str())
+    );
+    assert!(!closes(&output));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn projects_without_discovered_candidates_return_to_menu() {
+    let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+    env.exe = Some(temp.child("nixon").path().to_path_buf());
+    let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+    let ctx = egui::Context::default();
+
+    let _ = frame(&mut app, &ctx, vec![key(egui::Key::P)]);
+    let output = wait_for_text(&mut app, &ctx, super::PREVIEW_STATUS);
+    assert!(!closes(&output));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
 fn projects_pick_command_and_placeholder_before_running() {
     let (temp, mut app, calls, captures) = placeholder_fixture(false, true);
     let first = temp.child("projects/work-one").path().to_path_buf();

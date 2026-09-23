@@ -15,7 +15,6 @@ use nixon::fs::Dirs;
 use nixon::process::{Invocation, ProcessRunner, RealRunner};
 use nixon::project::Project;
 use nixon::project::detect::inspect;
-use nixon::select;
 use nixon_gui::browser::target_url;
 use nixon_gui::picker::GuiPicker;
 use nixon_gui::window::{BrowserInputEvent, EditEvent, MenuWindow, native_options};
@@ -567,14 +566,7 @@ fn pick_current_command<R: ProcessRunner>(
 fn pick_project_command<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
 ) -> CommandOutcome {
-    let projects = app.projects();
-    if projects.is_empty() {
-        return CommandOutcome::Canceled;
-    }
-    let mut options = select::project_options(&app.config, None, false);
-    options.select_one = false;
-    let candidates = select::project_candidates(&projects, &app.dirs.home);
-    let selection = match app.picker.pick(&options, candidates) {
+    let selection = match app.pick_project_explicit() {
         Ok(selection) => selection,
         Err(error) => return CommandOutcome::Error(format!("Could not select project: {error}")),
     };
@@ -585,13 +577,7 @@ fn pick_project_command<R: ProcessRunner>(
     if items.len() != 1 {
         return CommandOutcome::Error("Expected one project selection.".to_owned());
     }
-    let picked = items.remove(0);
-    let Some(project) = projects
-        .into_iter()
-        .find(|project| project.path().to_string_lossy() == picked.value)
-    else {
-        return CommandOutcome::Error(format!("Selected project disappeared: {}", picked.value));
-    };
+    let project = items.remove(0);
     match kind {
         SelectionType::Default => pick_command_for_project(app, &project),
         SelectionType::Show => project_detail(&project),
@@ -610,16 +596,7 @@ fn pick_command_for_project<R: ProcessRunner>(
     app: &mut App<GuiPicker, GuiProcessRunner<R>>,
     project: &Project,
 ) -> CommandOutcome {
-    let result = app.commands_for(project).and_then(|commands| {
-        let visible: Vec<Command> = commands
-            .into_iter()
-            .filter(|command| !command.is_hidden)
-            .collect();
-        if visible.is_empty() {
-            return Ok(Selection::Empty);
-        }
-        app.pick_command(project, &visible, "Select command", None)
-    });
+    let result = app.choose_command(project, None);
     match result {
         Ok(Selection::Selected {
             kind: SelectionType::Default,

@@ -114,14 +114,38 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
         let query = if query == Some(".") { None } else { query };
 
         let projects = self.projects();
-        let options = select::project_options(&self.config, query, multiple);
-        let candidates = select::project_candidates(&projects, &self.dirs.home);
-
-        match self.picker.pick(&options, candidates)? {
+        match self.pick_discovered_projects(&projects, query, multiple, true)? {
             Selection::Empty => Err(NixonError::NothingSelected(
                 "No project selected.".to_owned(),
             )),
             Selection::Canceled => Err(NixonError::Canceled),
+            Selection::Selected { kind, items } => Ok((kind, items)),
+        }
+    }
+
+    /// Opens a project picker even when only one project was discovered.
+    pub fn pick_project_explicit(&mut self) -> Result<Selection<Project>> {
+        let projects = self.projects();
+        if projects.is_empty() {
+            return Ok(Selection::Empty);
+        }
+        self.pick_discovered_projects(&projects, None, false, false)
+    }
+
+    fn pick_discovered_projects(
+        &mut self,
+        projects: &[Project],
+        query: Option<&str>,
+        multiple: bool,
+        select_one: bool,
+    ) -> Result<Selection<Project>> {
+        let mut options = select::project_options(&self.config, query, multiple);
+        options.select_one = select_one;
+        let candidates = select::project_candidates(projects, &self.dirs.home);
+
+        match self.picker.pick(&options, candidates)? {
+            Selection::Empty => Ok(Selection::Empty),
+            Selection::Canceled => Ok(Selection::Canceled),
             Selection::Selected { kind, items } => {
                 let chosen = items
                     .into_iter()
@@ -134,7 +158,10 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
                             .unwrap_or_else(|| Project::from_path(&path, Vec::new()))
                     })
                     .collect();
-                Ok((kind, chosen))
+                Ok(Selection::Selected {
+                    kind,
+                    items: chosen,
+                })
             }
         }
     }

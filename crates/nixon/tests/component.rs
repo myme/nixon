@@ -223,6 +223,17 @@ fn selecting_nothing_reports_no_command_selected() {
 }
 
 #[test]
+fn choosing_commands_with_only_hidden_entries_returns_empty_without_a_picker() {
+    let fixture = Fixture::new("# `_secret`\n\n```bash\necho secret\n```\n");
+    let mut app = fixture.app(picks(&[]), FakeRunner::new());
+
+    let selection = app.choose_command(&app.current_project(), None).unwrap();
+
+    assert!(matches!(selection, Selection::Empty));
+    assert!(app.picker.calls.is_empty());
+}
+
+#[test]
 fn a_background_command_is_detached() {
     let fixture = Fixture::new("# `serve &`\n\n```bash\npython -m http.server\n```\n");
     let picker = picks(&[&["serve"]]);
@@ -720,6 +731,51 @@ fn the_nixon_binary_is_in_the_environment() {
         env.contains(&("nixon_bin".to_owned(), "/usr/bin/nixon".to_owned())),
         "env was {env:?}"
     );
+}
+
+#[test]
+fn explicit_project_pick_shows_one_candidate_and_can_cancel() {
+    let mut fixture = Fixture::new(VIM_FILE_MD);
+    fixture.config.project_dirs.push(fixture.project_path());
+    let picker = ScriptedPicker::new(vec![Selection::Canceled]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    assert!(matches!(
+        app.pick_project_explicit().unwrap(),
+        Selection::Canceled
+    ));
+    assert_eq!(app.picker.calls.len(), 1);
+    let (options, candidates) = &app.picker.calls[0];
+    assert!(!options.select_one);
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(
+        candidates[0].value,
+        fixture.project_path().to_string_lossy()
+    );
+
+    let mut cli_app = fixture.app(picks(&[]), FakeRunner::new());
+    assert!(cli_app.pick_projects(None, false).is_ok());
+    assert!(cli_app.picker.calls.is_empty());
+}
+
+#[test]
+fn explicit_project_show_maps_the_candidate_to_its_detected_project() {
+    let mut fixture = Fixture::new(VIM_FILE_MD);
+    let path = fixture.project_path();
+    fixture.config.project_dirs.push(path.clone());
+    let picker = ScriptedPicker::new(vec![Selection::selected(
+        SelectionType::Show,
+        vec![Candidate::identity(path.to_string_lossy().into_owned())],
+    )]);
+    let mut app = fixture.app(picker, FakeRunner::new());
+
+    let Selection::Selected { kind, items } = app.pick_project_explicit().unwrap() else {
+        panic!("expected selected project");
+    };
+    assert_eq!(kind, SelectionType::Show);
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].path(), path);
+    assert_eq!(items[0].types[0].id, "marked");
 }
 
 /// A path is already an answer: no discovery, no picker.

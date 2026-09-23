@@ -96,6 +96,10 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             .cloned()
             .collect();
 
+        if visible.is_empty() {
+            return Ok(Selection::Empty);
+        }
+
         self.pick_command(project, &visible, "Select command", query)
     }
 
