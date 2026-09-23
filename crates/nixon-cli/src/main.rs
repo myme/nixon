@@ -77,10 +77,6 @@ fn run() -> Result<i32> {
     // Defaults, then the file, then the command line.
     let config = Config::defaults().merge(file_config).merge(cli_config);
 
-    if parsed.global.mode == Mode::Gui {
-        return gui::run(&config.launcher);
-    }
-
     let env = Environment {
         cwd: std::env::current_dir()?,
         shell: std::env::var("SHELL").ok(),
@@ -90,6 +86,10 @@ fn run() -> Result<i32> {
             .ok(),
         exe: std::env::current_exe().ok(),
     };
+
+    if parsed.global.mode == Mode::Gui {
+        return gui::run(config, dirs, env);
+    }
 
     let mut app = App::new(config, dirs, env, TuiPicker, RealRunner);
     dispatch(&mut app, parsed.command)

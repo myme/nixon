@@ -57,10 +57,13 @@ resolution, evaluation, and history as the terminal CLI.
   default; `--mode gui` (or `-m gui`) explicitly opens the graphical menu.
   This replaces the earlier separate-binary plan and does not restore
   `nixon -b rofi`.
-- [x] **PREVIEW:** The first runnable GUI stage opens the merged-config menu.
-  Selecting an action shows a visible status that execution is not wired yet;
-  it never silently drops or executes the action. GUI subcommands and bare
-  command names are explicitly rejected until the workflows are integrated.
+- [x] **PREVIEW:** The GUI opens the merged-config menu. Commands discovers
+  current-project commands on a worker and opens the GUI picker. A selection
+  displays the command name and selection type without executing it;
+  cancellation returns to the menu and discovery errors appear in the window.
+  Other actions show a visible status that execution is not wired yet. GUI
+  subcommands and bare command names are explicitly rejected until the
+  workflows are integrated.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
   old exit-code/argv protocol. The behavior to recover is GUI selection.
 

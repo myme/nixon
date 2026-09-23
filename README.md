@@ -106,8 +106,9 @@ v2 is a rewrite in Rust. Configuration files carry over unchanged; the
 command line has a few deliberate differences.
 
 - **The picker is built in.** `fzf` and `rofi` are no longer needed or used.
-  `nixon --mode gui` now opens a graphical menu preview; selected actions
-  show a status until workflow execution is integrated.
+  `nixon --mode gui` now opens a graphical menu preview. Commands opens a
+  graphical picker and reports the selected name and action type; command
+  execution is not wired yet.
 - **Removed flags.** `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went
   with the backend concept. Passing one is now an ordinary argument error.
   Commands run in the terminal you started them from; a command marked `&`

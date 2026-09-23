@@ -37,8 +37,11 @@ Global options come before the subcommand. Each on/off flag has a hidden
 be overridden either way.
 
 `nixon --mode gui` (or `nixon -m gui`) opens the configured graphical root
-menu. This is a preview: selecting an action shows an in-window status, but
-does not execute it yet.
+menu. Commands opens a picker for commands in the current project, with local
+config and hidden-command rules applied. Selecting one shows its name and
+selection type in the window; it does not execute, edit, show, or visit the
+command yet. Canceling returns to the menu, and discovery errors appear there.
+Other menu actions still show a preview status.
 GUI mode currently accepts no subcommands; `nixon --mode gui run` and bare
 command names report an error. `--mode tui` and the default retain the terminal
 behavior.
