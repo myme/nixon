@@ -44,7 +44,13 @@ impl EditView {
                 ui.label("Ctrl-Enter submits · Esc returns to menu");
             });
             if let Some(error) = &self.error {
-                ui.colored_label(egui::Color32::LIGHT_RED, error);
+                let visuals = ui.visuals();
+                // The default error red needs more contrast against both panel palettes.
+                let color = egui::ecolor::tint_color_towards(
+                    visuals.error_fg_color,
+                    visuals.widgets.active.text_color(),
+                );
+                ui.colored_label(color, error);
             }
             ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| {

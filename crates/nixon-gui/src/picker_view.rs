@@ -373,37 +373,7 @@ fn render_pick(
         }
         option_row(ui, app);
         ui.horizontal(|ui| {
-            if app.option_focus.is_none() {
-                let response =
-                    ui.label(egui::RichText::new(query_display(app, &ime.preedit)).monospace());
-                let query = app.query.text();
-                let (_, column) = app.query.cursor();
-                let at = query_cursor_byte_index(&query, column);
-                let prefix = format!("> {}{}", &query[..at], ime.preedit);
-                let width = ui
-                    .painter()
-                    .layout_no_wrap(
-                        prefix,
-                        egui::TextStyle::Monospace.resolve(ui.style()),
-                        ui.visuals().text_color(),
-                    )
-                    .size()
-                    .x;
-                let caret = egui::Rect::from_min_size(
-                    egui::pos2(response.rect.min.x + width, response.rect.min.y),
-                    egui::vec2(2.0, response.rect.height()),
-                );
-                ctx.output_mut(|output| {
-                    output.ime = Some(egui::output::IMEOutput {
-                        rect: response.rect,
-                        cursor_rect: caret,
-                    });
-                });
-            } else {
-                ime.preedit.clear();
-                ime.composing = false;
-                ui.label(egui::RichText::new(query_display(app, "")).monospace());
-            }
+            render_query(ui, app, ime);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(count_label(app));
             });
@@ -426,9 +396,13 @@ fn render_pick(
                 ""
             };
             let label = format!("{mark}{}", row.candidate.plain());
-            let mut button = egui::Button::new(egui::RichText::new(label).monospace());
+            let mut text = egui::RichText::new(label).monospace();
             if row.is_cursor {
-                button = button.fill(egui::Color32::from_gray(64));
+                text = text.color(ui.visuals().widgets.active.text_color());
+            }
+            let mut button = egui::Button::new(text);
+            if row.is_cursor {
+                button = button.fill(ui.visuals().widgets.active.bg_fill);
             }
             let response = ui.add_sized([ui.available_width(), ROW_HEIGHT - 2.0], button);
             if response.clicked_by(egui::PointerButton::Primary)
@@ -456,6 +430,39 @@ fn render_pick(
         });
     });
     (row_clicked, action_clicked)
+}
+
+fn render_query(ui: &mut egui::Ui, app: &App, ime: &mut ImeState) {
+    if app.option_focus.is_none() {
+        let response = ui.label(egui::RichText::new(query_display(app, &ime.preedit)).monospace());
+        let query = app.query.text();
+        let (_, column) = app.query.cursor();
+        let at = query_cursor_byte_index(&query, column);
+        let prefix = format!("> {}{}", &query[..at], ime.preedit);
+        let width = ui
+            .painter()
+            .layout_no_wrap(
+                prefix,
+                egui::TextStyle::Monospace.resolve(ui.style()),
+                ui.visuals().text_color(),
+            )
+            .size()
+            .x;
+        let caret = egui::Rect::from_min_size(
+            egui::pos2(response.rect.min.x + width, response.rect.min.y),
+            egui::vec2(2.0, response.rect.height()),
+        );
+        ui.ctx().output_mut(|output| {
+            output.ime = Some(egui::output::IMEOutput {
+                rect: response.rect,
+                cursor_rect: caret,
+            });
+        });
+    } else {
+        ime.preedit.clear();
+        ime.composing = false;
+        ui.label(egui::RichText::new(query_display(app, "")).monospace());
+    }
 }
 
 fn update_confirm(

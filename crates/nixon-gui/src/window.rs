@@ -302,11 +302,13 @@ fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
         egui::Sense::click(),
     );
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    let fill = if response.hovered() || response.has_focus() {
-        egui::Color32::from_gray(54)
-    } else {
-        egui::Color32::from_gray(34)
-    };
+    let visuals = ui.visuals();
+    let row_style = visuals.widgets.style(&response);
+    let fill = row_style.bg_fill;
+    let primary_text = row_style.text_color();
+    let secondary_text = row_style.text_color();
+    let badge_fill = visuals.extreme_bg_color;
+    let badge_text = visuals.text_color();
     let painter = ui.painter();
     painter.rect_filled(rect, 8, fill);
 
@@ -314,7 +316,7 @@ fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
         rect.min + egui::vec2(10.0, 8.0),
         egui::vec2(56.0, height - 16.0),
     );
-    painter.rect_filled(badge, 5, egui::Color32::from_gray(80));
+    painter.rect_filled(badge, 5, badge_fill);
     let key_text = match key {
         MenuKey::Character(character) => character.to_string(),
         MenuKey::Space => "Space".to_owned(),
@@ -324,7 +326,7 @@ fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
         egui::Align2::CENTER_CENTER,
         key_text,
         egui::FontId::monospace(14.0),
-        egui::Color32::WHITE,
+        badge_text,
     );
 
     let text_x = badge.max.x + 12.0;
@@ -333,14 +335,14 @@ fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
         egui::Align2::LEFT_CENTER,
         label,
         egui::FontId::proportional(16.0),
-        egui::Color32::WHITE,
+        primary_text,
     );
     painter.text(
         egui::pos2(text_x, rect.center().y + 12.0),
         egui::Align2::LEFT_CENTER,
         description,
         egui::FontId::proportional(12.0),
-        egui::Color32::LIGHT_GRAY,
+        secondary_text,
     );
     if submenu {
         painter.text(
@@ -348,7 +350,7 @@ fn menu_row(ui: &mut egui::Ui, item: &MenuItem) -> egui::Response {
             egui::Align2::CENTER_CENTER,
             "›",
             egui::FontId::proportional(22.0),
-            egui::Color32::LIGHT_GRAY,
+            secondary_text,
         );
     }
     response
@@ -483,6 +485,63 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    fn painted_text_color(output: &egui::FullOutput, wanted: &str) -> egui::Color32 {
+        output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(shape) if shape.galley.text() == wanted => {
+                    shape.override_text_color.or_else(|| {
+                        shape
+                            .galley
+                            .job
+                            .sections
+                            .first()
+                            .map(|section| section.format.color)
+                    })
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("did not paint text {wanted}"))
+    }
+
+    fn painted_rect_fill(output: &egui::FullOutput, height: f32, min_width: f32) -> egui::Color32 {
+        output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Rect(shape)
+                    if (shape.rect.height() - height).abs() < 0.01
+                        && shape.rect.width() >= min_width =>
+                {
+                    Some(shape.fill)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("did not paint rectangle of height {height}"))
+    }
+
+    fn contrast_ratio(foreground: egui::Color32, background: egui::Color32) -> f32 {
+        fn channel(value: u8) -> f32 {
+            let value = f32::from(value) / 255.0;
+            if value <= 0.040_45 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        }
+        fn luminance(color: egui::Color32) -> f32 {
+            let rg = 0.7152_f32.mul_add(channel(color.g()), 0.2126 * channel(color.r()));
+            0.0722_f32.mul_add(channel(color.b()), rg)
+        }
+        let (light, dark) = if luminance(foreground) >= luminance(background) {
+            (luminance(foreground), luminance(background))
+        } else {
+            (luminance(background), luminance(foreground))
+        };
+        (light + 0.05) / (dark + 0.05)
     }
 
     fn click_button(
@@ -688,6 +747,138 @@ mod tests {
                 shown.iter().any(|text| text == expected),
                 "missing {expected}: {shown:?}"
             );
+        }
+    }
+
+    #[test]
+    fn custom_menu_colors_follow_light_dark_and_runtime_theme_switches() {
+        let (actions, _receiver) = mpsc::channel();
+        let mut window = MenuWindow::new(&Config::defaults().launcher, actions).unwrap();
+        let ctx = egui::Context::default();
+        let mut row_fills = Vec::new();
+        for visuals in [
+            egui::Visuals::dark(),
+            egui::Visuals::light(),
+            egui::Visuals::dark(),
+        ] {
+            ctx.set_visuals(visuals.clone());
+            frame(&ctx, &mut window, Vec::new());
+            let output = frame(&ctx, &mut window, Vec::new());
+            let row_fill = painted_rect_fill(&output, 58.0, 300.0);
+            assert_eq!(row_fill, visuals.widgets.active.bg_fill);
+            assert_eq!(
+                painted_rect_fill(&output, 42.0, 56.0),
+                visuals.extreme_bg_color
+            );
+            assert_eq!(painted_text_color(&output, "C"), visuals.text_color());
+            assert_eq!(
+                painted_text_color(&output, "Commands"),
+                visuals.widgets.active.text_color()
+            );
+            assert_eq!(
+                painted_text_color(&output, "Find and run a command"),
+                visuals.widgets.active.text_color()
+            );
+            assert_eq!(
+                painted_text_color(&output, "Projects"),
+                visuals.widgets.inactive.text_color()
+            );
+            assert!(output.shapes.iter().any(|clipped| matches!(
+                &clipped.shape,
+                egui::Shape::Rect(shape)
+                    if (shape.rect.height() - 58.0).abs() < 0.01
+                        && shape.fill == visuals.widgets.inactive.bg_fill
+            )));
+            assert!(contrast_ratio(painted_text_color(&output, "Commands"), row_fill) >= 4.5);
+            assert!(
+                contrast_ratio(
+                    painted_text_color(&output, "Projects"),
+                    visuals.widgets.inactive.bg_fill
+                ) >= 4.5
+            );
+            assert!(
+                contrast_ratio(painted_text_color(&output, "C"), visuals.extreme_bg_color,) >= 4.5
+            );
+            row_fills.push(row_fill);
+        }
+        assert_ne!(row_fills[0], row_fills[1]);
+        assert_eq!(row_fills[0], row_fills[2]);
+    }
+
+    #[test]
+    fn picker_selection_colors_follow_theme_switches() {
+        let (mut window, mut picker) = window_with_picker();
+        let (done, replies) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            done.send(
+                picker
+                    .pick(&PickerOptions::default(), candidates(&["alpha", "beta"]))
+                    .unwrap(),
+            )
+            .unwrap();
+        });
+        let ctx = egui::Context::default();
+        let mut fills = Vec::new();
+        for visuals in [
+            egui::Visuals::dark(),
+            egui::Visuals::light(),
+            egui::Visuals::dark(),
+        ] {
+            ctx.set_visuals(visuals.clone());
+            let output = wait_for_text(&ctx, &mut window, "alpha");
+            let fill = painted_rect_fill(&output, 24.0, 300.0);
+            assert_eq!(fill, visuals.widgets.active.bg_fill);
+            assert_eq!(
+                painted_text_color(&output, "alpha"),
+                visuals.widgets.active.text_color()
+            );
+            assert!(contrast_ratio(painted_text_color(&output, "alpha"), fill) >= 4.5);
+            fills.push(fill);
+        }
+        assert_ne!(fills[0], fills[1]);
+        assert_eq!(fills[0], fills[2]);
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(egui::Key::Escape, egui::Modifiers::default())],
+        );
+        assert_eq!(
+            wait_for_reply(&ctx, &mut window, &replies),
+            Selection::Canceled
+        );
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn editor_error_color_follows_theme_switches() {
+        let (actions, _receiver) = mpsc::channel();
+        let mut window = MenuWindow::new(&Config::defaults().launcher, actions).unwrap();
+        let ctx = egui::Context::default();
+        window.open_edit("Edit".to_owned(), String::new());
+        frame(&ctx, &mut window, Vec::new());
+        frame(
+            &ctx,
+            &mut window,
+            vec![key(
+                egui::Key::Enter,
+                egui::Modifiers {
+                    ctrl: true,
+                    ..egui::Modifiers::default()
+                },
+            )],
+        );
+        for visuals in [egui::Visuals::light(), egui::Visuals::dark()] {
+            ctx.set_visuals(visuals.clone());
+            let output = frame(&ctx, &mut window, Vec::new());
+            let error_color = painted_text_color(&output, "Empty command.");
+            assert_eq!(
+                error_color,
+                egui::ecolor::tint_color_towards(
+                    visuals.error_fg_color,
+                    visuals.widgets.active.text_color()
+                )
+            );
+            assert!(contrast_ratio(error_color, visuals.panel_fill) >= 4.5);
         }
     }
 
