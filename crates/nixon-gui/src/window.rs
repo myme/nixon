@@ -7,6 +7,7 @@ use nixon::config::launcher::{LauncherAction, LauncherConfig, MenuItem, MenuKey}
 
 use crate::browser_view::{BrowserInputOutcome, BrowserInputView};
 use crate::detail_view::{DetailOutcome, DetailView};
+use crate::edit_view::{EditOutcome, EditView};
 use crate::menu::{InputFocus, MenuInput, MenuOutcome, MenuState};
 use crate::picker::GuiPickerRequests;
 use crate::picker_view::PickerView;
@@ -21,6 +22,8 @@ pub struct MenuWindow {
     browser_event: Option<BrowserInputEvent>,
     detail: Option<DetailView>,
     detail_closed: bool,
+    edit: Option<EditView>,
+    edit_event: Option<EditEvent>,
 }
 
 /// The browser input screen's result.
@@ -29,6 +32,15 @@ pub enum BrowserInputEvent {
     /// User submitted nonblank text.
     Submitted(String),
     /// User returned to the menu.
+    Canceled,
+}
+
+/// An in-window command editor submission or cancellation.
+#[derive(Debug, Eq, PartialEq)]
+pub enum EditEvent {
+    /// User submitted nonempty source text.
+    Submitted(String),
+    /// User returned to the menu without running anything.
     Canceled,
 }
 
@@ -45,6 +57,8 @@ impl MenuWindow {
             browser_event: None,
             detail: None,
             detail_closed: false,
+            edit: None,
+            edit_event: None,
         })
     }
 
@@ -75,6 +89,17 @@ impl MenuWindow {
         std::mem::replace(&mut self.detail_closed, false)
     }
 
+    /// Opens a multiline editor initialized with the selected source.
+    pub fn open_edit(&mut self, title: String, source: String) {
+        self.edit = Some(EditView::new(title, source));
+        self.edit_event = None;
+    }
+
+    /// Takes a submitted edit or cancellation from the editor.
+    pub const fn take_edit_event(&mut self) -> Option<EditEvent> {
+        self.edit_event.take()
+    }
+
     /// The menu currently shown by the window.
     #[must_use]
     pub const fn menu(&self) -> &MenuState {
@@ -83,6 +108,24 @@ impl MenuWindow {
 
     /// Handles one egui frame without running the selected action.
     pub fn show(&mut self, ctx: &egui::Context) {
+        if let Some(edit) = self.edit.as_mut() {
+            match edit.show(ctx) {
+                EditOutcome::Pending => {}
+                EditOutcome::Canceled => {
+                    self.edit = None;
+                    self.edit_event = Some(EditEvent::Canceled);
+                    self.focus_first_row = true;
+                    ctx.request_repaint();
+                }
+                EditOutcome::Submitted(source) => {
+                    self.edit = None;
+                    self.edit_event = Some(EditEvent::Submitted(source));
+                    self.focus_first_row = true;
+                    ctx.request_repaint();
+                }
+            }
+            return;
+        }
         if let Some(detail) = self.detail.as_mut() {
             if matches!(detail.show(ctx), DetailOutcome::Back) {
                 self.detail = None;

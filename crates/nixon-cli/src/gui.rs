@@ -16,7 +16,7 @@ use nixon::project::detect::inspect;
 use nixon::select;
 use nixon_gui::browser::target_url;
 use nixon_gui::picker::GuiPicker;
-use nixon_gui::window::{BrowserInputEvent, MenuWindow, native_options};
+use nixon_gui::window::{BrowserInputEvent, EditEvent, MenuWindow, native_options};
 use nixon_picker::{Picker, Selection, SelectionType};
 
 use crate::cli::Commands;
@@ -56,6 +56,7 @@ struct PreviewApp {
     busy: bool,
     browser_busy: bool,
     media_busy: bool,
+    pending_edit: Option<(Project, Box<Command>)>,
     status: String,
 }
 
@@ -67,8 +68,14 @@ const PREVIEW_STATUS: &str = "GUI preview: choose an action.";
 
 enum CommandOutcome {
     Launched,
-    Selected { name: String, kind: SelectionType },
-    Detail { title: String, body: String },
+    Edit {
+        project: Project,
+        command: Box<Command>,
+    },
+    Detail {
+        title: String,
+        body: String,
+    },
     Empty,
     Canceled,
     Error(String),
@@ -80,6 +87,11 @@ enum CommandRequest {
     Quick {
         name: String,
         project: Option<String>,
+    },
+    RunEdited {
+        project: Project,
+        command: Box<Command>,
+        source: String,
     },
 }
 
@@ -151,6 +163,11 @@ impl PreviewApp {
                     CommandRequest::Quick { name, project } => {
                         launch_quick_command(&mut app, &name, project.as_deref())
                     }
+                    CommandRequest::RunEdited {
+                        project,
+                        command,
+                        source,
+                    } => run_edited_command(&mut app, &project, *command, &source),
                 };
                 if worker_results.send(outcome).is_err() {
                     break;
@@ -175,6 +192,7 @@ impl PreviewApp {
             busy: false,
             browser_busy: false,
             media_busy: false,
+            pending_edit: None,
             status: PREVIEW_STATUS.to_owned(),
         })
     }
@@ -208,13 +226,21 @@ impl PreviewApp {
             }
             ctx.request_repaint();
         }
+        if let Some(event) = self.menu.take_edit_event() {
+            self.handle_edit_event(event);
+            ctx.request_repaint();
+        }
         for outcome in self.command_results.try_iter() {
             self.busy = false;
             match outcome {
                 CommandOutcome::Launched => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-                CommandOutcome::Selected { name, kind } => {
-                    self.status =
-                        format!("Selected command: {name} ({kind:?}). Execution is not wired yet.");
+                CommandOutcome::Edit { project, command } => {
+                    self.status = format!("Editing {}.", command.name);
+                    self.menu.open_edit(
+                        format!("Edit command: {}", command.name),
+                        command.source.clone(),
+                    );
+                    self.pending_edit = Some((project, command));
                 }
                 CommandOutcome::Detail { title, body } => {
                     self.status = format!("Showing {title}.");
@@ -329,6 +355,35 @@ impl PreviewApp {
                     "{} selected. Execution is not wired yet.",
                     action_name(&action)
                 );
+            }
+        }
+    }
+
+    fn handle_edit_event(&mut self, event: EditEvent) {
+        match event {
+            EditEvent::Canceled => {
+                self.pending_edit = None;
+                PREVIEW_STATUS.clone_into(&mut self.status);
+            }
+            EditEvent::Submitted(source) => {
+                if let Some((project, command)) = self.pending_edit.take() {
+                    let name = command.name.clone();
+                    if self
+                        .command_requests
+                        .send(CommandRequest::RunEdited {
+                            project,
+                            command,
+                            source,
+                        })
+                        .is_ok()
+                    {
+                        self.busy = true;
+                        self.status = format!("Running edited {name}…");
+                    } else {
+                        "Command worker is unavailable.".clone_into(&mut self.status);
+                        tracing::error!("{}", self.status);
+                    }
+                }
             }
         }
     }
@@ -549,13 +604,17 @@ fn pick_command_for_project<R: ProcessRunner>(
             let command = items.remove(0);
             visit_selected_command(app, project, &command)
         }
-        Ok(Selection::Selected { kind, items }) => {
-            let name = items
-                .into_iter()
-                .map(|command| command.name)
-                .collect::<Vec<_>>()
-                .join(", ");
-            CommandOutcome::Selected { name, kind }
+        Ok(Selection::Selected {
+            kind: SelectionType::Edit,
+            mut items,
+        }) => {
+            if items.len() != 1 {
+                return CommandOutcome::Error("Expected one command selection.".to_owned());
+            }
+            CommandOutcome::Edit {
+                project: project.clone(),
+                command: Box::new(items.remove(0)),
+            }
         }
         Ok(Selection::Empty) => CommandOutcome::Empty,
         Ok(Selection::Canceled) => CommandOutcome::Canceled,
@@ -603,6 +662,27 @@ fn run_selected_command<R: ProcessRunner>(
         Ok(_) => CommandOutcome::Launched,
         Err(NixonError::Canceled) => CommandOutcome::Canceled,
         Err(error) => CommandOutcome::Error(format!("Could not run {}: {error}", command.name)),
+    }
+}
+
+fn run_edited_command<R: ProcessRunner>(
+    app: &mut App<GuiPicker, GuiProcessRunner<R>>,
+    project: &Project,
+    command: Command,
+    source: &str,
+) -> CommandOutcome {
+    let config = match app.config_for(project) {
+        Ok(config) => config,
+        Err(error) => {
+            return CommandOutcome::Error(format!("Could not load command config: {error}"));
+        }
+    };
+    app.runner.set_configured_terminal(config.launcher.terminal);
+    let name = command.name.clone();
+    match app.run_edited_cmd(project, command, source, &[]) {
+        Ok(_) => CommandOutcome::Launched,
+        Err(NixonError::Canceled) => CommandOutcome::Canceled,
+        Err(error) => CommandOutcome::Error(format!("Could not run edited {name}: {error}")),
     }
 }
 
@@ -1100,6 +1180,58 @@ printf '%s\\n' \"$1\"
         )
     }
 
+    fn click_button(
+        app: &mut PreviewApp,
+        ctx: &egui::Context,
+        output: &egui::FullOutput,
+        label: &str,
+    ) -> egui::FullOutput {
+        let at = output
+            .shapes
+            .iter()
+            .find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == label => {
+                    Some(text.pos + text.galley.size() / 2.0)
+                }
+                _ => None,
+            })
+            .unwrap();
+        frame(
+            app,
+            ctx,
+            vec![
+                egui::Event::PointerMoved(at),
+                egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed: true,
+                    modifiers: egui::Modifiers::default(),
+                },
+            ],
+        );
+        frame(
+            app,
+            ctx,
+            vec![egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::default(),
+            }],
+        )
+    }
+
+    fn replace_edit_text(app: &mut PreviewApp, ctx: &egui::Context, source: &str) {
+        let ctrl = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..egui::Modifiers::default()
+        };
+        let _ = frame(app, ctx, vec![key_with_modifiers(egui::Key::A, ctrl)]);
+        let _ = frame(app, ctx, vec![key_release(egui::Key::A)]);
+        let _ = frame(app, ctx, vec![egui::Event::Text(source.to_owned())]);
+    }
+
     fn wait_for_text(app: &mut PreviewApp, ctx: &egui::Context, wanted: &str) -> egui::FullOutput {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
@@ -1368,20 +1500,15 @@ printf '%s\\n' \"$1\"
     }
 
     #[test]
-    fn edit_selection_remains_an_explicit_preview() {
-        let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
-        let exe = temp.child("nixon").path().to_path_buf();
-        env.exe = Some(exe.clone());
-        let (runner, calls) = command_runner(None, exe, false);
-        let mut app = PreviewApp::with_command_runner(
-            config,
-            dirs,
-            env,
-            RealRunner,
-            super::SessionMediaTransport,
-            runner,
-        )
-        .unwrap();
+    fn edited_command_runs_exact_source_with_original_language_and_project() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let terminal = executable(&temp, "terminal");
+        config.launcher.terminal = Some(vec![
+            terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
         let ctx = egui::Context::default();
         let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
         wait_for_text(&mut app, &ctx, "Select command");
@@ -1390,10 +1517,163 @@ printf '%s\\n' \"$1\"
             &ctx,
             vec![key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT)],
         );
-        let output = wait_for_text(&mut app, &ctx, "Selected command: alpha (Edit)");
-        assert!(!closes(&output));
+        let output = wait_for_text(&mut app, &ctx, "Edit command: alpha");
+        assert!(
+            texts(&output)
+                .iter()
+                .any(|text| text.contains("touch selected-marker"))
+        );
         assert!(calls.lock().unwrap().is_empty());
+        replace_edit_text(&mut app, &ctx, "printf 'edited result'\n\n");
+        let output = frame(&mut app, &ctx, Vec::new());
+        let output = click_button(&mut app, &ctx, &output, "Submit");
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(
+            payload.cwd,
+            Some(temp.child("project").path().to_path_buf())
+        );
+        assert_eq!(payload.argv[0], "bash");
+        assert_eq!(
+            fs::read_to_string(&payload.argv[1]).unwrap(),
+            "printf 'edited result'\n"
+        );
         assert!(!temp.child("project/selected-marker").path().exists());
+        let history = fs::read_to_string(temp.child("state/nixon/history").path()).unwrap();
+        assert!(history.contains("nixon run alpha"), "{history}");
+    }
+
+    #[test]
+    fn canceling_edit_returns_to_menu_without_running() {
+        let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT)],
+        );
+        let output = wait_for_text(&mut app, &ctx, "Edit command: alpha");
+        click_button(&mut app, &ctx, &output, "Back");
+        let _ = wait_for_text(&mut app, &ctx, super::PREVIEW_STATUS);
+        assert!(calls.lock().unwrap().is_empty());
+        assert!(!temp.child("state/nixon/history").path().exists());
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::C)]);
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+    }
+
+    #[test]
+    fn closing_window_during_edit_releases_command_worker() {
+        let (temp, config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT)],
+        );
+        wait_for_text(&mut app, &ctx, "Edit command: alpha");
+        let PreviewApp {
+            _worker: worker,
+            command_requests,
+            menu,
+            ..
+        } = app;
+        drop(menu);
+        drop(command_requests);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        thread::spawn(move || sender.send(worker.join()).ok());
+        assert!(
+            receiver
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap()
+                .is_ok()
+        );
+        assert!(calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn empty_edit_stays_open_until_valid_source_is_submitted() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let terminal = executable(&temp, "terminal");
+        config.launcher.terminal = Some(vec![
+            terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT)],
+        );
+        wait_for_text(&mut app, &ctx, "Edit command: alpha");
+        replace_edit_text(&mut app, &ctx, "  \n ");
+        let output = frame(&mut app, &ctx, Vec::new());
+        click_button(&mut app, &ctx, &output, "Submit");
+        let output = wait_for_text(&mut app, &ctx, "Empty command.");
+        assert!(
+            texts(&output)
+                .iter()
+                .any(|text| text == "Edit command: alpha")
+        );
+        assert!(calls.lock().unwrap().is_empty());
+        assert!(!temp.child("state/nixon/history").path().exists());
+        replace_edit_text(&mut app, &ctx, "echo valid");
+        let output = frame(&mut app, &ctx, Vec::new());
+        let output = click_button(&mut app, &ctx, &output, "Submit");
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        assert_eq!(calls.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn edited_command_continues_through_placeholder_pick() {
+        let (temp, mut app, calls, captures) = placeholder_fixture(false, false);
+        let ctx = egui::Context::default();
+        let _ = frame(&mut app, &ctx, vec![key(egui::Key::C)]);
+        wait_for_text(&mut app, &ctx, "Select command");
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT)],
+        );
+        let _ = frame(&mut app, &ctx, vec![key_release(egui::Key::Enter)]);
+        wait_for_text(&mut app, &ctx, "Edit command: alpha");
+        replace_edit_text(&mut app, &ctx, "printf 'edited %s\\n' \"$1\"");
+        let output = frame(&mut app, &ctx, Vec::new());
+        click_button(&mut app, &ctx, &output, "Submit");
+        wait_for_text(&mut app, &ctx, "choice with spaces");
+        let output = frame(&mut app, &ctx, vec![key(egui::Key::Enter)]);
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        assert_eq!(captures.lock().unwrap().len(), 1);
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert!(payload.argv.iter().any(|arg| arg == "choice with spaces"));
+        assert_eq!(
+            fs::read_to_string(&payload.argv[1]).unwrap(),
+            "printf 'edited %s\\n' \"$1\"\n"
+        );
+        let history = fs::read_to_string(temp.child("state/nixon/history").path()).unwrap();
+        assert!(history.contains("alpha"), "{history}");
     }
 
     #[test]
@@ -2182,6 +2462,56 @@ printf '%s\\n' \"$1\"
         );
         assert!(!first.join("should-not-run").exists());
         assert!(!temp.child("state/nixon/history").path().exists());
+    }
+
+    #[test]
+    fn editing_project_command_keeps_local_terminal_and_python_language() {
+        let (temp, mut config, dirs, mut env) = fixture(LOCAL_COMMANDS);
+        let (first, _) = discovered_projects(&temp, &mut config);
+        let global_terminal = executable(&temp, "global-terminal");
+        let local_terminal = executable(&temp, "local terminal");
+        config.launcher.terminal = Some(vec![
+            global_terminal.to_string_lossy().into_owned(),
+            "-e".to_owned(),
+        ]);
+        fs::write(
+            first.join("nixon.md"),
+            format!(
+                "```yaml config\nlauncher:\n  terminal: [{}, '-e']\n```\n\n# `jump`\n\n```python\nprint('original')\n```\n",
+                serde_json::to_string(&local_terminal.to_string_lossy()).unwrap()
+            ),
+        ).unwrap();
+        env.exe = Some(temp.child("nixon").path().to_path_buf());
+        let (mut app, calls) = preview_with_fake_command(config, dirs, env);
+        let ctx = egui::Context::default();
+        open_projects(&mut app, &ctx);
+        choose_first_project(&mut app, &ctx);
+        let _ = frame(&mut app, &ctx, vec![egui::Event::Text("jump".to_owned())]);
+        let _ = frame(
+            &mut app,
+            &ctx,
+            vec![key_with_modifiers(egui::Key::Enter, egui::Modifiers::ALT)],
+        );
+        wait_for_text(&mut app, &ctx, "Edit command: jump");
+        replace_edit_text(&mut app, &ctx, "print('edited')");
+        let output = frame(&mut app, &ctx, Vec::new());
+        let output = click_button(&mut app, &ctx, &output, "Submit");
+        if !closes(&output) {
+            wait_for_close(&mut app, &ctx);
+        }
+        let calls = calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].argv[0], local_terminal.to_string_lossy());
+        let payload = read_payload(std::path::Path::new(calls[0].argv.last().unwrap())).unwrap();
+        assert_eq!(payload.cwd, Some(first));
+        assert_eq!(payload.argv[0], "python3");
+        assert_eq!(
+            fs::read_to_string(&payload.argv[1]).unwrap(),
+            "print('edited')\n"
+        );
+        let history = fs::read_to_string(temp.child("state/nixon/history").path()).unwrap();
+        assert!(history.contains("nixon project"), "{history}");
+        assert!(history.contains("jump"), "{history}");
     }
 
     #[test]

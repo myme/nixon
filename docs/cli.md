@@ -48,7 +48,11 @@ and Back or Esc returns to the menu. F2 opens the command's definition at its
 recorded line in the configured editor through the selected project's terminal
 launcher. A successful handoff closes the window; a missing location, editor,
 terminal, or launch error stays visible and is reported on stderr. Visit does
-not run the command or add history. Edit still shows a preview status.
+not run the command or add history. Alt-Enter opens a multiline source editor
+in the same window. Submit (or Ctrl-Enter) runs the edited source with the
+original command's language, options, placeholders, project config, and
+history. Back or Esc cancels without running; empty source stays editable and
+shows an error.
 Browser (default **W**, then **O**) opens a focused input. Enter opens a full
 `http://` or `https://` URL unchanged, adds `https://` to a dotted address
 without spaces, or searches through `launcher.search_url`. Empty input does

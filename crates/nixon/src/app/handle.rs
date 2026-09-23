@@ -235,13 +235,23 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
             nixon_picker::editor::Edited::Canceled => return Err(NixonError::Canceled),
             nixon_picker::editor::Edited::Submitted(text) => text,
         };
+        self.run_edited_cmd(project, command, &edited, args)
+    }
+
+    /// Runs submitted editor text with the command's original metadata.
+    pub fn run_edited_cmd(
+        &mut self,
+        project: &Project,
+        mut command: Command,
+        edited: &str,
+        args: &[String],
+    ) -> Result<ExitCode> {
         if edited.trim().is_empty() {
             return Err(NixonError::NothingSelected("Empty command.".to_owned()));
         }
 
-        let mut edited_command = command;
-        edited_command.source = format!("{}\n", edited.trim_end());
-        self.run_cmd(project, &edited_command, args)
+        command.source = format!("{}\n", edited.trim_end());
+        self.run_cmd(project, &command, args)
     }
 
     /// Opens a command where it is defined.

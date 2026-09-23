@@ -61,7 +61,8 @@ resolution, evaluation, and history as the terminal CLI.
   discover and run commands through the GUI picker and existing App flow on a
   worker. Browser and media actions run on workers. Project Inspect and command
   Show open a read-only detail panel; Visit hands off to the configured editor
-  through the terminal launcher. Edit displays a preview status.
+  through the terminal launcher. Edit opens an in-window source editor and
+  runs submitted text through the existing command flow.
   History remains a preview. GUI subcommands and bare command names are
   explicitly rejected.
 - [ ] **OUT OF SCOPE:** Calling the external `rofi` program or restoring its
@@ -222,7 +223,7 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
   project environment variables, or history serialization.
 - [x] **MUST:** Show displays command source in a GUI panel with a way back;
   it does not print invisible data to the launcher's stdout.
-- [ ] **MUST:** Edit opens a multiline GUI editor initialized from the source.
+- [x] **MUST:** Edit opens a multiline GUI editor initialized from the source.
   Submitting runs the edited source with the original command's language,
   placeholders, options, and project; cancelling changes nothing. This
   replaces the terminal-only `nixon_picker::editor` for the GUI path.
