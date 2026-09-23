@@ -358,10 +358,12 @@ launcher:
 - [x] **MUST:** Closing the window cancels an active pick and stops any
   streaming producer. A detached command already handed to the process runner
   remains detached. No orphaned GUI worker waits on an unanswered pick.
-- [ ] **MUST:** GUI errors appear in the window and on stderr when launched
+- [x] **MUST:** GUI errors appear in the window and on stderr when launched
   from a terminal. stdout remains reserved for explicit machine-readable
-  output, as in the CLI. Headless tests cover visible status, error logging,
-  and empty stdout separately; a launched-process check of all three remains.
+  output, as in the CLI. The Xvfb smoke script triggers disabled History and
+  checks the visible error, stderr, and empty stdout in one launched process;
+  it passed against the development binary on 2026-09-23. Packaged execution
+  remains subject to the separate smoke gate below.
 - [x] **DECISION:** Linux is the first packaged GUI target. The user confirmed
   that the GUI launches on macOS; GUI colors follow light and dark system
   themes and adapt to changes while open (headless theme tests). MPRIS control

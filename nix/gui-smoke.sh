@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Drive the packaged GUI through both picker paths without running a command.
+# Drive the packaged GUI through picks and a visible error without running a command.
 set -euo pipefail
 
 binary=${1:?pass the wrapped nixon binary}
@@ -13,9 +13,13 @@ fail() {
     printf 'Last screen text:\n' >&2
     cat "$work/ocr.txt" >&2
   fi
-  if [[ -f $work/gui.log ]]; then
-    printf 'GUI output:\n' >&2
-    cat "$work/gui.log" >&2
+  if [[ -f $work/gui.stderr ]]; then
+    printf 'GUI stderr:\n' >&2
+    cat "$work/gui.stderr" >&2
+  fi
+  if [[ -s $work/gui.stdout ]]; then
+    printf 'GUI stdout:\n' >&2
+    cat "$work/gui.stdout" >&2
   fi
   if [[ -f $work/xvfb.log ]]; then
     printf 'Xvfb output:\n' >&2
@@ -60,6 +64,7 @@ chmod 700 "$XDG_RUNTIME_DIR"
 cat > "$XDG_CONFIG_HOME/nixon.md" <<EOF
 \`\`\`yaml config
 project_dirs: ["$work/projects"]
+history: false
 project_types:
   - name: fixture
     desc: Fixture project
@@ -129,7 +134,7 @@ for _ in {1..20}; do
 done
 [[ -n $xvfb_pid ]] || fail 'could not start Xvfb on a free display'
 
-setsid "$binary" --mode gui > "$work/gui.log" 2>&1 &
+setsid "$binary" --mode gui > "$work/gui.stdout" 2> "$work/gui.stderr" &
 gui_pid=$!
 window=
 for _ in {1..300}; do
@@ -144,7 +149,10 @@ xdotool windowfocus --sync "$window" || fail "could not focus the Nixon window"
 screen_has() {
   rm -f "$work/screen.png"
   scrot -u "$work/screen.png" || fail "could not capture the GUI window"
-  tesseract "$work/screen.png" stdout --psm 11 > "$work/ocr.txt" 2> "$work/ocr.log" \
+  ffmpeg -v error -y -i "$work/screen.png" \
+    -vf 'scale=iw*3:ih*3:flags=lanczos,eq=contrast=2' -frames:v 1 \
+    "$work/screen-ocr.png" || fail 'could not prepare the GUI screenshot for OCR'
+  tesseract "$work/screen-ocr.png" stdout --psm 11 > "$work/ocr.txt" 2> "$work/ocr.log" \
     || fail "could not read the GUI window: $(cat "$work/ocr.log")"
   grep -Fqi -- "$1" "$work/ocr.txt"
 }
@@ -170,6 +178,11 @@ xdotool key --clearmodifiers Return
 expect_screen 'selected project command picker' 'Select command [MapleProject]'
 xdotool key --clearmodifiers Escape
 expect_screen 'menu after canceling project command' 'Commands'
+xdotool key --clearmodifiers h
+expect_screen 'disabled history error' 'history is disabled'
+grep -Fq 'history is disabled in the configuration' "$work/gui.stderr" \
+  || fail 'history error was not reported on stderr'
+[[ ! -s $work/gui.stdout ]] || fail 'GUI wrote to stdout after the error'
 xdotool key --clearmodifiers Escape
 
 for _ in {1..60}; do
@@ -184,6 +197,7 @@ if kill -0 -- "-$gui_pid" 2>/dev/null; then
   fail "nixon left a process in its process group"
 fi
 gui_pid=
+[[ ! -s $work/gui.stdout ]] || fail 'GUI wrote to stdout'
 [[ ! -e $GUI_SMOKE_CURRENT_MARKER ]] || fail 'the current command was launched'
 [[ ! -e $GUI_SMOKE_PROJECT_MARKER ]] || fail 'the project command was launched'
 printf 'GUI opened, navigated both pickers, and closed cleanly.\n'

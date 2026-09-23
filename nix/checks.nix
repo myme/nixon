@@ -213,6 +213,7 @@ in
           pkgs.xdotool
           pkgs.scrot
           pkgs.tesseract
+          pkgs.ffmpeg
           pkgs.util-linux
         ];
       }
