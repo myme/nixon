@@ -101,8 +101,9 @@ include it.
 
 ## GUI terminal launcher
 
-The GUI Commands action uses `launcher.terminal` as an argument vector for
-foreground runs. Put
+The GUI Commands action and configured command actions use the selected
+project's effective `launcher.terminal` as an argument vector for foreground
+runs. Put
 the terminal's execute flag in its own element, for example:
 
 ```yaml

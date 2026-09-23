@@ -164,7 +164,7 @@ nixon-cli -> nixon-gui -> nixon -> nixon-picker
   History, **W** Browser, and the PoC's **S** Spotify. The built-in key map
   is documented in the UI and user guide; a replacement menu may reassign
   keys, and config conflicts are detected at load time.
-- [ ] **MUST:** A configured quick action may run a named Nixon command in
+- [x] **MUST:** A configured quick action may run a named Nixon command in
   the current project or a named/discovered project. It uses the same local
   config, command options, placeholders, `direnv`/Nix wrapping, and history
   recording as choosing that command from the GUI list.

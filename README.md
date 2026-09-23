@@ -111,7 +111,9 @@ command line has a few deliberate differences.
   terminal. Browser opens a URL or searches from a focused input. Spotify
   (default **S**) controls playback through the player's
   MPRIS session bus service on Linux; a missing service is shown in the
-  window. Projects, History, and custom command actions remain previews.
+  window. Configured command actions run a named command in the current or a
+  selected project with the same prompts and terminal handoff. Projects and
+  History remain previews.
 - **Removed flags.** `-b/--backend`, `-t/--terminal` and `-T/--force-tty` went
   with the backend concept. Passing one is now an ordinary argument error.
   Commands run in the terminal you started them from; a command marked `&`

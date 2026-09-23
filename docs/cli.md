@@ -53,8 +53,14 @@ Spotify (default **S**) uses Space for play/pause, **P** for previous, and
 **N** for next through the session MPRIS service on Linux. The configured
 `player` selects `org.mpris.MediaPlayer2.<player>`. A successful call closes
 the window; an unavailable service or other D-Bus error stays visible in the
-window and is reported on stderr. Projects, History, and custom command
-actions still show a preview status.
+window and is reported on stderr. A configured command action runs its named
+command in the current project, or resolves its `project` as a path or project
+picker query. It uses the project's local config, option and placeholder
+prompts, command history, and the same terminal handoff or detached execution
+as Commands. Successful launches close the window; cancellation returns to the
+menu; missing projects, commands, or launchers stay visible and are reported on
+stderr. Projects and History still show a preview status.
+F1 in a quick action's project picker returns to the menu without launching.
 GUI mode currently accepts no subcommands; `nixon --mode gui run` and bare
 command names report an error. `--mode tui` and the default retain the terminal
 behavior.

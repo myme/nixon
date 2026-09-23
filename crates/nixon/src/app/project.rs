@@ -166,12 +166,21 @@ impl<P: Picker, R: ProcessRunner> App<P, R> {
 
     /// The project for a query, or the current one.
     pub fn project_for_query(&mut self, query: Option<&str>) -> Result<Project> {
-        if query == Some(".")
-            && let Some(project) = find_in_project(&self.config.project_types, &self.env.cwd)
-        {
-            return Ok(project);
-        }
-        self.pick_one_project(query)
+        self.project_for_query_with_kind(query)
+            .map(|(_, project)| project)
+    }
+
+    /// Resolves a project query and keeps the picker's selection action.
+    pub fn project_for_query_with_kind(
+        &mut self,
+        query: Option<&str>,
+    ) -> Result<(SelectionType, Project)> {
+        let (kind, projects) = self.pick_projects(query, false)?;
+        projects
+            .into_iter()
+            .next()
+            .map(|project| (kind, project))
+            .ok_or_else(|| NixonError::NothingSelected("No project selected.".to_owned()))
     }
 }
 
