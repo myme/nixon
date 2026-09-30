@@ -195,6 +195,37 @@ and a field selector of `1` to pick the commit `SHA1` from the log.
 git show "$@"
 ```
 
+### `_git-branches`
+
+Local branches as `git branch -vv` shows them, valued by branch name.
+
+```bash
+# Cut the name from after the margin, where `*` and `+` mark checked-out
+# branches and would shift a `fields 1` selector.
+git branch -vv | jq -Rn '[inputs | select(.[2:3] != "(")
+  | {title: ., value: (.[2:] | split(" ")[0])}]'
+```
+
+### `git-branches ${_git-branches | json | multi}`
+
+Select local `git` branches.
+
+```bash
+printf '%s\n' "$@"
+```
+
+### `git-branch-delete --force ${_git-branches | json | multi}`
+
+Delete local `git` branches.
+
+- `--force`: off — delete with `-D`, even when not merged
+
+```bash
+flag=-d
+[ -n "$nixon_opt_force" ] && flag=-D
+git branch "$flag" "$@"
+```
+
 ## Files
 
 ### `cat`
