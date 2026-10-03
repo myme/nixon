@@ -51,7 +51,7 @@
     )
     // {
       overlays.default = final: _prev: {
-        nixon = self.packages.${final.system}.nixon;
+        nixon = self.packages.${final.stdenv.hostPlatform.system}.nixon;
       };
     };
 }
